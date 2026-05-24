@@ -170,3 +170,15 @@ class SolverOutput(BaseModel):
     latency_seconds: Annotated[float, Field(ge=0)] | None = None
     cost_usd: Annotated[float, Field(ge=0)] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExecutionResult(BaseModel):
+    """The result of running SQL against a platform: returned rows plus execution measurements."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True, serialize_by_alias=True)
+
+    rows: list[dict[str, Any]]
+    schema_: dict[str, str] | None = Field(default=None, alias="schema")
+    latency_seconds: Annotated[float, Field(ge=0)]
+    error: Annotated[str, Field(min_length=1)] | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)

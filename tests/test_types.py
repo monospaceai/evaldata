@@ -11,6 +11,7 @@ from data_eval.types import (
     ComparisonConfig,
     CostBudget,
     EvalCase,
+    ExecutionResult,
     Expectation,
     ExpectationSuite,
     Expected,
@@ -451,5 +452,81 @@ class TestSolverOutput:
     def test_default_metadata_not_shared(self) -> None:
         a = SolverOutput(output="SELECT 1")
         b = SolverOutput(output="SELECT 2")
+        a.metadata["touched"] = True
+        assert b.metadata == {}
+
+
+@pytest.mark.unit
+class TestExecutionResult:
+    def test_minimal_construction(self) -> None:
+        result = ExecutionResult(rows=[{"count": 1297}], latency_seconds=0.042)
+        assert result.rows == [{"count": 1297}]
+        assert result.schema_ is None
+        assert result.latency_seconds == 0.042
+        assert result.error is None
+        assert result.metadata == {}
+
+    def test_empty_rows_allowed(self) -> None:
+        result = ExecutionResult(rows=[], latency_seconds=0.01)
+        assert result.rows == []
+
+    def test_with_schema(self) -> None:
+        result = ExecutionResult(
+            rows=[{"id": 1, "revenue": 12.5}],
+            schema={"id": "INTEGER", "revenue": "DOUBLE"},
+            latency_seconds=0.1,
+        )
+        assert result.schema_ == {"id": "INTEGER", "revenue": "DOUBLE"}
+
+    def test_with_error(self) -> None:
+        result = ExecutionResult(
+            rows=[],
+            latency_seconds=0.005,
+            error="syntax error at or near 'FROMM'",
+        )
+        assert result.error == "syntax error at or near 'FROMM'"
+
+    def test_with_metadata(self) -> None:
+        result = ExecutionResult(
+            rows=[{"x": 1}],
+            latency_seconds=0.2,
+            metadata={"warehouse": "EVAL_WH", "query_id": "abc-123"},
+        )
+        assert result.metadata["warehouse"] == "EVAL_WH"
+
+    def test_json_round_trip_minimal(self) -> None:
+        result = ExecutionResult(rows=[{"x": 1}], latency_seconds=0.1)
+        restored = ExecutionResult.model_validate_json(result.model_dump_json())
+        assert restored == result
+
+    def test_json_round_trip_schema_uses_external_alias(self) -> None:
+        result = ExecutionResult(
+            rows=[{"x": 1}],
+            schema={"x": "INTEGER"},
+            latency_seconds=0.1,
+        )
+        dumped = result.model_dump_json()
+        assert '"schema"' in dumped
+        assert '"schema_"' not in dumped
+        restored = ExecutionResult.model_validate_json(dumped)
+        assert restored == result
+
+    def test_rejects_negative_latency(self) -> None:
+        with pytest.raises(ValidationError):
+            ExecutionResult.model_validate({"rows": [], "latency_seconds": -0.001})
+
+    def test_rejects_empty_error_string(self) -> None:
+        with pytest.raises(ValidationError):
+            ExecutionResult.model_validate({"rows": [], "latency_seconds": 0.0, "error": ""})
+
+    def test_rejects_extra_fields(self) -> None:
+        with pytest.raises(ValidationError):
+            ExecutionResult.model_validate(
+                {"rows": [], "latency_seconds": 0.0, "bytes_scanned": 1000},
+            )
+
+    def test_default_metadata_not_shared(self) -> None:
+        a = ExecutionResult(rows=[], latency_seconds=0.0)
+        b = ExecutionResult(rows=[], latency_seconds=0.0)
         a.metadata["touched"] = True
         assert b.metadata == {}
