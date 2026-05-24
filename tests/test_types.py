@@ -6,6 +6,7 @@ from pydantic import TypeAdapter, ValidationError
 from data_eval.types import (
     ColumnPresenceExpectation,
     ColumnTypeExpectation,
+    ComparisonConfig,
     Expectation,
     ExpectationSuite,
     Expected,
@@ -240,3 +241,46 @@ class TestExpected:
         original = ExpectationSuite(expectations=[RowCountExpectation(exact=3)])
         restored = ExpectedAdapter.validate_json(ExpectedAdapter.dump_json(original))
         assert restored == original
+
+
+@pytest.mark.unit
+class TestComparisonConfig:
+    def test_defaults(self) -> None:
+        cfg = ComparisonConfig()
+        assert cfg.row_order == "ignore"
+        assert cfg.column_order == "ignore"
+        assert cfg.type_equality == "ignore"
+        assert cfg.null_equality == "equal"
+        assert cfg.float_tolerance == 1e-9
+
+    def test_strict_construction(self) -> None:
+        cfg = ComparisonConfig(
+            row_order="strict",
+            column_order="strict",
+            type_equality="strict",
+            null_equality="distinct",
+            float_tolerance=0.0,
+        )
+        assert cfg.row_order == "strict"
+        assert cfg.null_equality == "distinct"
+
+    def test_json_round_trip(self) -> None:
+        cfg = ComparisonConfig(row_order="strict", float_tolerance=1e-6)
+        restored = ComparisonConfig.model_validate_json(cfg.model_dump_json())
+        assert restored == cfg
+
+    def test_rejects_unknown_row_order(self) -> None:
+        with pytest.raises(ValidationError):
+            ComparisonConfig.model_validate({"row_order": "maybe"})
+
+    def test_rejects_unknown_null_equality(self) -> None:
+        with pytest.raises(ValidationError):
+            ComparisonConfig.model_validate({"null_equality": "python"})
+
+    def test_rejects_negative_float_tolerance(self) -> None:
+        with pytest.raises(ValidationError):
+            ComparisonConfig(float_tolerance=-1e-9)
+
+    def test_rejects_extra_fields(self) -> None:
+        with pytest.raises(ValidationError):
+            ComparisonConfig.model_validate({"duplicates": "multiset"})

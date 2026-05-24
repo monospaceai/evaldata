@@ -121,3 +121,15 @@ Expected = Annotated[
     ExpectedResultSet | ExpectedSQL | ExpectationSuite,
     Field(discriminator="kind"),
 ]
+
+
+class ComparisonConfig(BaseModel):
+    """Rules for deciding whether two result sets are equivalent."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    row_order: Literal["ignore", "strict"] = "ignore"
+    column_order: Literal["ignore", "strict"] = "ignore"
+    type_equality: Literal["ignore", "strict"] = "ignore"
+    null_equality: Literal["equal", "distinct"] = "equal"
+    float_tolerance: Annotated[float, Field(ge=0.0)] = 1e-9
