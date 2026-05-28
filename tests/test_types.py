@@ -6,6 +6,7 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from data_eval.types import (
+    Column,
     ColumnMismatch,
     ColumnPresenceExpectation,
     ColumnTypeExpectation,
@@ -18,7 +19,7 @@ from data_eval.types import (
     Expected,
     ExpectedResultSet,
     ExpectedSQL,
-    NonNullExpectation,
+    NotNullExpectation,
     PlatformRef,
     ResultSetDiff,
     RowCountExpectation,
@@ -111,6 +112,35 @@ class TestSnapshotRef:
 
 
 @pytest.mark.unit
+class TestColumn:
+    def test_construction(self) -> None:
+        col = Column(name="revenue", type="DECIMAL(10, 2)")
+        assert col.name == "revenue"
+        assert col.type == "DECIMAL(10, 2)"
+
+    def test_nested_type_string(self) -> None:
+        col = Column(name="payload", type="ARRAY<STRUCT<a: INT, b: STRING>>")
+        assert col.type == "ARRAY<STRUCT<a: INT, b: STRING>>"
+
+    def test_json_round_trip(self) -> None:
+        col = Column(name="id", type="BIGINT")
+        restored = Column.model_validate_json(col.model_dump_json())
+        assert restored == col
+
+    def test_rejects_empty_name(self) -> None:
+        with pytest.raises(ValidationError):
+            Column(name="", type="INTEGER")
+
+    def test_rejects_empty_type(self) -> None:
+        with pytest.raises(ValidationError):
+            Column(name="id", type="")
+
+    def test_rejects_extra_fields(self) -> None:
+        with pytest.raises(ValidationError):
+            Column.model_validate({"name": "id", "type": "INTEGER", "nullable": True})
+
+
+@pytest.mark.unit
 class TestExpectedResultSet:
     def test_minimal_construction(self) -> None:
         exp = ExpectedResultSet(rows=[{"count": 1297}])
@@ -119,15 +149,15 @@ class TestExpectedResultSet:
         assert exp.schema_ is None
 
     def test_with_schema(self) -> None:
-        exp = ExpectedResultSet(rows=[{"id": 1}], schema={"id": "INTEGER"})
-        assert exp.schema_ == {"id": "INTEGER"}
+        exp = ExpectedResultSet(rows=[{"id": 1}], schema=[Column(name="id", type="INTEGER")])
+        assert exp.schema_ == [Column(name="id", type="INTEGER")]
 
     def test_empty_rows_allowed(self) -> None:
         exp = ExpectedResultSet(rows=[])
         assert exp.rows == []
 
     def test_json_round_trip(self) -> None:
-        exp = ExpectedResultSet(rows=[{"x": 1}], schema={"x": "INTEGER"})
+        exp = ExpectedResultSet(rows=[{"x": 1}], schema=[Column(name="x", type="INTEGER")])
         dumped = exp.model_dump_json()
         assert '"schema"' in dumped
         assert '"schema_"' not in dumped
@@ -179,8 +209,8 @@ class TestExpectations:
         assert e.column == "id"
         assert e.expected_type == "INTEGER"
 
-    def test_non_null_construction(self) -> None:
-        e = NonNullExpectation(column="email")
+    def test_not_null_construction(self) -> None:
+        e = NotNullExpectation(column="email")
         assert e.column == "email"
 
     def test_unique_construction(self) -> None:
@@ -257,31 +287,27 @@ class TestExpected:
 class TestComparisonConfig:
     def test_defaults(self) -> None:
         cfg = ComparisonConfig()
-        assert cfg.row_order == "ignore"
         assert cfg.column_order == "ignore"
-        assert cfg.type_equality == "ignore"
         assert cfg.null_equality == "equal"
         assert cfg.float_tolerance == 1e-9
 
     def test_strict_construction(self) -> None:
         cfg = ComparisonConfig(
-            row_order="strict",
             column_order="strict",
-            type_equality="strict",
             null_equality="distinct",
             float_tolerance=0.0,
         )
-        assert cfg.row_order == "strict"
+        assert cfg.column_order == "strict"
         assert cfg.null_equality == "distinct"
 
     def test_json_round_trip(self) -> None:
-        cfg = ComparisonConfig(row_order="strict", float_tolerance=1e-6)
+        cfg = ComparisonConfig(column_order="strict", float_tolerance=1e-6)
         restored = ComparisonConfig.model_validate_json(cfg.model_dump_json())
         assert restored == cfg
 
-    def test_rejects_unknown_row_order(self) -> None:
+    def test_rejects_unknown_column_order(self) -> None:
         with pytest.raises(ValidationError):
-            ComparisonConfig.model_validate({"row_order": "maybe"})
+            ComparisonConfig.model_validate({"column_order": "maybe"})
 
     def test_rejects_unknown_null_equality(self) -> None:
         with pytest.raises(ValidationError):
@@ -356,13 +382,13 @@ class TestEvalCase:
             expected=ExpectedSQL(sql="SELECT * FROM users WHERE active"),
             platform=PlatformRef(name="warehouse", kind="snowflake"),
             snapshot=SnapshotRef(kind="timestamp", value="2026-05-23T00:00:00Z"),
-            comparison=ComparisonConfig(row_order="strict"),
+            comparison=ComparisonConfig(column_order="strict"),
             allow_data_egress=True,
             cost_budget=CostBudget(max_seconds=30.0),
             metadata={"owner": "analytics", "ticket": "ANL-42"},
         )
         assert case.snapshot is not None
-        assert case.comparison.row_order == "strict"
+        assert case.comparison.column_order == "strict"
         assert case.allow_data_egress is True
         assert case.metadata["owner"] == "analytics"
 
@@ -477,10 +503,10 @@ class TestExecutionResult:
     def test_with_schema(self) -> None:
         result = ExecutionResult(
             rows=[{"id": 1, "revenue": 12.5}],
-            schema={"id": "INTEGER", "revenue": "DOUBLE"},
+            schema=[Column(name="id", type="INTEGER"), Column(name="revenue", type="DOUBLE")],
             latency_seconds=0.1,
         )
-        assert result.schema_ == {"id": "INTEGER", "revenue": "DOUBLE"}
+        assert result.schema_ == [Column(name="id", type="INTEGER"), Column(name="revenue", type="DOUBLE")]
 
     def test_with_error(self) -> None:
         result = ExecutionResult(
@@ -506,7 +532,7 @@ class TestExecutionResult:
     def test_json_round_trip_schema_uses_external_alias(self) -> None:
         result = ExecutionResult(
             rows=[{"x": 1}],
-            schema={"x": "INTEGER"},
+            schema=[Column(name="x", type="INTEGER")],
             latency_seconds=0.1,
         )
         dumped = result.model_dump_json()

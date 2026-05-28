@@ -37,6 +37,18 @@ class SnapshotRef(BaseModel):
     value: Annotated[str, Field(min_length=1)]
 
 
+class Column(BaseModel):
+    """A result-set column: its name and native SQL type string (compared semantically via SQLGlot)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Annotated[str, Field(min_length=1)]
+    type: Annotated[str, Field(min_length=1)]
+
+
+Schema = list[Column]
+
+
 class ExpectedResultSet(BaseModel):
     """Expected outcome specified as concrete result-set rows."""
 
@@ -44,7 +56,7 @@ class ExpectedResultSet(BaseModel):
 
     kind: Literal["result_set"] = "result_set"
     rows: list[dict[str, Any]]
-    schema_: dict[str, str] | None = Field(default=None, alias="schema")
+    schema_: Schema | None = Field(default=None, alias="schema")
 
 
 class ExpectedSQL(BaseModel):
@@ -84,12 +96,12 @@ class ColumnTypeExpectation(BaseModel):
     expected_type: Annotated[str, Field(min_length=1)]
 
 
-class NonNullExpectation(BaseModel):
+class NotNullExpectation(BaseModel):
     """A named column must contain no NULL values."""
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["non_null"] = "non_null"
+    kind: Literal["not_null"] = "not_null"
     column: Annotated[str, Field(min_length=1)]
 
 
@@ -103,7 +115,7 @@ class UniqueExpectation(BaseModel):
 
 
 Expectation = Annotated[
-    RowCountExpectation | ColumnPresenceExpectation | ColumnTypeExpectation | NonNullExpectation | UniqueExpectation,
+    RowCountExpectation | ColumnPresenceExpectation | ColumnTypeExpectation | NotNullExpectation | UniqueExpectation,
     Field(discriminator="kind"),
 ]
 
@@ -128,9 +140,7 @@ class ComparisonConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    row_order: Literal["ignore", "strict"] = "ignore"
     column_order: Literal["ignore", "strict"] = "ignore"
-    type_equality: Literal["ignore", "strict"] = "ignore"
     null_equality: Literal["equal", "distinct"] = "equal"
     float_tolerance: Annotated[float, Field(ge=0.0)] = 1e-9
 
@@ -178,7 +188,7 @@ class ExecutionResult(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True, serialize_by_alias=True)
 
     rows: list[dict[str, Any]]
-    schema_: dict[str, str] | None = Field(default=None, alias="schema")
+    schema_: Schema | None = Field(default=None, alias="schema")
     latency_seconds: Annotated[float, Field(ge=0)]
     error: Annotated[str, Field(min_length=1)] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
