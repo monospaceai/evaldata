@@ -1,5 +1,7 @@
 """DuckDB adapter: shared conformance battery + DuckDB-specific native-type checks."""
 
+from pathlib import Path
+
 import pytest
 from sqlglot import exp
 
@@ -74,14 +76,16 @@ class TestDuckDBNativeTypes:
 class TestDuckDBFilePath:
     """``database=`` argument is honoured — a file-backed DB persists across reopens."""
 
-    def test_file_backed_database_persists(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    def test_file_backed_database_persists(self, tmp_path: Path) -> None:
+        # Context-manager exit calls close() — deterministic release of the
+        # OS file handle / WAL lock (DuckDB issues #3573, #1365). Avoids the
+        # `del`-then-finalize trap (DuckDB #14771) that breaks on Windows and
+        # under non-CPython runtimes.
         db_path = str(tmp_path / "test.duckdb")
-        first = DuckDBAdapter(database=db_path)
-        first.execute("CREATE TABLE t (x INTEGER)")
-        first.execute("INSERT INTO t VALUES (42)")
-        # Drop the handle so the second adapter can re-open the file.
-        del first
-        second = DuckDBAdapter(database=db_path)
-        result = second.execute("SELECT x FROM t")
-        assert result.error is None
-        assert result.rows == [{"x": 42}]
+        with DuckDBAdapter(database=db_path) as first:
+            first.execute("CREATE TABLE t (x INTEGER)")
+            first.execute("INSERT INTO t VALUES (42)")
+        with DuckDBAdapter(database=db_path) as second:
+            result = second.execute("SELECT x FROM t")
+            assert result.error is None
+            assert result.rows == [{"x": 42}]
