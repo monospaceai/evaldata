@@ -20,6 +20,7 @@ from rich import box
 from rich.console import Console, RenderableType
 from rich.table import Table
 
+from data_eval.reporting.collector import CaseReport
 from data_eval.types import EvalCase, ExecutionResult, ResultSetDiff, ScoreResult, SolverError, SolverOutput
 
 
@@ -57,6 +58,30 @@ def render_solver_error(case: EvalCase, error: SolverError) -> str:
     )
 
 
+def render_summary(case_reports: Sequence[CaseReport]) -> str:
+    """Render a run-level rollup table (one row per case) plus a pass/fail tally."""
+    table = Table(box=box.SIMPLE, pad_edge=False)
+    table.add_column("case")
+    table.add_column("result")
+    table.add_column("detail")
+    for report in case_reports:
+        table.add_row(report.id, "PASS" if report.passed else "FAIL", _summary_detail(report))
+
+    buffer = io.StringIO()
+    console = Console(file=buffer, no_color=True, highlight=False, markup=False, width=100)
+    console.print(table)
+    passed = sum(1 for r in case_reports if r.passed)
+    console.print(f"{passed} passed, {len(case_reports) - passed} failed")
+    return "\n".join(line.rstrip() for line in buffer.getvalue().splitlines())
+
+
+def _summary_detail(report: CaseReport) -> str:
+    """The detail cell for a case: its solver error, or the names of any failed scorers."""
+    if report.error is not None:
+        return report.error
+    return ", ".join(score.scorer for score in report.scores if not score.passed)
+
+
 def _render_diff(diff: ResultSetDiff) -> str:
     """Render a ``ResultSetDiff`` as Rich tables, returned as an indented plain-text block.
 
@@ -79,7 +104,7 @@ def _render_diff(diff: ResultSetDiff) -> str:
         renderables += [f"extra rows ({diff.extra_row_count}); sample:", _rows_table(diff.sample_extra_rows)]
 
     buffer = io.StringIO()
-    console = Console(file=buffer, no_color=True, highlight=False, width=100)
+    console = Console(file=buffer, no_color=True, highlight=False, markup=False, width=100)
     for renderable in renderables:
         console.print(renderable)
     block = "\n".join(line.rstrip() for line in buffer.getvalue().splitlines())

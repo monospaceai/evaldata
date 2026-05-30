@@ -2,7 +2,8 @@
 
 import pytest
 
-from data_eval.reporting.terminal import render_failure, render_solver_error
+from data_eval.reporting.collector import CaseReport
+from data_eval.reporting.terminal import render_failure, render_solver_error, render_summary
 from data_eval.types import (
     EvalCase,
     ExecutionResult,
@@ -68,6 +69,19 @@ class TestRenderFailure:
         assert "type mismatches" in msg
         assert "TIMESTAMP" in msg and "DATE" in msg
 
+    def test_bracketed_type_strings_survive(self) -> None:
+        # Array/list-style values must not be eaten by Rich console markup ([...] tags).
+        out = SolverOutput(output="SELECT 1")
+        result = ExecutionResult(rows=[], latency_seconds=0.0)
+        diff = ResultSetDiff(
+            expected_row_count=1,
+            actual_row_count=1,
+            type_mismatches=[TypeMismatch(column="tags", expected="INTEGER[]", actual="VARCHAR[]")],
+        )
+        score = ScoreResult(scorer="result_set_equivalence", passed=False, diff=diff)
+        msg = render_failure(_case(), out, result, [score])
+        assert "INTEGER[]" in msg and "VARCHAR[]" in msg
+
     def test_renders_execution_error(self) -> None:
         out = SolverOutput(output="SELECT * FROM nope")
         result = ExecutionResult(rows=[], latency_seconds=0.0, error="table nope does not exist")
@@ -84,3 +98,27 @@ class TestRenderSolverError:
         assert "rock-count" in msg
         assert "auth" in msg
         assert "invalid api key" in msg
+
+
+@pytest.mark.unit
+class TestRenderSummary:
+    def test_rows_results_and_tally(self) -> None:
+        summary = render_summary(
+            [
+                CaseReport(id="ok", input="q", passed=True),
+                CaseReport(
+                    id="bad",
+                    input="q",
+                    passed=False,
+                    scores=[ScoreResult(scorer="result_set_equivalence", passed=False)],
+                ),
+            ]
+        )
+        assert "ok" in summary and "PASS" in summary
+        assert "bad" in summary and "FAIL" in summary
+        assert "result_set_equivalence" in summary  # failed-scorer name in the detail cell
+        assert "1 passed, 1 failed" in summary
+
+    def test_solver_error_shown_in_detail(self) -> None:
+        summary = render_summary([CaseReport(id="x", input="q", passed=False, error="solver error [auth]")])
+        assert "solver error [auth]" in summary

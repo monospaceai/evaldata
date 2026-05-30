@@ -23,6 +23,7 @@ from collections.abc import Sequence
 
 from data_eval.platforms.base import PlatformAdapter
 from data_eval.platforms.registry import resolve
+from data_eval.reporting.collector import CaseReport, record
 from data_eval.reporting.terminal import render_failure, render_solver_error
 from data_eval.scorers.base import Scorer
 from data_eval.solvers.base import Solver
@@ -45,7 +46,9 @@ def assert_eval(
     """
     output = solver.solve(case)
     if output.error is not None:
-        raise AssertionError(render_solver_error(case, output.error))
+        error = output.error
+        record(CaseReport(id=case.id, input=case.input, passed=False, error=f"solver error [{error.kind}]"))
+        raise AssertionError(render_solver_error(case, error))
     sql = output.output
     if sql is None:  # invariant: error is None implies output is set (SolverOutput validator)
         raise AssertionError(f"data-eval case {case.id!r}: solver returned neither output nor error")
@@ -53,5 +56,6 @@ def assert_eval(
     result = live.execute(sql)
     scores = [scorer.score(case, output, result) for scorer in scorers]
     failures = [s for s in scores if not s.passed]
+    record(CaseReport(id=case.id, input=case.input, passed=not failures, scores=list(scores)))
     if failures:
         raise AssertionError(render_failure(case, output, result, failures))
