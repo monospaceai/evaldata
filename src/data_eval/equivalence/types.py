@@ -1,6 +1,7 @@
 """Semantic SQL-type comparison via SQLGlot (single-dialect)."""
 
 from sqlglot import exp
+from sqlglot.errors import SqlglotError
 
 from data_eval.types import SQLDialect
 
@@ -24,6 +25,6 @@ def types_match(actual: str, expected: str, dialect: SQLDialect) -> bool:
     try:
         actual_dt = exp.DataType.build(actual, dialect=dialect)
         expected_dt = exp.DataType.build(expected, dialect=dialect)
-    except Exception:
+    except SqlglotError:
         return actual == expected
     return actual_dt.is_type(expected_dt)

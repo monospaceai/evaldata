@@ -225,7 +225,8 @@ class SolverOutput(BaseModel):
             ValueError: If Pydantic validation fails.
         """
         if (self.output is None) == (self.error is None):
-            raise ValueError("SolverOutput requires exactly one of 'output' or 'error' to be set")
+            msg = "SolverOutput requires exactly one of 'output' or 'error' to be set"
+            raise ValueError(msg)
         return self
 
 

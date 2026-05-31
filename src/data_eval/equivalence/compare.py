@@ -3,7 +3,7 @@
 from typing import overload
 
 from data_eval.equivalence.columns import ColumnReconciliation, reconcile_columns
-from data_eval.equivalence.resultset import TypedResultSet, UntypedResultSet
+from data_eval.equivalence.result_set import TypedResultSet, UntypedResultSet
 from data_eval.equivalence.rows import match_multiset
 from data_eval.equivalence.types import types_match
 from data_eval.types import ComparisonConfig, ResultSetDiff, SQLDialect, TypeMismatch
@@ -94,7 +94,7 @@ def _compare_typed(
     type_mismatches: list[TypeMismatch] = []
     if compare_types:
         if dialect is None:
-            msg = "dialect= is required when compare_types=True on typed result sets"
+            msg = "`dialect` is required when `compare_types=True` on typed result sets"
             raise ValueError(msg)
         actual_types = {c.name: c.type for c in actual.schema_}
         expected_types = {c.name: c.type for c in expected.schema_}
@@ -155,13 +155,13 @@ def _build_diff(
         type_mismatches=type_mismatches,
         column_order_mismatch=cols.order_mismatch,
     )
-    if _is_empty(diff):
+    if _is_equal(diff):
         return None
     return diff
 
 
-def _is_empty(d: ResultSetDiff) -> bool:
-    """Check whether a `ResultSetDiff` carries no signals of difference.
+def _is_equal(d: ResultSetDiff) -> bool:
+    """Whether the diff records no differences — i.e. the result sets are equal.
 
     Args:
         d: The diff to inspect.

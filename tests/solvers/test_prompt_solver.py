@@ -96,7 +96,8 @@ class TestPromptSolver:
         _patch_completion(monkeypatch, _stub_response("SELECT 1"))
 
         def boom(**kwargs):
-            raise Exception("no pricing for this model")
+            msg = "no pricing for this model"
+            raise Exception(msg)
 
         monkeypatch.setattr("litellm.completion_cost", boom)
         out = PromptSolver(model="m").solve(_case())

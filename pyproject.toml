@@ -111,7 +111,7 @@ src = ["src", "tests"]
 # https://docs.astral.sh/ruff/linter/
 preview = true
 select = [
-    "E", "F", "I", "UP", "B", "SIM", "D",
+    "E", "F", "I", "UP", "B", "SIM", "D", "EM",
     "DOC102", "DOC201", "DOC202", "DOC402", "DOC403", "DOC501", "DOC502",
 ]
 ignore = [
@@ -172,7 +172,7 @@ exclude_also = [
     "if __name__ == .__main__.:",
     "class .*\\bProtocol\\):",
 ]
-fail_under = 0   # Start permissive; ratchet to 80 once equivalence engine lands.
+fail_under = 100
 
 [tool.coverage.html]
 directory = "htmlcov"

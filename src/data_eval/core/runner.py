@@ -42,7 +42,8 @@ def assert_eval(
         raise AssertionError(render_solver_error(case, error))
     sql = output.output
     if sql is None:  # invariant: error is None implies output is set (SolverOutput validator)
-        raise AssertionError(f"data-eval case {case.id!r}: solver returned neither output nor error")
+        msg = f"data-eval case {case.id!r}: solver returned neither output nor error"
+        raise AssertionError(msg)
     live = adapter if adapter is not None else resolve(case.platform)
     result = live.execute(sql)
     scores = [scorer.score(case, output, result) for scorer in scorers]

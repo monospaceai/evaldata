@@ -203,6 +203,9 @@ class TestTypesMatch:
     def test_unparseable_falls_back_to_string_equality(self) -> None:
         assert types_match("UNKNOWN_EXOTIC_TYPE", "UNKNOWN_EXOTIC_TYPE", "duckdb") is True
 
+    def test_unparseable_different_strings_not_equal(self) -> None:
+        assert types_match("UNKNOWN_EXOTIC_TYPE_A", "UNKNOWN_EXOTIC_TYPE_B", "duckdb") is False
+
 
 # ---------- compare() battery ----------
 

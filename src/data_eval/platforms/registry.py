@@ -105,7 +105,5 @@ def resolve(ref: PlatformRef) -> PlatformAdapter:
 def close_all() -> None:
     """Close every cached adapter and clear the cache (idempotent; no-op when empty)."""
     for _ref, adapter in _ADAPTERS.values():
-        close = getattr(adapter, "close", None)
-        if callable(close):
-            close()
+        adapter.close()
     _ADAPTERS.clear()

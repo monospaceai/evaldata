@@ -117,7 +117,8 @@ def doctor(
     """
     refs = _build_refs(duckdb=duckdb, postgres=postgres)
     if not refs:
-        raise typer.BadParameter("specify at least one platform, e.g. --duckdb PATH or --postgres CONNINFO")
+        msg = "specify at least one platform, e.g. --duckdb PATH or --postgres CONNINFO"
+        raise typer.BadParameter(msg)
 
     console = Console()
     table = Table(title="data-eval doctor", title_justify="left")

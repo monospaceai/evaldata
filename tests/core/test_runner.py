@@ -102,7 +102,8 @@ class _ExplodingAdapter:
     """A stub adapter whose execute fails the test if ever called."""
 
     def execute(self, sql: str) -> ExecutionResult:
-        raise AssertionError("adapter.execute must not be called when the solver errors")
+        msg = "adapter.execute must not be called when the solver errors"
+        raise AssertionError(msg)
 
 
 @pytest.mark.unit

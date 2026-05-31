@@ -27,3 +27,7 @@ class PlatformAdapter(Protocol):
     def execute(self, sql: str) -> ExecutionResult:
         """Execute one SQL statement and return its structured result."""
         ...
+
+    def close(self) -> None:
+        """Release the underlying connection/resources. Called once at session end."""
+        ...
