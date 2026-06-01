@@ -22,6 +22,7 @@ class ConformanceFixtures(Protocol):
     empty_result: str  # returns zero rows with a known schema (column "n")
     three_rows: str  # returns three rows in column "n" with values 1, 2, 3
     null_value: str  # returns one row with NULL in column "x"
+    duplicate_column_names: str  # returns two columns both named "x"
     references_missing_table: str  # references a non-existent table
     parse_error: str  # is syntactically invalid
 
@@ -34,6 +35,7 @@ class DuckDBFixtures:
     empty_result: str = "SELECT 1 AS n WHERE 1=0"
     three_rows: str = "SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3"
     null_value: str = "SELECT NULL AS x"
+    duplicate_column_names: str = "SELECT 1 AS x, 2 AS x"
     references_missing_table: str = "SELECT * FROM does_not_exist_xyz"
     parse_error: str = "SELECT FROM nope"
 
@@ -52,6 +54,7 @@ class PostgresFixtures:
     empty_result: str = "SELECT 1 AS n WHERE false"
     three_rows: str = "SELECT n FROM (VALUES (1), (2), (3)) AS t(n)"
     null_value: str = "SELECT NULL AS x"
+    duplicate_column_names: str = "SELECT 1 AS x, 2 AS x"
     references_missing_table: str = "SELECT * FROM does_not_exist_xyz"
     parse_error: str = "SLECT 1"
 

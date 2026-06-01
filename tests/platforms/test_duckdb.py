@@ -32,7 +32,7 @@ class TestDuckDBNativeTypes:
         result = adapter.execute(sql)
         assert result.error is None
         assert result.schema_ is not None
-        assert result.schema_[0].type == expected_type
+        assert result.schema_[0].type.raw == expected_type
 
     @pytest.mark.parametrize(
         "sql",
@@ -50,7 +50,7 @@ class TestDuckDBNativeTypes:
         result = adapter.execute(sql)
         assert result.error is None
         assert result.schema_ is not None
-        parsed = exp.DataType.build(result.schema_[0].type, dialect="duckdb")
+        parsed = exp.DataType.build(result.schema_[0].type.raw, dialect="duckdb")
         assert isinstance(parsed, exp.DataType)
 
 

@@ -23,10 +23,12 @@ from data_eval.types import (
     PlatformRef,
     ResultSetDiff,
     RowCountExpectation,
+    Schema,
     ScoreResult,
     SnapshotRef,
     SolverError,
     SolverOutput,
+    SqlType,
     TypeMismatch,
     UniqueExpectation,
 )
@@ -116,15 +118,67 @@ class TestSnapshotRef:
 
 
 @pytest.mark.unit
+class TestSqlType:
+    def test_string_shorthand_leaves_canonical_unset(self) -> None:
+        t = SqlType.model_validate("BIGINT")
+        assert t.raw == "BIGINT"
+        assert t.canonical is None
+
+    def test_parse_populates_canonical(self) -> None:
+        t = SqlType.parse("BIGINT", "duckdb")
+        assert t.raw == "BIGINT"
+        assert t.canonical == "BIGINT"
+
+    def test_canonical_equality_bigint_int8(self) -> None:
+        assert SqlType.parse("BIGINT", "duckdb") == SqlType.parse("INT8", "duckdb")
+
+    def test_case_insensitive(self) -> None:
+        assert SqlType.parse("bigint", "duckdb") == SqlType.parse("BIGINT", "duckdb")
+
+    def test_whitespace_insensitive(self) -> None:
+        assert SqlType.parse("DECIMAL(10,2)", "duckdb") == SqlType.parse("DECIMAL(10, 2)", "duckdb")
+
+    def test_exact_parameters_distinct(self) -> None:
+        assert SqlType.parse("DECIMAL(10,2)", "duckdb") != SqlType.parse("DECIMAL", "duckdb")
+
+    def test_cross_dialect_canonical_equality(self) -> None:
+        assert SqlType.parse("BIGINT", "duckdb") == SqlType.parse("LONG", "databricks")
+
+    def test_unparseable_falls_back_to_raw(self) -> None:
+        a = SqlType.parse("UNKNOWN_EXOTIC_TYPE", "duckdb")
+        b = SqlType.parse("UNKNOWN_EXOTIC_TYPE", "duckdb")
+        assert a.canonical is None
+        assert a == b
+
+    def test_unparseable_different_raw_distinct(self) -> None:
+        assert SqlType.parse("EXOTIC_A", "duckdb") != SqlType.parse("EXOTIC_B", "duckdb")
+
+    def test_json_round_trip(self) -> None:
+        t = SqlType.parse("BIGINT", "duckdb")
+        dumped = t.model_dump_json()
+        assert '"raw":"BIGINT"' in dumped
+        assert '"canonical":"BIGINT"' in dumped
+        restored = SqlType.model_validate_json(dumped)
+        assert restored == t
+        assert restored.raw == t.raw and restored.canonical == t.canonical
+
+
+@pytest.mark.unit
 class TestColumn:
     def test_construction(self) -> None:
         col = Column(name="revenue", type="DECIMAL(10, 2)")
         assert col.name == "revenue"
-        assert col.type == "DECIMAL(10, 2)"
+        assert col.type.raw == "DECIMAL(10, 2)"
+        assert col.nullable is None
+
+    def test_nullable_tri_state(self) -> None:
+        assert Column(name="a", type="INT", nullable=True).nullable is True
+        assert Column(name="a", type="INT", nullable=False).nullable is False
+        assert Column(name="a", type="INT").nullable is None
 
     def test_nested_type_string(self) -> None:
         col = Column(name="payload", type="ARRAY<STRUCT<a: INT, b: STRING>>")
-        assert col.type == "ARRAY<STRUCT<a: INT, b: STRING>>"
+        assert col.type.raw == "ARRAY<STRUCT<a: INT, b: STRING>>"
 
     def test_json_round_trip(self) -> None:
         col = Column(name="id", type="BIGINT")
@@ -141,7 +195,42 @@ class TestColumn:
 
     def test_rejects_extra_fields(self) -> None:
         with pytest.raises(ValidationError):
-            Column.model_validate({"name": "id", "type": "INTEGER", "nullable": True})
+            Column.model_validate({"name": "id", "type": "INTEGER", "scale": 2})
+
+
+@pytest.mark.unit
+class TestSchema:
+    def test_preserves_duplicate_names(self) -> None:
+        s = Schema([Column(name="a", type="INT"), Column(name="a", type="VARCHAR")])
+        assert s.names == ["a", "a"]
+        assert [t.raw for t in s.types] == ["INT", "VARCHAR"]
+
+    def test_len_index_iter(self) -> None:
+        s = Schema([Column(name="a", type="INT"), Column(name="b", type="VARCHAR")])
+        assert len(s) == 2
+        assert s[1].name == "b"
+        assert [c.name for c in s] == ["a", "b"]
+
+    def test_names_and_types_positionally_aligned(self) -> None:
+        s = Schema([Column(name="x", type="INT"), Column(name="y", type="DOUBLE")])
+        assert s.names == ["x", "y"]
+        assert [t.raw for t in s.types] == ["INT", "DOUBLE"]
+
+    def test_json_array_round_trip(self) -> None:
+        s = Schema([Column(name="id", type="INTEGER")])
+        dumped = s.model_dump_json()
+        assert dumped.startswith("[")
+        assert '"schema_"' not in dumped
+        restored = Schema.model_validate_json(dumped)
+        assert restored == s
+
+    def test_coerces_from_plain_list(self) -> None:
+        result = ExecutionResult(
+            rows=[{"id": 1}],
+            schema=[Column(name="id", type="INTEGER")],
+            latency_seconds=0.1,
+        )
+        assert isinstance(result.schema_, Schema)
 
 
 @pytest.mark.unit
@@ -154,7 +243,9 @@ class TestExpectedResultSet:
 
     def test_with_schema(self) -> None:
         exp = ExpectedResultSet(rows=[{"id": 1}], schema=[Column(name="id", type="INTEGER")])
-        assert exp.schema_ == [Column(name="id", type="INTEGER")]
+        assert exp.schema_ is not None
+        assert exp.schema_.names == ["id"]
+        assert exp.schema_[0].type.raw == "INTEGER"
 
     def test_empty_rows_allowed(self) -> None:
         exp = ExpectedResultSet(rows=[])
@@ -417,6 +508,15 @@ class TestEvalCase:
         with pytest.raises(ValidationError):
             _make_case(typo_field="anything")
 
+    def test_rejects_duplicate_expected_schema_columns(self) -> None:
+        with pytest.raises(ValidationError, match="duplicate column name"):
+            _make_case(
+                expected=ExpectedResultSet(
+                    rows=[{"x": 1}],
+                    schema=[Column(name="x", type="INTEGER"), Column(name="x", type="BIGINT")],
+                ),
+            )
+
     def test_default_metadata_not_shared(self) -> None:
         case_a = _make_case()
         case_b = _make_case(id="another")
@@ -554,7 +654,9 @@ class TestExecutionResult:
             schema=[Column(name="id", type="INTEGER"), Column(name="revenue", type="DOUBLE")],
             latency_seconds=0.1,
         )
-        assert result.schema_ == [Column(name="id", type="INTEGER"), Column(name="revenue", type="DOUBLE")]
+        assert result.schema_ is not None
+        assert result.schema_.names == ["id", "revenue"]
+        assert [t.raw for t in result.schema_.types] == ["INTEGER", "DOUBLE"]
 
     def test_with_error(self) -> None:
         result = ExecutionResult(

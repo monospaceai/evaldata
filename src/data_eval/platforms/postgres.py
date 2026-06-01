@@ -6,7 +6,8 @@ from typing import Self
 
 import psycopg
 
-from data_eval.types import Column, ExecutionResult
+from data_eval.platforms.base import rows_or_error
+from data_eval.types import Column, ExecutionResult, SqlType
 
 
 class PostgresAdapter:
@@ -66,10 +67,8 @@ class PostgresAdapter:
         if description is None:
             # Non-row-returning statement (DDL/DML): success, no schema.
             return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed)
-        schema: list[Column] = []
-        names: list[str] = []
-        for col in description:
-            schema.append(Column(name=col.name, type=col.type_display))
-            names.append(col.name)
-        rows = [dict(zip(names, row, strict=True)) for row in rows_raw]
-        return ExecutionResult(rows=rows, schema=schema, latency_seconds=elapsed)
+        columns = [
+            Column(name=col.name, type=SqlType.parse(col.type_display, "postgres"), nullable=col.null_ok)
+            for col in description
+        ]
+        return rows_or_error(columns, rows_raw, elapsed)

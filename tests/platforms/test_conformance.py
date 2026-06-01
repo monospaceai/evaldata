@@ -41,6 +41,16 @@ def test_null_values_round_trip(under_test: UnderTest) -> None:
     assert result.rows == [{"x": None}]
 
 
+def test_duplicate_output_columns_return_error(under_test: UnderTest) -> None:
+    # Name-keyed rows cannot represent two columns sharing a name; the adapter surfaces
+    # this as an error rather than silently dropping the colliding column.
+    result = under_test.adapter.execute(under_test.fixtures.duplicate_column_names)
+    assert result.error is not None
+    assert "duplicate" in result.error
+    assert result.rows == []
+    assert result.schema_ is None
+
+
 def test_missing_table_returns_error_not_exception(under_test: UnderTest) -> None:
     result = under_test.adapter.execute(under_test.fixtures.references_missing_table)
     assert result.error is not None

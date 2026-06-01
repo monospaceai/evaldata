@@ -6,7 +6,8 @@ from typing import Self
 
 import duckdb
 
-from data_eval.types import Column, ExecutionResult
+from data_eval.platforms.base import rows_or_error
+from data_eval.types import Column, ExecutionResult, SqlType
 
 
 class DuckDBAdapter:
@@ -60,10 +61,9 @@ class DuckDBAdapter:
                 error=str(e),
             )
         elapsed = time.perf_counter() - start
-        schema: list[Column] = []
-        names: list[str] = []
-        for name, type_, *_ in description:
-            schema.append(Column(name=name, type=str(type_)))
-            names.append(name)
-        rows = [dict(zip(names, row, strict=True)) for row in rows_raw]
-        return ExecutionResult(rows=rows, schema=schema, latency_seconds=elapsed)
+        columns: list[Column] = []
+        for desc in description:
+            name, type_ = desc[0], desc[1]
+            null_ok = desc[6] if len(desc) > 6 else None
+            columns.append(Column(name=name, type=SqlType.parse(str(type_), "duckdb"), nullable=null_ok))
+        return rows_or_error(columns, rows_raw, elapsed)

@@ -1,8 +1,12 @@
 """Core public Pydantic types for data-eval."""
 
+from collections import Counter
+from collections.abc import Iterator
 from typing import Annotated, Any, Literal, NewType
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
+from sqlglot import exp
+from sqlglot.errors import SqlglotError
 
 # A SQL string designated as a solver's runnable artifact. Static-only: at runtime it is a
 # plain `str`, so it flows transparently into anything that executes SQL; producing one
@@ -43,16 +47,124 @@ class SnapshotRef(BaseModel):
     value: Annotated[str, Field(min_length=1)]
 
 
+class SqlType(BaseModel):
+    """A SQL column type, canonicalised through SQLGlot for safe equality.
+
+    `raw` is the native string the platform or author produced (truthful, for diffs).
+    `canonical` is the dialect-neutral SQLGlot rendering used for comparison, or `None`
+    when SQLGlot cannot parse the type. Equality compares `canonical` when both sides
+    have one, else falls back to `raw`.
+
+    Accepts a plain string as authoring shorthand: `"BIGINT"` becomes a `SqlType` with
+    `raw="BIGINT"` and `canonical=None`. Canonicalisation happens eagerly at the
+    ingestion boundary (adapters and the `EvalCase` validator), never at compare time.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    raw: Annotated[str, Field(min_length=1)]
+    canonical: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_string_shorthand(cls, value: Any) -> Any:
+        """Turn a bare type string into `{raw, canonical=None}`.
+
+        Args:
+            value: The raw input — either a string shorthand or a mapping.
+
+        Returns:
+            A mapping suitable for field validation; the input unchanged if not a string.
+        """
+        if isinstance(value, str):
+            return {"raw": value}
+        return value
+
+    @classmethod
+    def parse(cls, raw: str, dialect: "SQLDialect") -> "SqlType":
+        """Build a `SqlType`, canonicalising `raw` in `dialect`.
+
+        Args:
+            raw: The native SQL type string.
+            dialect: The SQLGlot dialect to parse `raw` in.
+
+        Returns:
+            A `SqlType` whose `canonical` is the dialect-neutral SQLGlot rendering, or
+            `None` if `raw` is not parseable in `dialect`.
+        """
+        try:
+            canonical = exp.DataType.build(raw, dialect=dialect).sql()
+        except SqlglotError:
+            return cls(raw=raw, canonical=None)
+        return cls(raw=raw, canonical=canonical)
+
+    def __eq__(self, other: object) -> bool:
+        """Compare on `canonical` when both sides have one, else on `raw`.
+
+        Returns:
+            `True` if the types are equal under that rule, `NotImplemented` if `other`
+            is not a `SqlType`.
+        """
+        if not isinstance(other, SqlType):
+            return NotImplemented
+        if self.canonical is not None and other.canonical is not None:
+            return self.canonical == other.canonical
+        return self.raw == other.raw
+
+    def __hash__(self) -> int:
+        """Hash on `canonical` when present, else `raw` — consistent with `__eq__`.
+
+        Returns:
+            The hash of the comparison key.
+        """
+        return hash(self.canonical if self.canonical is not None else self.raw)
+
+
 class Column(BaseModel):
-    """A result-set column: its name and native SQL type string (compared semantically via SQLGlot)."""
+    """A result-set column: name, SQL type, and tri-state nullability."""
 
     model_config = ConfigDict(extra="forbid")
 
     name: Annotated[str, Field(min_length=1)]
-    type: Annotated[str, Field(min_length=1)]
+    type: SqlType
+    nullable: bool | None = None
 
 
-Schema = list[Column]
+class Schema(RootModel[list[Column]]):
+    """An ordered, duplicate-faithful sequence of result-set columns.
+
+    Wraps a `list[Column]` and serialises as a plain JSON array. Name lookup is not
+    offered: result sets may repeat column names, so the convenience accessors are
+    positional and duplicate-safe.
+    """
+
+    root: list[Column]
+
+    def __iter__(self) -> Iterator[Column]:  # ty: ignore[invalid-method-override]
+        """Iterate the columns in order.
+
+        Returns:
+            An iterator over the columns.
+        """
+        return iter(self.root)
+
+    def __len__(self) -> int:
+        """Return the number of columns."""
+        return len(self.root)
+
+    def __getitem__(self, index: int) -> Column:
+        """Return the column at `index` (positional)."""
+        return self.root[index]
+
+    @property
+    def names(self) -> list[str]:
+        """The column names in order (duplicate-faithful)."""
+        return [c.name for c in self.root]
+
+    @property
+    def types(self) -> list["SqlType"]:
+        """The column types in order, positionally aligned with `names`."""
+        return [c.type for c in self.root]
 
 
 class ExpectedResultSet(BaseModel):
@@ -173,6 +285,37 @@ class EvalCase(BaseModel):
     allow_data_egress: bool = False
     cost_budget: CostBudget | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _canonicalize_expected_schema(self) -> "EvalCase":
+        """Canonicalise an `ExpectedResultSet` schema's types in the case's dialect.
+
+        The schema is authored with native type strings whose dialect is the platform's.
+        Re-build each `Column.type` via `SqlType.parse` so `canonical` is populated and
+        comparison is dialect-free downstream. Duplicate column names are rejected: rows
+        are matched by name during comparison, so a repeated name is unresolvable.
+
+        Returns:
+            The validated `EvalCase`.
+
+        Raises:
+            ValueError: If the expected schema declares a column name more than once.
+        """
+        if isinstance(self.expected, ExpectedResultSet) and self.expected.schema_ is not None:
+            names = self.expected.schema_.names
+            duplicates = [name for name, count in Counter(names).items() if count > 1]
+            if duplicates:
+                listed = ", ".join(repr(name) for name in duplicates)
+                msg = f"expected schema has duplicate column name(s): {listed}"
+                raise ValueError(msg)
+            dialect = self.platform.dialect or self.platform.kind
+            self.expected.schema_ = Schema(
+                root=[
+                    Column(name=c.name, type=SqlType.parse(c.type.raw, dialect), nullable=c.nullable)
+                    for c in self.expected.schema_
+                ]
+            )
+        return self
 
 
 SolverErrorKind = Literal[

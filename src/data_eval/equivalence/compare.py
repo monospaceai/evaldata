@@ -5,8 +5,7 @@ from typing import overload
 from data_eval.equivalence.columns import ColumnReconciliation, reconcile_columns
 from data_eval.equivalence.result_set import TypedResultSet, UntypedResultSet
 from data_eval.equivalence.rows import match_multiset
-from data_eval.equivalence.types import types_match
-from data_eval.types import ComparisonConfig, ResultSetDiff, SQLDialect, TypeMismatch
+from data_eval.types import ComparisonConfig, ResultSetDiff, TypeMismatch
 
 #: Max differing rows carried in each `ResultSetDiff` sample. Counts stay exact; only
 #: the inline examples are capped so a large mismatch doesn't flood the failure message.
@@ -20,7 +19,6 @@ def compare(
     config: ComparisonConfig | None = ...,
     *,
     compare_types: bool = ...,
-    dialect: SQLDialect | None = ...,
 ) -> ResultSetDiff | None: ...
 
 
@@ -38,12 +36,13 @@ def compare(
     config: ComparisonConfig | None = None,
     *,
     compare_types: bool = True,
-    dialect: SQLDialect | None = None,
 ) -> ResultSetDiff | None:
     """Compare an actual result set against an expected one for equivalence.
 
-    Both inputs must be the same shape: either both `TypedResultSet` (enabling semantic
-    type comparison) or both `UntypedResultSet`. Row comparison is multiset (unordered).
+    Both inputs must be the same shape: either both `TypedResultSet` (enabling column-type
+    comparison) or both `UntypedResultSet`. Row comparison is multiset (unordered). Column
+    types are compared via `SqlType` equality; they are canonicalised at ingestion, so no
+    dialect is needed here.
 
     Args:
         actual: The actual result set.
@@ -52,8 +51,6 @@ def compare(
             Defaults to `ComparisonConfig()`.
         compare_types: Whether to compare column types. Only meaningful for typed result
             sets.
-        dialect: The SQLGlot dialect for semantic type comparison. Required when
-            `compare_types` is true on typed result sets.
 
     Returns:
         `None` if the result sets are equivalent, else a `ResultSetDiff` describing the
@@ -64,7 +61,7 @@ def compare(
     """
     cfg = config or ComparisonConfig()
     if isinstance(actual, TypedResultSet) and isinstance(expected, TypedResultSet):
-        return _compare_typed(actual, expected, cfg, compare_types, dialect)
+        return _compare_typed(actual, expected, cfg, compare_types)
     if isinstance(actual, UntypedResultSet) and isinstance(expected, UntypedResultSet):
         return _compare_untyped(actual, expected, cfg)
     msg = "actual and expected must both be Typed or both Untyped result sets"
@@ -76,32 +73,21 @@ def _compare_typed(
     expected: TypedResultSet,
     cfg: ComparisonConfig,
     compare_types: bool,
-    dialect: SQLDialect | None,
 ) -> ResultSetDiff | None:
-    """Compare two typed result sets, optionally including semantic column-type comparison.
+    """Compare two typed result sets, optionally including column-type comparison.
 
     Returns:
         `None` if equivalent, else a `ResultSetDiff` describing the differences.
-
-    Raises:
-        ValueError: If `compare_types` is true but `dialect` is not given.
     """
-    cols = reconcile_columns(
-        [c.name for c in actual.schema_],
-        [c.name for c in expected.schema_],
-        cfg.column_order,
-    )
+    cols = reconcile_columns(actual.schema_.names, expected.schema_.names, cfg.column_order)
     type_mismatches: list[TypeMismatch] = []
     if compare_types:
-        if dialect is None:
-            msg = "`dialect` is required when `compare_types=True` on typed result sets"
-            raise ValueError(msg)
-        actual_types = {c.name: c.type for c in actual.schema_}
-        expected_types = {c.name: c.type for c in expected.schema_}
+        actual_types = dict(zip(actual.schema_.names, actual.schema_.types, strict=True))
+        expected_types = dict(zip(expected.schema_.names, expected.schema_.types, strict=True))
         type_mismatches = [
-            TypeMismatch(column=col, expected=expected_types[col], actual=actual_types[col])
+            TypeMismatch(column=col, expected=expected_types[col].raw, actual=actual_types[col].raw)
             for col in cols.in_both
-            if not types_match(actual_types[col], expected_types[col], dialect)
+            if actual_types[col] != expected_types[col]
         ]
     return _build_diff(actual, expected, cols, type_mismatches, cfg)
 
