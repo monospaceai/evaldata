@@ -153,6 +153,21 @@ class TestSqlType:
     def test_unparseable_different_raw_distinct(self) -> None:
         assert SqlType.parse("EXOTIC_A", "duckdb") != SqlType.parse("EXOTIC_B", "duckdb")
 
+    def test_not_equal_to_non_sqltype(self) -> None:
+        # __eq__ returns NotImplemented for a non-SqlType, so Python falls back to inequality.
+        assert SqlType.parse("BIGINT", "duckdb") != 5
+
+    def test_hashable_by_canonical(self) -> None:
+        a = SqlType.parse("BIGINT", "duckdb")
+        b = SqlType.parse("INT8", "duckdb")
+        assert hash(a) == hash(b)
+        assert len({a, b}) == 1
+
+    def test_hashable_by_raw_when_unparseable(self) -> None:
+        a = SqlType.parse("EXOTIC_X", "duckdb")
+        assert a.canonical is None
+        assert hash(a) == hash(SqlType.parse("EXOTIC_X", "duckdb"))
+
     def test_json_round_trip(self) -> None:
         t = SqlType.parse("BIGINT", "duckdb")
         dumped = t.model_dump_json()

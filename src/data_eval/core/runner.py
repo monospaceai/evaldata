@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 
-from data_eval.platforms.base import PlatformAdapter
+from data_eval.platforms.base import PlatformAdapter, execute_within_budget
 from data_eval.platforms.registry import resolve
 from data_eval.reporting.collector import CaseReport, record
 from data_eval.reporting.terminal import render_failure, render_solver_error
@@ -22,7 +22,8 @@ def assert_eval(
 
     Solves the case, executes the produced SQL, and scores the result with each scorer.
     The adapter is the explicitly passed `adapter` if given, otherwise resolved (and
-    session-cached) from `case.platform`.
+    session-cached) from `case.platform`. Execution is bounded by `case.cost_budget`'s
+    `max_seconds`: an overrunning query is cancelled and scored as an execution failure.
 
     Args:
         case: The eval case to run.
@@ -41,11 +42,12 @@ def assert_eval(
         record(CaseReport(id=case.id, input=case.input, passed=False, error=f"solver error [{error.kind}]"))
         raise AssertionError(render_solver_error(case, error))
     sql = output.output
-    if sql is None:  # invariant: error is None implies output is set (SolverOutput validator)
+    if sql is None:  # pragma: no cover - unreachable: SolverOutput's validator guarantees output XOR error
         msg = f"data-eval case {case.id!r}: solver returned neither output nor error"
         raise AssertionError(msg)
     live = adapter if adapter is not None else resolve(case.platform)
-    result = live.execute(sql)
+    max_seconds = case.cost_budget.max_seconds if case.cost_budget is not None else None
+    result = execute_within_budget(live, sql, max_seconds)
     scores = [scorer.score(case, output, result) for scorer in scorers]
     failures = [s for s in scores if not s.passed]
     record(CaseReport(id=case.id, input=case.input, passed=not failures, scores=list(scores)))

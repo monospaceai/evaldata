@@ -1,6 +1,6 @@
 """Shared `PlatformAdapter` conformance battery, parametrised over every adapter via `under_test`."""
 
-from data_eval.platforms.base import PlatformAdapter
+from data_eval.platforms.base import PlatformAdapter, execute_within_budget
 
 from .conftest import UnderTest
 
@@ -77,3 +77,28 @@ def test_latency_is_measured_on_failure(under_test: UnderTest) -> None:
     result = under_test.adapter.execute(under_test.fixtures.parse_error)
     assert result.error is not None
     assert result.latency_seconds >= 0
+
+
+def test_query_within_budget_returns_result(under_test: UnderTest) -> None:
+    result = execute_within_budget(under_test.adapter, under_test.fixtures.one_row_one_column, max_seconds=30)
+    assert result.error is None
+    assert result.rows == [{"n": 1}]
+
+
+def test_query_exceeding_budget_is_cancelled(under_test: UnderTest) -> None:
+    # A query that overruns the budget is aborted via adapter.cancel() and surfaced as an
+    # error rather than blocking for its full runtime.
+    result = execute_within_budget(under_test.adapter, under_test.fixtures.slow_query, max_seconds=0.5)
+    assert result.error is not None
+    assert "budget" in result.error
+    assert result.rows == []
+    assert result.schema_ is None
+    assert result.latency_seconds >= 0.5
+
+
+def test_cancel_is_safe_when_no_query_running(under_test: UnderTest) -> None:
+    # cancel() with nothing in flight is a no-op; the adapter stays usable afterwards.
+    under_test.adapter.cancel()
+    result = under_test.adapter.execute(under_test.fixtures.one_row_one_column)
+    assert result.error is None
+    assert result.rows == [{"n": 1}]

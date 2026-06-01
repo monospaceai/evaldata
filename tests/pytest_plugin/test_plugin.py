@@ -1,8 +1,12 @@
 """Tests for the data-eval pytest plugin's `case` fixture, exercised via `pytester`."""
 
 import json
+import types
+from pathlib import Path
 
 import pytest
+
+from data_eval.pytest_plugin import plugin
 
 pytest_plugins = ["pytester"]
 
@@ -74,6 +78,27 @@ def test_run_summary_printed_at_end_of_session(pytester: pytest.Pytester) -> Non
     result = pytester.runpytest()
     result.assert_outcomes(passed=1)
     result.stdout.fnmatch_lines(["*data-eval summary*", "*test_eval*PASS*", "*1 passed, 0 failed*"])
+
+
+@pytest.mark.unit
+def test_terminal_summary_skipped_on_xdist_worker() -> None:
+    config = types.SimpleNamespace(workerinput={})
+    calls: list[str] = []
+    reporter = types.SimpleNamespace(
+        write_sep=lambda *a, **k: calls.append("sep"),
+        write_line=lambda *a, **k: calls.append("line"),
+    )
+    plugin.pytest_terminal_summary(reporter, 0, config)  # ty: ignore[invalid-argument-type]
+    assert calls == []  # the controller prints the summary, never a worker
+
+
+@pytest.mark.unit
+def test_sessionfinish_on_xdist_worker_does_not_write_json(tmp_path: Path) -> None:
+    artifact = tmp_path / "results.json"
+    config = types.SimpleNamespace(workerinput={}, getoption=lambda name: str(artifact))
+    session = types.SimpleNamespace(config=config)
+    plugin.pytest_sessionfinish(session, 0)  # ty: ignore[invalid-argument-type]
+    assert not artifact.exists()  # the controller writes the artifact, never a worker
 
 
 @pytest.mark.unit

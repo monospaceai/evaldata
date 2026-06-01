@@ -83,6 +83,22 @@ class TestDoctor:
         assert result.exit_code == 1
         assert "FAIL" in result.output
 
+    def test_fail_when_probe_query_returns_error_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A connection that opens but whose SELECT 1 fails as an ExecutionResult.error is a FAIL.
+        from data_eval.types import ExecutionResult
+
+        class _ErroringAdapter:
+            def execute(self, sql: str) -> ExecutionResult:
+                return ExecutionResult(rows=[], schema=None, latency_seconds=0.0, error="probe blew up")
+
+            def close(self) -> None: ...
+
+        monkeypatch.setattr(cli, "resolve", lambda ref: _ErroringAdapter())
+        result = runner.invoke(app, ["doctor", "--duckdb", ":memory:"])
+        assert result.exit_code == 1
+        assert "FAIL" in result.output
+        assert "probe blew up" in result.output
+
     def test_requires_at_least_one_platform(self) -> None:
         result = runner.invoke(app, ["doctor"])
         assert result.exit_code == 2

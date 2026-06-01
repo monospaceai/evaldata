@@ -65,6 +65,12 @@ class TestPromptSolver:
         out = PromptSolver(model="m").solve(_case())
         assert out.output == "SELECT id FROM t"
 
+    def test_empty_fence_falls_back_to_raw_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A fence with nothing inside it: the whole text is returned rather than an empty SQL.
+        _patch_completion(monkeypatch, _stub_response("```sql\n```"))
+        out = PromptSolver(model="m").solve(_case())
+        assert out.output == "```sql\n```"
+
     def test_empty_response(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_completion(monkeypatch, _stub_response(""))
         out = PromptSolver(model="m").solve(_case())
@@ -114,6 +120,44 @@ class TestPromptSolver:
         assert out.error is not None
         assert out.error.kind == "timeout"
         assert out.error.provider == "openai"
+
+    def test_rate_limit_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def fake(**kwargs):
+            raise litellm.RateLimitError(message="slow down", llm_provider="openai", model="m")
+
+        monkeypatch.setattr("litellm.completion", fake)
+        out = PromptSolver(model="m").solve(_case())
+        assert out.output is None
+        assert out.error is not None
+        assert out.error.kind == "rate_limit"
+        assert out.error.provider == "openai"
+
+    def test_bad_request_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def fake(**kwargs):
+            raise litellm.BadRequestError(message="nope", model="m", llm_provider="openai")
+
+        monkeypatch.setattr("litellm.completion", fake)
+        out = PromptSolver(model="m").solve(_case())
+        assert out.error is not None
+        assert out.error.kind == "bad_request"
+
+    def test_api_connection_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def fake(**kwargs):
+            raise litellm.APIConnectionError(message="unreachable", llm_provider="openai", model="m")
+
+        monkeypatch.setattr("litellm.completion", fake)
+        out = PromptSolver(model="m").solve(_case())
+        assert out.error is not None
+        assert out.error.kind == "api_connection"
+
+    def test_api_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def fake(**kwargs):
+            raise litellm.APIError(status_code=500, message="boom", llm_provider="openai", model="m")
+
+        monkeypatch.setattr("litellm.completion", fake)
+        out = PromptSolver(model="m").solve(_case())
+        assert out.error is not None
+        assert out.error.kind == "api_error"
 
     def test_auth_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def fake(**kwargs):

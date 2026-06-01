@@ -1,5 +1,6 @@
 """`PostgresAdapter`: PostgreSQL execution backend over `psycopg` (v3)."""
 
+import contextlib
 import time
 from types import TracebackType
 from typing import Self
@@ -23,6 +24,17 @@ class PostgresAdapter:
         # autocommit so a failed statement can't poison later calls with an aborted
         # transaction; psycopg's connection context manager is intentionally unused.
         self._conn = psycopg.connect(conninfo, autocommit=True)
+
+    def cancel(self) -> None:
+        """Cancel the query currently executing on this connection.
+
+        Sends a libpq cancel request over a separate channel, so it is safe to call from
+        another thread while `execute` is blocked, and a harmless no-op when no query is
+        running. The cancelled `execute` raises `psycopg.errors.QueryCanceled`, surfaced as
+        `ExecutionResult.error`. Cancellation failures are swallowed — they are non-fatal.
+        """
+        with contextlib.suppress(psycopg.Error):  # best-effort; a failed cancel is non-fatal
+            self._conn.cancel_safe()
 
     def close(self) -> None:
         """Release the underlying psycopg connection."""

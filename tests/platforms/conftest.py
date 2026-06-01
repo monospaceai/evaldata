@@ -25,6 +25,7 @@ class ConformanceFixtures(Protocol):
     duplicate_column_names: str  # returns two columns both named "x"
     references_missing_table: str  # references a non-existent table
     parse_error: str  # is syntactically invalid
+    slow_query: str  # runs long enough to overrun a sub-second budget, and is interruptible
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,12 @@ class DuckDBFixtures:
     duplicate_column_names: str = "SELECT 1 AS x, 2 AS x"
     references_missing_table: str = "SELECT * FROM does_not_exist_xyz"
     parse_error: str = "SELECT FROM nope"
+    # No pg_sleep equivalent: a recursive CTE counting to 100M spins long enough to overrun
+    # a sub-second budget, and DuckDB checks for interrupts between iterations.
+    slow_query: str = (
+        "WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE n < 100000000) "
+        "SELECT count(*) AS n FROM t"
+    )
 
 
 @dataclass(frozen=True)
@@ -57,6 +64,7 @@ class PostgresFixtures:
     duplicate_column_names: str = "SELECT 1 AS x, 2 AS x"
     references_missing_table: str = "SELECT * FROM does_not_exist_xyz"
     parse_error: str = "SLECT 1"
+    slow_query: str = "SELECT pg_sleep(10)"
 
 
 @dataclass(frozen=True)

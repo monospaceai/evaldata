@@ -17,6 +17,15 @@ class DuckDBAdapter:
         """Open a DuckDB connection to `database` (default `:memory:`)."""
         self._conn = duckdb.connect(database)
 
+    def cancel(self) -> None:
+        """Interrupt the query currently executing on this connection.
+
+        Safe to call from another thread while `execute` is blocked, and a no-op when no
+        query is running. The interrupted `execute` raises `duckdb.InterruptException`,
+        which it surfaces as `ExecutionResult.error` like any other query failure.
+        """
+        self._conn.interrupt()
+
     def close(self) -> None:
         """Release the underlying DuckDB connection (file handle / WAL lock).
 

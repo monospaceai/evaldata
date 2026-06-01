@@ -1,6 +1,9 @@
 """`PlatformAdapter` Protocol: the contract every platform integration implements."""
 
+import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from typing import Any, Protocol, runtime_checkable
 
 from data_eval.types import Column, ExecutionResult, Schema
@@ -25,9 +28,55 @@ class PlatformAdapter(Protocol):
         """Execute one SQL statement and return its structured result."""
         ...
 
+    def cancel(self) -> None:
+        """Abort the query currently executing on this connection, if any.
+
+        Called from another thread when an `execute` overruns its time budget, so it must
+        be safe to invoke while `execute` is blocked. A no-op when no query is running, and
+        best-effort: it must not raise — a cancellation that fails or arrives late is
+        non-fatal (the overrun is still surfaced as `ExecutionResult.error`).
+        """
+        ...
+
     def close(self) -> None:
         """Release the underlying connection/resources. Called once at session end."""
         ...
+
+
+def execute_within_budget(adapter: PlatformAdapter, sql: str, max_seconds: float | None) -> ExecutionResult:
+    """Execute `sql` on `adapter`, cancelling it if it exceeds `max_seconds`.
+
+    With `max_seconds` unset, runs `adapter.execute` directly. Otherwise runs it on a worker
+    thread and waits up to `max_seconds`; if the query is still running, calls
+    `adapter.cancel()` to abort it and returns an `ExecutionResult.error` describing the
+    overrun (errors-as-values — a budget overrun is a failure value, not an exception). The
+    cancelled query is awaited so its connection is released before returning.
+
+    Args:
+        adapter: The platform adapter to execute against.
+        sql: The SQL statement to execute.
+        max_seconds: Wall-clock ceiling for the query, or `None` for no limit.
+
+    Returns:
+        The adapter's `ExecutionResult` if the query finishes within budget, otherwise an
+        `ExecutionResult` with `error` set and `latency_seconds` measuring the elapsed time.
+    """
+    if max_seconds is None:
+        return adapter.execute(sql)
+    start = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(adapter.execute, sql)
+        try:
+            return future.result(timeout=max_seconds)
+        except FuturesTimeout:
+            adapter.cancel()
+    elapsed = time.perf_counter() - start
+    return ExecutionResult(
+        rows=[],
+        schema=None,
+        latency_seconds=elapsed,
+        error=f"exceeded cost budget: query did not complete within {max_seconds}s",
+    )
 
 
 def rows_or_error(columns: list[Column], rows_raw: list[tuple[Any, ...]], latency_seconds: float) -> ExecutionResult:

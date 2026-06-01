@@ -1,5 +1,6 @@
 """Unit tests for platform-ref builders and `PlatformRef` -> adapter resolution."""
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -54,3 +55,26 @@ class TestResolve:
     def test_close_all_is_idempotent_when_empty(self) -> None:
         close_all()
         close_all()  # no raise
+
+    def test_postgres_extra_missing_raises_runtime_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Simulate the 'postgres' extra not being installed: importing the adapter fails.
+        monkeypatch.setitem(sys.modules, "data_eval.platforms.postgres", None)
+        with pytest.raises(RuntimeError, match="requires the 'postgres' extra"):
+            resolve(postgres_platform(name="pg-missing-extra", conninfo=""))
+
+
+@pytest.mark.e2e
+class TestResolvePostgres:
+    """`resolve` builds a live PostgresAdapter through the registry's postgres dispatch."""
+
+    def test_resolves_and_executes_postgres(self) -> None:
+        from .conftest import _postgres_dsn, connect_postgres_or_skip
+
+        connect_postgres_or_skip().close()  # skip unless a Postgres is reachable
+        adapter = resolve(postgres_platform(name="registry-pg-e2e", conninfo=_postgres_dsn()))
+        try:
+            result = adapter.execute("SELECT 1 AS n")
+            assert result.error is None
+            assert result.rows == [{"n": 1}]
+        finally:
+            close_all()
