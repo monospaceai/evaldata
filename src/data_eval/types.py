@@ -442,6 +442,26 @@ class ResultSetDiff(BaseModel):
     column_order_mismatch: bool = False
 
 
+class ExpectationOutcome(BaseModel):
+    """The result of checking one `Expectation` against an executed result.
+
+    `expected`/`actual` carry the compared scalars (a row count, a column's type
+    `raw`); `count` carries the number of offending elements (NULL or duplicate
+    values); `detail` is the human-readable failure message, `None` when the
+    expectation holds. Which fields are populated depends on the expectation kind.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Annotated[str, Field(min_length=1)]
+    passed: bool
+    column: str | None = None
+    expected: str | None = None
+    actual: str | None = None
+    count: Annotated[int, Field(ge=0)] | None = None
+    detail: Annotated[str, Field(min_length=1)] | None = None
+
+
 class ScoreResult(BaseModel):
     """The outcome of running a Scorer against an EvalCase: pass/fail plus diagnostics."""
 
@@ -450,5 +470,6 @@ class ScoreResult(BaseModel):
     scorer: Annotated[str, Field(min_length=1)]
     passed: bool
     diff: ResultSetDiff | None = None
+    outcomes: list[ExpectationOutcome] = Field(default_factory=list)
     explanation: Annotated[str, Field(min_length=1)] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

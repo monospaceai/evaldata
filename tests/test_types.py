@@ -15,6 +15,7 @@ from data_eval.types import (
     EvalCase,
     ExecutionResult,
     Expectation,
+    ExpectationOutcome,
     ExpectationSuite,
     Expected,
     ExpectedResultSet,
@@ -803,6 +804,55 @@ class TestColumnMismatch:
 
 
 @pytest.mark.unit
+class TestExpectationOutcome:
+    def test_minimal_pass(self) -> None:
+        o = ExpectationOutcome(kind="unique", passed=True)
+        assert o.kind == "unique"
+        assert o.passed is True
+        assert o.column is None
+        assert o.expected is None
+        assert o.actual is None
+        assert o.count is None
+        assert o.detail is None
+
+    def test_full_construction(self) -> None:
+        o = ExpectationOutcome(
+            kind="column_type",
+            passed=False,
+            column="n",
+            expected="INTEGER",
+            actual="BIGINT",
+            count=None,
+            detail="column_type: column 'n' expected type 'INTEGER', got 'BIGINT'",
+        )
+        assert o.column == "n"
+        assert o.expected == "INTEGER"
+        assert o.actual == "BIGINT"
+        assert o.detail is not None
+
+    def test_json_round_trip(self) -> None:
+        o = ExpectationOutcome(kind="not_null", passed=False, column="email", count=2, detail="2 NULLs")
+        restored = ExpectationOutcome.model_validate_json(o.model_dump_json())
+        assert restored == o
+
+    def test_rejects_empty_kind(self) -> None:
+        with pytest.raises(ValidationError):
+            ExpectationOutcome(kind="", passed=True)
+
+    def test_rejects_empty_detail(self) -> None:
+        with pytest.raises(ValidationError):
+            ExpectationOutcome(kind="row_count", passed=False, detail="")
+
+    def test_rejects_negative_count(self) -> None:
+        with pytest.raises(ValidationError):
+            ExpectationOutcome(kind="not_null", passed=False, count=-1)
+
+    def test_rejects_extra_fields(self) -> None:
+        with pytest.raises(ValidationError):
+            ExpectationOutcome.model_validate({"kind": "row_count", "passed": True, "sample": []})
+
+
+@pytest.mark.unit
 class TestResultSetDiff:
     def test_minimal_construction(self) -> None:
         diff = ResultSetDiff(expected_row_count=10, actual_row_count=10)
@@ -883,6 +933,7 @@ class TestScoreResult:
         assert result.scorer == "result_set_equivalence"
         assert result.passed is True
         assert result.diff is None
+        assert result.outcomes == []
         assert result.explanation is None
         assert result.metadata == {}
 
@@ -933,6 +984,31 @@ class TestScoreResult:
         )
         restored = ScoreResult.model_validate_json(result.model_dump_json())
         assert restored == result
+
+    def test_json_round_trip_with_outcomes(self) -> None:
+        result = ScoreResult(
+            scorer="expectation_suite",
+            passed=False,
+            outcomes=[
+                ExpectationOutcome(kind="row_count", passed=True, expected="2", actual="2"),
+                ExpectationOutcome(
+                    kind="not_null",
+                    passed=False,
+                    column="email",
+                    count=2,
+                    detail="not_null: column 'email' has 2 NULL value(s)",
+                ),
+            ],
+            explanation="1 expectation(s) failed:\n  - not_null: column 'email' has 2 NULL value(s)",
+        )
+        restored = ScoreResult.model_validate_json(result.model_dump_json())
+        assert restored == result
+
+    def test_default_outcomes_not_shared(self) -> None:
+        a = ScoreResult(scorer="x", passed=True)
+        b = ScoreResult(scorer="y", passed=True)
+        a.outcomes.append(ExpectationOutcome(kind="row_count", passed=True))
+        assert b.outcomes == []
 
     def test_rejects_empty_scorer(self) -> None:
         with pytest.raises(ValidationError):

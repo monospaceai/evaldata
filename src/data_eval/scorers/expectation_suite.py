@@ -9,6 +9,7 @@ from data_eval.types import (
     EvalCase,
     ExecutionResult,
     Expectation,
+    ExpectationOutcome,
     ExpectationSuite,
     NotNullExpectation,
     RowCountExpectation,
@@ -32,9 +33,10 @@ class ExpectationSuiteScorer:
             result: The executed result to check the expectations against.
 
         Returns:
-            A `ScoreResult` that passes when all expectations hold; on failure its
-            `explanation` lists each unmet expectation. A failed query yields a failing
-            result with an explanation.
+            A `ScoreResult` that passes when all expectations hold. `outcomes` carries one
+            `ExpectationOutcome` per expectation (passing and failing alike); on failure
+            `explanation` lists each unmet expectation, derived from those outcomes. A failed
+            query yields a failing result with an explanation and no outcomes.
 
         Raises:
             TypeError: If `case.expected` is not an `ExpectationSuite`.
@@ -51,14 +53,15 @@ class ExpectationSuiteScorer:
                 explanation=f"query execution failed: {result.error}",
             )
 
-        failures = [msg for e in expected.expectations if (msg := _evaluate_one(e, result)) is not None]
+        outcomes = [_evaluate_one(e, result) for e in expected.expectations]
+        failures = [o for o in outcomes if not o.passed]
         if not failures:
-            return ScoreResult(scorer=SCORER_NAME, passed=True)
-        explanation = "\n".join([f"{len(failures)} expectation(s) failed:", *(f"  - {m}" for m in failures)])
-        return ScoreResult(scorer=SCORER_NAME, passed=False, explanation=explanation)
+            return ScoreResult(scorer=SCORER_NAME, passed=True, outcomes=outcomes)
+        explanation = "\n".join([f"{len(failures)} expectation(s) failed:", *(f"  - {o.detail}" for o in failures)])
+        return ScoreResult(scorer=SCORER_NAME, passed=False, outcomes=outcomes, explanation=explanation)
 
 
-def _evaluate_one(expectation: Expectation, result: ExecutionResult) -> str | None:
+def _evaluate_one(expectation: Expectation, result: ExecutionResult) -> ExpectationOutcome:
     """Check one expectation against `result`.
 
     Args:
@@ -66,49 +69,97 @@ def _evaluate_one(expectation: Expectation, result: ExecutionResult) -> str | No
         result: The executed result.
 
     Returns:
-        A human-readable failure message, or `None` if the expectation holds.
+        An `ExpectationOutcome` recording pass/fail and the compared values; its `detail`
+        holds a human-readable failure message, or `None` when the expectation holds.
     """
     match expectation:
         case RowCountExpectation():
             actual = len(result.rows)
-            if actual != expectation.exact:
-                return f"row_count: expected {expectation.exact} rows, got {actual}"
-            return None
+            passed = actual == expectation.exact
+            return ExpectationOutcome(
+                kind=expectation.kind,
+                passed=passed,
+                expected=str(expectation.exact),
+                actual=str(actual),
+                detail=None if passed else f"row_count: expected {expectation.exact} rows, got {actual}",
+            )
         case ColumnPresenceExpectation():
             present = _result_column_names(result)
             missing = [c for c in expectation.columns if c not in present]
-            if missing:
-                return f"column_presence: missing column(s) {missing}"
-            return None
+            return ExpectationOutcome(
+                kind=expectation.kind,
+                passed=not missing,
+                detail=None if not missing else f"column_presence: missing column(s) {missing}",
+            )
         case ColumnTypeExpectation():
+            expected_raw = expectation.expected_type.raw
             if result.schema_ is None:
-                return f"column_type: no column schema available for column {expectation.column!r}"
+                return ExpectationOutcome(
+                    kind=expectation.kind,
+                    passed=False,
+                    column=expectation.column,
+                    expected=expected_raw,
+                    detail=f"column_type: no column schema available for column {expectation.column!r}",
+                )
             types = dict(zip(result.schema_.names, result.schema_.types, strict=True))
             if expectation.column not in types:
-                return f"column_type: column {expectation.column!r} not found in result"
-            actual_type = types[expectation.column]
-            if actual_type != expectation.expected_type:
-                return (
-                    f"column_type: column {expectation.column!r} expected type "
-                    f"{expectation.expected_type.raw!r}, got {actual_type.raw!r}"
+                return ExpectationOutcome(
+                    kind=expectation.kind,
+                    passed=False,
+                    column=expectation.column,
+                    expected=expected_raw,
+                    detail=f"column_type: column {expectation.column!r} not found in result",
                 )
-            return None
+            actual_type = types[expectation.column]
+            passed = actual_type == expectation.expected_type
+            return ExpectationOutcome(
+                kind=expectation.kind,
+                passed=passed,
+                column=expectation.column,
+                expected=expected_raw,
+                actual=actual_type.raw,
+                detail=None
+                if passed
+                else f"column_type: column {expectation.column!r} expected type {expected_raw!r}, got {actual_type.raw!r}",
+            )
         case NotNullExpectation():
             if expectation.column not in _result_column_names(result):
-                return f"not_null: column {expectation.column!r} not found in result"
+                return ExpectationOutcome(
+                    kind=expectation.kind,
+                    passed=False,
+                    column=expectation.column,
+                    detail=f"not_null: column {expectation.column!r} not found in result",
+                )
             null_count = sum(1 for row in result.rows if row.get(expectation.column) is None)
-            if null_count:
-                return f"not_null: column {expectation.column!r} has {null_count} NULL value(s)"
-            return None
+            passed = null_count == 0
+            return ExpectationOutcome(
+                kind=expectation.kind,
+                passed=passed,
+                column=expectation.column,
+                count=null_count,
+                detail=None if passed else f"not_null: column {expectation.column!r} has {null_count} NULL value(s)",
+            )
         case UniqueExpectation():
             if expectation.column not in _result_column_names(result):
-                return f"unique: column {expectation.column!r} not found in result"
+                return ExpectationOutcome(
+                    kind=expectation.kind,
+                    passed=False,
+                    column=expectation.column,
+                    detail=f"unique: column {expectation.column!r} not found in result",
+                )
             counts = Counter(_hashable_key(row.get(expectation.column)) for row in result.rows)
             duplicates = [key for key, n in counts.items() if n > 1]
+            detail = None
             if duplicates:
                 sample = ", ".join(_render_key(key) for key in duplicates[:3])
-                return f"unique: column {expectation.column!r} has {len(duplicates)} duplicated value(s): {sample}"
-            return None
+                detail = f"unique: column {expectation.column!r} has {len(duplicates)} duplicated value(s): {sample}"
+            return ExpectationOutcome(
+                kind=expectation.kind,
+                passed=not duplicates,
+                column=expectation.column,
+                count=len(duplicates),
+                detail=detail,
+            )
         case _:  # pragma: no cover - exhaustive over the Expectation union
             assert_never(expectation)
 
