@@ -108,13 +108,14 @@ class TestResultSetEquivalence:
         assert score.diff is None
         assert score.explanation is not None
 
-    def test_distinct_null_equality_is_rejected(self) -> None:
+    def test_distinct_null_equality_without_key_is_rejected(self) -> None:
         case = _case(ExpectedResultSet(rows=[{"n": None}]), ComparisonConfig(null_equality="distinct"))
         result = ExecutionResult(rows=[{"n": None}], latency_seconds=0.0)
         score = _score(case, result, "SELECT NULL AS n")
         assert score.passed is False
         assert score.diff is None
-        assert score.explanation == "null_equality='distinct' is not supported by the SQL equivalence path"
+        assert score.explanation is not None
+        assert "requires a match_key" in score.explanation
 
     def test_typed_path_detects_type_mismatch(self) -> None:
         case = _case(ExpectedResultSet(rows=[{"n": 1}], schema=[Column(name="n", type="INTEGER")]))
@@ -204,3 +205,56 @@ class TestResultSetEquivalence:
 
     def test_satisfies_scorer_protocol(self) -> None:
         assert isinstance(ResultSetEquivalence(), Scorer)
+
+
+def _stats(missing: int, extra: int, *mismatches: int) -> ExecutionResult:
+    """One-row keyed-diff stats: `missing`, `extra`, then a count per value column."""
+    row: dict[str, object] = {"missing": missing, "extra": extra}
+    for index, count in enumerate(mismatches):
+        row[f"m{index}"] = count
+    return ExecutionResult(rows=[row], latency_seconds=0.0)
+
+
+@pytest.mark.unit
+class TestKeyedPath:
+    """Error-injection branches of the keyed `FULL OUTER JOIN` path (via the scripted adapter)."""
+
+    @staticmethod
+    def _keyed_case(key: list[str]) -> EvalCase:
+        return _case(ExpectedResultSet(rows=[{"id": 1, "v": 10}]), ComparisonConfig(match_key=key))
+
+    def test_dupes_probe_error_fails(self) -> None:
+        # The expected-side duplicate-key probe (the first derived query) errors.
+        case = self._keyed_case(["id"])
+        result = ExecutionResult(rows=[{"id": 1, "v": 10}], latency_seconds=0.0)
+        score = _scripted_score(case, result, [_err("dupe boom")])
+        assert score.passed is False
+        assert score.diff is None
+        assert "dupe boom" in (score.explanation or "")
+
+    def test_stats_query_error_fails(self) -> None:
+        # Both dup probes return 0; the stats aggregate errors.
+        case = self._keyed_case(["id"])
+        result = ExecutionResult(rows=[{"id": 1, "v": 10}], latency_seconds=0.0)
+        score = _scripted_score(case, result, [_count(0), _count(0), _err("stats boom")])
+        assert score.passed is False
+        assert score.diff is None
+        assert "stats boom" in (score.explanation or "")
+
+    def test_missing_sample_error_fails(self) -> None:
+        # missing > 0 but the missing-sample query errors.
+        case = self._keyed_case(["id"])
+        result = ExecutionResult(rows=[{"id": 1, "v": 10}], latency_seconds=0.0)
+        score = _scripted_score(case, result, [_count(0), _count(0), _stats(1, 0, 0), _err("missing boom")])
+        assert score.passed is False
+        assert score.diff is None
+        assert "missing boom" in (score.explanation or "")
+
+    def test_extra_sample_error_fails(self) -> None:
+        # extra > 0 but the extra-sample query errors.
+        case = self._keyed_case(["id"])
+        result = ExecutionResult(rows=[{"id": 1, "v": 10}], latency_seconds=0.0)
+        score = _scripted_score(case, result, [_count(0), _count(0), _stats(0, 1, 0), _err("extra boom")])
+        assert score.passed is False
+        assert score.diff is None
+        assert "extra boom" in (score.explanation or "")

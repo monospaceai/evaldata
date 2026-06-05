@@ -367,3 +367,314 @@ def except_all_sample(left: exp.Query, right: exp.Query, dialect: Dialect) -> Sq
     """
     query = exp.select("*").from_(_except_all(left, right)).limit(SAMPLE_LIMIT)
     return Sql(query.sql(dialect=dialect))
+
+
+# Per-side row-presence markers, projected as constant `TRUE` columns before the FULL OUTER
+# JOIN; a `NULL` marker after the join means that side contributed no row for the key.
+_EXPECTED_PRESENT = "e_present"
+_ACTUAL_PRESENT = "a_present"
+
+# Aliases pinning each side's columns through the join, so `e."order"`/`a."order"` survive as
+# distinct `j."e__order"`/`j."a__order"` regardless of the user's column names.
+_EXPECTED_PREFIX = "e__"
+_ACTUAL_PREFIX = "a__"
+
+
+def _marked_operand(relation: exp.Query, alias: str, marker: str) -> exp.Subquery:
+    """Wrap `relation` as `(SELECT *, TRUE AS <marker> FROM (<relation>)) AS <alias>`.
+
+    Args:
+        relation: The side relation (expected or actual), projecting the shared columns.
+        alias: The subquery alias the join qualifies columns by.
+        marker: The constant-`TRUE` presence-marker column name.
+
+    Returns:
+        A `Subquery` carrying the shared columns plus the presence marker.
+    """
+    inner = exp.Subquery(this=relation.copy(), alias=exp.TableAlias(this=exp.to_identifier("m")))
+    marked = exp.select(exp.Star()).from_(inner).select(exp.convert(True).as_(exp.to_identifier(marker)))
+    return exp.Subquery(this=marked, alias=exp.TableAlias(this=exp.to_identifier(alias)))
+
+
+def _keyed_join(
+    expected_rel: exp.Query,
+    actual_rel: exp.Query,
+    key_columns: list[str],
+    in_both: list[str],
+    dialect: Dialect,
+) -> exp.Subquery:
+    """Build the `FULL OUTER JOIN` of expected and actual, aligned on `key_columns`.
+
+    Each side is marked with a presence column and projected with `e__`/`a__`-prefixed
+    aliases; the join condition is `e.<k> = a.<k>` ANDed over the key columns (collision-free
+    and hash-joinable on both engines, unlike a null-safe operator which Postgres rejects in a
+    `FULL JOIN`). A `NULL` in a key column never aligns, so such rows surface as missing/extra.
+
+    Args:
+        expected_rel: The expected relation over `in_both`.
+        actual_rel: The actual relation over `in_both`.
+        key_columns: The match-key columns aligned on.
+        in_both: The shared columns, in expected order.
+        dialect: The SQLGlot dialect to render in (unused for structure; kept for symmetry).
+
+    Returns:
+        A `Subquery` aliased `j` exposing `j."e__<col>"`, `j."a__<col>"`, `e_present`,
+        and `a_present`.
+    """
+    expected = _marked_operand(expected_rel, "e", _EXPECTED_PRESENT)
+    actual = _marked_operand(actual_rel, "a", _ACTUAL_PRESENT)
+    condition = exp.and_(
+        *(
+            exp.EQ(
+                this=exp.column(key, table="e", quoted=True),
+                expression=exp.column(key, table="a", quoted=True),
+            )
+            for key in key_columns
+        )
+    )
+    projections: list[exp.Expression] = []
+    for col in in_both:
+        projections.append(
+            exp.column(col, table="e", quoted=True).as_(exp.to_identifier(f"{_EXPECTED_PREFIX}{col}", quoted=True))
+        )
+        projections.append(
+            exp.column(col, table="a", quoted=True).as_(exp.to_identifier(f"{_ACTUAL_PREFIX}{col}", quoted=True))
+        )
+    projections.append(exp.column(_EXPECTED_PRESENT, table="e"))
+    projections.append(exp.column(_ACTUAL_PRESENT, table="a"))
+    joined = exp.select(*projections).from_(expected).join(actual, on=condition, join_type="full outer")
+    return exp.Subquery(this=joined, alias=exp.TableAlias(this=exp.to_identifier("j")))
+
+
+def _joined_column(prefix: str, col: str) -> exp.Column:
+    """Reference a joined, prefixed column on the `j` subquery.
+
+    Args:
+        prefix: The side prefix (`e__` or `a__`).
+        col: The original column name.
+
+    Returns:
+        The `j."<prefix><col>"` column expression.
+    """
+    return exp.column(f"{prefix}{col}", table="j", quoted=True)
+
+
+def _absent(marker: str) -> exp.Expression:
+    """Build `j.<marker> IS NULL` — the side contributed no row for the joined key.
+
+    Args:
+        marker: The presence-marker column name.
+
+    Returns:
+        The null-test expression.
+    """
+    return exp.column(marker, table="j").is_(exp.null())
+
+
+def _both_present() -> exp.Expression:
+    """Build `j.e_present IS NOT NULL AND j.a_present IS NOT NULL` — the key matched both sides.
+
+    Returns:
+        The both-present expression.
+    """
+    return exp.and_(
+        exp.not_(exp.column(_EXPECTED_PRESENT, table="j").is_(exp.null())),
+        exp.not_(exp.column(_ACTUAL_PRESENT, table="j").is_(exp.null())),
+    )
+
+
+def _tolerance_literal(tol: float) -> exp.Expression:
+    """Build `CAST(<tol> AS DECIMAL(38, 18))` for an exact decimal tolerance band.
+
+    Args:
+        tol: The absolute tolerance.
+
+    Returns:
+        The cast tolerance expression.
+    """
+    return exp.cast(exp.Literal.number(repr(tol)), exp.DataType.build(_ROUND_CAST))
+
+
+def _match_indicator(col: str, numeric: bool, null_equality: str, tol: exp.Expression) -> exp.Case:
+    """Build a `0`/`1` `CASE` that is `1` iff the column matches between sides (never `NULL`).
+
+    For `null_equality="equal"` two NULLs match; for `"distinct"` any NULL is a non-match.
+    Numeric columns compare within the tolerance band `ABS(e - a) <= tol` over a fixed-point
+    cast; other columns compare with `IS NOT DISTINCT FROM` (equal) or `=` (distinct).
+
+    Args:
+        col: The original column name.
+        numeric: Whether the column is numeric (uses the tolerance band).
+        null_equality: `"equal"` or `"distinct"`.
+        tol: The cast tolerance expression.
+
+    Returns:
+        A `Case` expression evaluating to `1` (match) or `0` (mismatch).
+    """
+    distinct = null_equality == "distinct"
+    one = exp.Literal.number(1)
+    zero = exp.Literal.number(0)
+
+    def either_null() -> exp.Expression:
+        return exp.or_(
+            _joined_column(_EXPECTED_PREFIX, col).is_(exp.null()), _joined_column(_ACTUAL_PREFIX, col).is_(exp.null())
+        )
+
+    if numeric:
+        within = exp.LTE(
+            this=exp.func(
+                "ABS",
+                exp.Sub(
+                    this=exp.cast(_joined_column(_EXPECTED_PREFIX, col), exp.DataType.build(_ROUND_CAST)),
+                    expression=exp.cast(_joined_column(_ACTUAL_PREFIX, col), exp.DataType.build(_ROUND_CAST)),
+                ),
+            ),
+            expression=tol.copy(),
+        )
+        case = exp.Case()
+        if distinct:
+            case = case.when(either_null(), zero)
+        else:
+            both_null = exp.and_(
+                _joined_column(_EXPECTED_PREFIX, col).is_(exp.null()),
+                _joined_column(_ACTUAL_PREFIX, col).is_(exp.null()),
+            )
+            case = case.when(both_null, one).when(either_null(), zero)
+        return case.when(within, one).else_(zero)
+
+    if distinct:
+        equal = exp.EQ(this=_joined_column(_EXPECTED_PREFIX, col), expression=_joined_column(_ACTUAL_PREFIX, col))
+    else:
+        equal = exp.NullSafeEQ(
+            this=_joined_column(_EXPECTED_PREFIX, col), expression=_joined_column(_ACTUAL_PREFIX, col)
+        )
+    return exp.Case().when(equal, one).else_(zero)
+
+
+def _sum_case(condition: exp.Expression, alias: str) -> exp.Expression:
+    """Build `SUM(CASE WHEN <condition> THEN 1 ELSE 0 END) AS <alias>`.
+
+    Args:
+        condition: The predicate counted when true.
+        alias: The output column alias.
+
+    Returns:
+        The aliased conditional-sum expression.
+    """
+    case = exp.Case().when(condition, exp.Literal.number(1)).else_(exp.Literal.number(0))
+    return exp.func("SUM", case).as_(exp.to_identifier(alias))
+
+
+def keyed_mismatch_alias(index: int) -> str:
+    """The output alias for the `index`-th value column's mismatch count.
+
+    Args:
+        index: The value-column position.
+
+    Returns:
+        The alias `m<index>`.
+    """
+    return f"m{index}"
+
+
+def keyed_diff_stats(
+    expected_rel: exp.Query,
+    actual_rel: exp.Query,
+    key_columns: list[str],
+    value_columns: list[str],
+    numeric_columns: set[str],
+    null_equality: str,
+    tolerance: float,
+    in_both: list[str],
+    dialect: Dialect,
+) -> Sql:
+    """Build the one-row keyed-diff aggregate over the `FULL OUTER JOIN`.
+
+    Projects `missing` (key only in expected), `extra` (key only in actual), and one
+    `m<i>` per value column counting key-matched rows whose value differs.
+
+    Args:
+        expected_rel: The expected relation over `in_both`.
+        actual_rel: The actual relation over `in_both`.
+        key_columns: The match-key columns aligned on.
+        value_columns: The non-key shared columns compared per row.
+        numeric_columns: The subset of `value_columns` compared within the tolerance band.
+        null_equality: `"equal"` or `"distinct"`.
+        tolerance: The absolute tolerance for numeric columns.
+        in_both: The shared columns, in expected order.
+        dialect: The SQLGlot dialect to render in.
+
+    Returns:
+        The aggregate SQL string yielding one row of counts.
+    """
+    joined = _keyed_join(expected_rel, actual_rel, key_columns, in_both, dialect)
+    tol = _tolerance_literal(tolerance)
+    selects: list[exp.Expression] = [
+        _sum_case(_absent(_ACTUAL_PRESENT), "missing"),
+        _sum_case(_absent(_EXPECTED_PRESENT), "extra"),
+    ]
+    for index, col in enumerate(value_columns):
+        indicator = _match_indicator(col, col in numeric_columns, null_equality, tol)
+        differs = exp.and_(_both_present(), exp.EQ(this=indicator, expression=exp.Literal.number(0)))
+        selects.append(_sum_case(differs, keyed_mismatch_alias(index)))
+    query = exp.select(*selects).from_(joined)
+    return Sql(query.sql(dialect=dialect))
+
+
+def keyed_sample(
+    expected_rel: exp.Query,
+    actual_rel: exp.Query,
+    key_columns: list[str],
+    in_both: list[str],
+    side: str,
+    dialect: Dialect,
+) -> Sql:
+    """Build a bounded sample of one key-only bucket, projected back to original column names.
+
+    Args:
+        expected_rel: The expected relation over `in_both`.
+        actual_rel: The actual relation over `in_both`.
+        key_columns: The match-key columns aligned on.
+        in_both: The shared columns, in expected order.
+        side: `"missing"` (key only in expected) or `"extra"` (key only in actual).
+        dialect: The SQLGlot dialect to render in.
+
+    Returns:
+        The sample SQL string (up to 20 rows) for the requested bucket.
+    """
+    joined = _keyed_join(expected_rel, actual_rel, key_columns, in_both, dialect)
+    if side == "missing":
+        prefix, absent_marker = _EXPECTED_PREFIX, _ACTUAL_PRESENT
+    else:
+        prefix, absent_marker = _ACTUAL_PREFIX, _EXPECTED_PRESENT
+    selections = [_joined_column(prefix, col).as_(exp.to_identifier(col, quoted=True)) for col in in_both]
+    query = exp.select(*selections).from_(joined).where(_absent(absent_marker)).limit(SAMPLE_LIMIT)
+    return Sql(query.sql(dialect=dialect))
+
+
+def keyed_dupes_count(relation: exp.Query, key_columns: list[str], dialect: Dialect) -> Sql:
+    """Build a count of match-key values appearing more than once in `relation`.
+
+    Used to reject a non-unique match key on either side; the engine defines key equality.
+    `NULL` key values are excluded — they never align under the join's `=` condition, so two
+    `NULL`-keyed rows are not a collision.
+
+    Args:
+        relation: The relation (expected or actual) over the shared columns.
+        key_columns: The match-key columns.
+        dialect: The SQLGlot dialect to render in.
+
+    Returns:
+        The duplicate-key count SQL string (`> 0` means the key is not unique).
+    """
+    sub = exp.Subquery(this=relation.copy(), alias=exp.TableAlias(this=exp.to_identifier("t")))
+    not_null = exp.and_(*(exp.not_(exp.column(key, quoted=True).is_(exp.null())) for key in key_columns))
+    inner = (
+        exp.select(exp.Literal.number(1))
+        .from_(sub)
+        .where(not_null)
+        .group_by(*(exp.column(key, quoted=True) for key in key_columns))
+        .having(exp.Count(this=exp.Star()) > 1)
+    )
+    outer = exp.select("count(*)").from_(exp.Subquery(this=inner, alias=exp.TableAlias(this=exp.to_identifier("d"))))
+    return Sql(outer.sql(dialect=dialect))

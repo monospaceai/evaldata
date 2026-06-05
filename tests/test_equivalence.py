@@ -10,7 +10,7 @@ from data_eval.equivalence import (
     build_result_set_diff,
     reconcile_columns,
 )
-from data_eval.types import Column, TypeMismatch
+from data_eval.types import Column, ColumnMismatch, TypeMismatch
 
 # ---------- engine input types ----------
 
@@ -122,6 +122,7 @@ def _diff(**overrides: object) -> object:
         "sample_extra_rows": [],
         "columns": _cols(["n"]),
         "type_mismatches": [],
+        "column_mismatches": [],
     }
     kwargs.update(overrides)
     return build_result_set_diff(**kwargs)  # type: ignore[arg-type]
@@ -169,6 +170,13 @@ class TestBuildResultSetDiff:
         diff = _diff(extra_row_count=1, sample_extra_rows=[{"n": 2}])
         assert diff is not None
         assert diff.column_mismatches == []
+
+    def test_column_mismatches_flag_difference(self) -> None:
+        diff = _diff(column_mismatches=[ColumnMismatch(column="n", unexpected_count=2)])
+        assert diff is not None
+        assert len(diff.column_mismatches) == 1
+        assert diff.column_mismatches[0].column == "n"
+        assert diff.column_mismatches[0].unexpected_count == 2
 
     def test_carries_row_counts(self) -> None:
         diff = _diff(expected_row_count=3, actual_row_count=5, extra_row_count=2, sample_extra_rows=[{"n": 9}])

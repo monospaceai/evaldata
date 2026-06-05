@@ -6,6 +6,7 @@ engines — proving the diff uses engine-native `EXCEPT ALL` semantics, not a Py
 """
 
 from decimal import Decimal
+from typing import Literal
 
 import pytest
 
@@ -135,13 +136,14 @@ def test_null_present_one_side_only_fails(engine: tuple[PlatformAdapter, Dialect
     assert score.diff.extra_row_count == 1
 
 
-def test_distinct_null_equality_rejected(engine: tuple[PlatformAdapter, Dialect]) -> None:
+def test_distinct_null_equality_without_key_rejected(engine: tuple[PlatformAdapter, Dialect]) -> None:
     _, dialect = engine
     expected = ExpectedResultSet(rows=[{"n": None}], schema=_schema(("n", "INTEGER"), dialect=dialect))
     score = _score(engine, "SELECT CAST(NULL AS INTEGER) AS n", expected, ComparisonConfig(null_equality="distinct"))
     assert score.passed is False
     assert score.diff is None
-    assert score.explanation == "null_equality='distinct' is not supported by the SQL equivalence path"
+    assert score.explanation is not None
+    assert "requires a match_key" in score.explanation
 
 
 def test_within_tolerance_passes(engine: tuple[PlatformAdapter, Dialect]) -> None:
@@ -219,3 +221,210 @@ def test_sample_cap_at_twenty(engine: tuple[PlatformAdapter, Dialect]) -> None:
     assert score.diff is not None
     assert score.diff.extra_row_count == 30
     assert len(score.diff.sample_extra_rows) == 20
+
+
+# ---------- keyed FULL OUTER JOIN path (match_key) ----------
+
+
+def _id_v_schema(dialect: Dialect, v_type: str = "INTEGER") -> Schema:
+    return _schema(("id", "INTEGER"), ("v", v_type), dialect=dialect)
+
+
+def _keyed(
+    key: list[str],
+    *,
+    null_equality: Literal["equal", "distinct"] = "equal",
+    float_tolerance: float = 1e-9,
+) -> ComparisonConfig:
+    return ComparisonConfig(match_key=key, null_equality=null_equality, float_tolerance=float_tolerance)
+
+
+def test_keyed_exact_match_passes(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    expected = ExpectedResultSet(rows=[{"id": 1, "v": 10}, {"id": 2, "v": 20}], schema=_id_v_schema(dialect))
+    score = _score(engine, "SELECT 2 AS id, 20 AS v UNION ALL SELECT 1, 10", expected, _keyed(["id"]))
+    assert score.passed is True
+    assert score.diff is None
+
+
+def test_keyed_per_column_diff_populates_column_mismatches(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    expected = ExpectedResultSet(rows=[{"id": 1, "v": 10}, {"id": 2, "v": 20}], schema=_id_v_schema(dialect))
+    score = _score(engine, "SELECT 1 AS id, 10 AS v UNION ALL SELECT 2, 99", expected, _keyed(["id"]))
+    assert score.passed is False
+    assert score.diff is not None
+    assert score.diff.missing_row_count == 0
+    assert score.diff.extra_row_count == 0
+    assert len(score.diff.column_mismatches) == 1
+    assert score.diff.column_mismatches[0].column == "v"
+    assert score.diff.column_mismatches[0].unexpected_count == 1
+
+
+def test_keyed_key_only_in_expected_is_missing(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    expected = ExpectedResultSet(rows=[{"id": 1, "v": 10}, {"id": 2, "v": 20}], schema=_id_v_schema(dialect))
+    score = _score(engine, "SELECT 1 AS id, 10 AS v", expected, _keyed(["id"]))
+    assert score.passed is False
+    assert score.diff is not None
+    assert score.diff.missing_row_count == 1
+    assert score.diff.extra_row_count == 0
+    assert score.diff.column_mismatches == []
+    assert score.diff.sample_missing_rows == [{"id": 2, "v": 20}]
+
+
+def test_keyed_key_only_in_actual_is_extra(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    expected = ExpectedResultSet(rows=[{"id": 1, "v": 10}], schema=_id_v_schema(dialect))
+    score = _score(engine, "SELECT 1 AS id, 10 AS v UNION ALL SELECT 2, 20", expected, _keyed(["id"]))
+    assert score.passed is False
+    assert score.diff is not None
+    assert score.diff.missing_row_count == 0
+    assert score.diff.extra_row_count == 1
+    assert score.diff.sample_extra_rows == [{"id": 2, "v": 20}]
+
+
+def test_keyed_equal_null_value_passes(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    expected = ExpectedResultSet(rows=[{"id": 1, "v": None}], schema=_id_v_schema(dialect))
+    score = _score(engine, "SELECT 1 AS id, CAST(NULL AS INTEGER) AS v", expected, _keyed(["id"]))
+    assert score.passed is True
+
+
+def test_keyed_distinct_null_value_is_mismatch(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    expected = ExpectedResultSet(rows=[{"id": 1, "v": None}], schema=_id_v_schema(dialect))
+    score = _score(
+        engine, "SELECT 1 AS id, CAST(NULL AS INTEGER) AS v", expected, _keyed(["id"], null_equality="distinct")
+    )
+    assert score.passed is False
+    assert score.diff is not None
+    assert score.diff.missing_row_count == 0
+    assert score.diff.extra_row_count == 0
+    assert len(score.diff.column_mismatches) == 1
+    assert score.diff.column_mismatches[0].column == "v"
+
+
+def test_keyed_tolerance_at_band_boundary_passes(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    expected = ExpectedResultSet(rows=[{"id": 1, "v": Decimal("10.0")}], schema=_id_v_schema(dialect, "NUMERIC"))
+    score = _score(engine, "SELECT 1 AS id, CAST(10.5 AS NUMERIC) AS v", expected, _keyed(["id"], float_tolerance=0.5))
+    assert score.passed is True
+
+
+def test_keyed_tolerance_just_over_band_fails(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    expected = ExpectedResultSet(rows=[{"id": 1, "v": Decimal("10.0")}], schema=_id_v_schema(dialect, "NUMERIC"))
+    score = _score(engine, "SELECT 1 AS id, CAST(10.51 AS NUMERIC) AS v", expected, _keyed(["id"], float_tolerance=0.5))
+    assert score.passed is False
+    assert score.diff is not None
+    assert len(score.diff.column_mismatches) == 1
+    assert score.diff.column_mismatches[0].column == "v"
+
+
+def test_keyed_composite_key_passes(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    schema = _schema(("a", "INTEGER"), ("b", "VARCHAR"), ("v", "INTEGER"), dialect=dialect)
+    expected = ExpectedResultSet(rows=[{"a": 1, "b": "x", "v": 10}, {"a": 1, "b": "y", "v": 20}], schema=schema)
+    model = "SELECT 1 AS a, CAST('x' AS VARCHAR) AS b, 10 AS v UNION ALL SELECT 1, CAST('y' AS VARCHAR), 20"
+    score = _score(engine, model, expected, _keyed(["a", "b"]))
+    assert score.passed is True
+
+
+def test_keyed_null_in_key_does_not_align(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    # A NULL in a key column is not a valid identifier: it never aligns under `=`, so the
+    # expected row is missing and the actual row is extra (dbt audit_helper semantics).
+    _, dialect = engine
+    schema = _schema(("a", "INTEGER"), ("b", "VARCHAR"), ("v", "INTEGER"), dialect=dialect)
+    expected = ExpectedResultSet(rows=[{"a": 1, "b": None, "v": 10}], schema=schema)
+    score = _score(engine, "SELECT 1 AS a, CAST(NULL AS VARCHAR) AS b, 10 AS v", expected, _keyed(["a", "b"]))
+    assert score.passed is False
+    assert score.diff is not None
+    assert score.diff.missing_row_count == 1
+    assert score.diff.extra_row_count == 1
+    assert score.diff.column_mismatches == []
+
+
+def test_keyed_duplicate_key_in_actual_rejected(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    expected = ExpectedResultSet(rows=[{"id": 1, "v": 10}], schema=_id_v_schema(dialect))
+    score = _score(engine, "SELECT 1 AS id, 10 AS v UNION ALL SELECT 1, 20", expected, _keyed(["id"]))
+    assert score.passed is False
+    assert score.diff is None
+    assert score.explanation is not None
+    assert "not unique in the actual" in score.explanation
+
+
+def test_keyed_duplicate_key_in_expected_rejected(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    expected = ExpectedResultSet(rows=[{"id": 1, "v": 10}, {"id": 1, "v": 20}], schema=_id_v_schema(dialect))
+    score = _score(engine, "SELECT 1 AS id, 10 AS v", expected, _keyed(["id"]))
+    assert score.passed is False
+    assert score.diff is None
+    assert score.explanation is not None
+    assert "not unique in the expected" in score.explanation
+
+
+def test_keyed_absent_key_column_rejected(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    expected = ExpectedResultSet(rows=[{"id": 1, "v": 10}], schema=_id_v_schema(dialect))
+    score = _score(engine, "SELECT 1 AS id, 10 AS v", expected, _keyed(["nope"]))
+    assert score.passed is False
+    assert score.diff is None
+    assert score.explanation is not None
+    assert "not present in both" in score.explanation
+
+
+def test_keyed_quoted_reserved_key_and_column(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    schema = _schema(("order", "INTEGER"), ("v", "INTEGER"), dialect=dialect)
+    expected = ExpectedResultSet(rows=[{"order": 1, "v": 10}], schema=schema)
+    score = _score(engine, 'SELECT 1 AS "order", 99 AS v', expected, _keyed(["order"]))
+    assert score.passed is False
+    assert score.diff is not None
+    assert len(score.diff.column_mismatches) == 1
+    assert score.diff.column_mismatches[0].column == "v"
+
+
+def test_keyed_derived_query_error_fails_without_raise(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    expected = ExpectedResultSet(rows=[{"id": 1, "v": 10}], schema=_id_v_schema(dialect))
+    score = _score(engine, "SELECT id, v FROM does_not_exist_xyz", expected, _keyed(["id"]))
+    assert score.passed is False
+    assert score.diff is None
+    assert score.explanation is not None
+
+
+def test_keyed_non_numeric_value_equal_compares_per_column(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    schema = _schema(("id", "INTEGER"), ("name", "VARCHAR"), dialect=dialect)
+    expected = ExpectedResultSet(rows=[{"id": 1, "name": "alice"}, {"id": 2, "name": "bob"}], schema=schema)
+    model = "SELECT 1 AS id, CAST('alice' AS VARCHAR) AS name UNION ALL SELECT 2, CAST('wrong' AS VARCHAR)"
+    score = _score(engine, model, expected, _keyed(["id"]))
+    assert score.passed is False
+    assert score.diff is not None
+    assert score.diff.missing_row_count == 0
+    assert score.diff.extra_row_count == 0
+    assert len(score.diff.column_mismatches) == 1
+    assert score.diff.column_mismatches[0].column == "name"
+    assert score.diff.column_mismatches[0].unexpected_count == 1
+
+
+def test_keyed_non_numeric_distinct_null_value_is_mismatch(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    schema = _schema(("id", "INTEGER"), ("name", "VARCHAR"), dialect=dialect)
+    expected = ExpectedResultSet(rows=[{"id": 1, "name": None}], schema=schema)
+    model = "SELECT 1 AS id, CAST(NULL AS VARCHAR) AS name"
+    score = _score(engine, model, expected, _keyed(["id"], null_equality="distinct"))
+    assert score.passed is False
+    assert score.diff is not None
+    assert len(score.diff.column_mismatches) == 1
+    assert score.diff.column_mismatches[0].column == "name"
+
+
+def test_keyed_non_numeric_equal_null_value_passes(engine: tuple[PlatformAdapter, Dialect]) -> None:
+    _, dialect = engine
+    schema = _schema(("id", "INTEGER"), ("name", "VARCHAR"), dialect=dialect)
+    expected = ExpectedResultSet(rows=[{"id": 1, "name": None}], schema=schema)
+    model = "SELECT 1 AS id, CAST(NULL AS VARCHAR) AS name"
+    score = _score(engine, model, expected, _keyed(["id"]))
+    assert score.passed is True

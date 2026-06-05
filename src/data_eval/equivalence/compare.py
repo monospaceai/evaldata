@@ -3,7 +3,7 @@
 from typing import Any
 
 from data_eval.equivalence.columns import ColumnReconciliation
-from data_eval.types import ResultSetDiff, TypeMismatch
+from data_eval.types import ColumnMismatch, ResultSetDiff, TypeMismatch
 
 
 def build_result_set_diff(
@@ -16,12 +16,13 @@ def build_result_set_diff(
     sample_extra_rows: list[dict[str, Any]],
     columns: ColumnReconciliation,
     type_mismatches: list[TypeMismatch],
+    column_mismatches: list[ColumnMismatch],
 ) -> ResultSetDiff | None:
     """Assemble a `ResultSetDiff` from already-computed diff signals.
 
-    Warehouse-free: the row counts/samples are computed by the engine (`EXCEPT ALL`) and the
-    column/type signals in Python, then passed here. `column_mismatches` is always empty (a
-    keyed-join feature).
+    Warehouse-free: the row counts/samples are computed by the engine and the column/type
+    signals in Python, then passed here. `column_mismatches` is populated only by the keyed
+    `FULL OUTER JOIN` path (empty for the keyless `EXCEPT ALL` path).
 
     Args:
         expected_row_count: The number of expected rows.
@@ -32,6 +33,8 @@ def build_result_set_diff(
         sample_extra_rows: A bounded sample of the extra rows.
         columns: The reconciliation of actual against expected column names.
         type_mismatches: Per-column type differences over the shared columns.
+        column_mismatches: Per-column counts of key-matched rows whose value differs;
+            empty for the keyless path.
 
     Returns:
         `None` if the assembled diff records no differences (the result sets are equal),
@@ -47,6 +50,7 @@ def build_result_set_diff(
         missing_columns=columns.missing,
         unexpected_columns=columns.unexpected,
         type_mismatches=type_mismatches,
+        column_mismatches=column_mismatches,
         column_order_mismatch=columns.order_mismatch,
     )
     if _is_equal(diff):

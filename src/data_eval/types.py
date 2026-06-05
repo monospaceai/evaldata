@@ -254,13 +254,21 @@ Expected = Annotated[
 
 
 class ComparisonConfig(BaseModel):
-    """Rules for deciding whether two result sets are equivalent."""
+    """Rules for deciding whether two result sets are equivalent.
+
+    A non-empty `match_key` selects the keyed `FULL OUTER JOIN` comparison: rows are
+    aligned on the key columns and compared per remaining column, enabling
+    `null_equality="distinct"`, an exact `abs(actual - expected) <= float_tolerance`
+    band, and per-column mismatch counts. An empty `match_key` uses the keyless bag
+    (`EXCEPT ALL`) comparison.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     column_order: Literal["ignore", "strict"] = "ignore"
     null_equality: Literal["equal", "distinct"] = "equal"
     float_tolerance: Annotated[float, Field(ge=0.0)] = 1e-9
+    match_key: list[str] = Field(default_factory=list)
 
 
 class CostBudget(BaseModel):
