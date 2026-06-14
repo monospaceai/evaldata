@@ -12,11 +12,6 @@ from data_eval import EvalCase, ResultSetEquivalence, assert_eval, eval_case
 from data_eval.platforms import duckdb_platform
 from data_eval.solvers import PromptSolver
 
-pytestmark = pytest.mark.skipif(
-    not os.getenv("OPENAI_API_KEY"),
-    reason="set OPENAI_API_KEY to run the hosted-AI example",
-)
-
 _DB_PATH = Path(tempfile.mkdtemp(prefix="data_eval_ex03_")) / "shop.duckdb"
 _PLATFORM = duckdb_platform(name="examples-hosted-ai", path=str(_DB_PATH))
 _MODEL = os.getenv("DATA_EVAL_HOSTED_MODEL", "openai/gpt-4o-mini")

@@ -19,7 +19,7 @@ solver = PromptSolver(model="openai/gpt-4o-mini")      # 03: hosted model
 | --- | --- | --- | --- |
 | `01_deterministic` | `CallableSolver` (fixed SQL) | Exercises each expected-type and scorer with no model or network | nothing |
 | `02_local_ai` | `PromptSolver` → local Ollama | Runs a self-hosted Ollama model through litellm | `data-eval[litellm]` + `ollama pull gemma4` |
-| `03_hosted_ai` | `PromptSolver` → hosted model | Runs a hosted model; gated on an API key | `data-eval[litellm]` + `OPENAI_API_KEY` |
+| `03_hosted_ai` | `PromptSolver` → hosted model | Sense-checks the hosted-model plumbing with a mocked reply (no live call) | `data-eval[litellm]` |
 
 ### 01_deterministic
 The solver is a `CallableSolver` returning fixed SQL. One file covers the expected-types:
@@ -37,7 +37,9 @@ model like `ollama_chat/qwen2.5-coder:1.5b`), and point at a remote Ollama insta
 
 ### 03_hosted_ai
 Mirrors 02 against a hosted model (`openai/gpt-4o-mini` by default, override with
-`DATA_EVAL_HOSTED_MODEL`). The module skips when `OPENAI_API_KEY` is unset.
+`DATA_EVAL_HOSTED_MODEL`). The model reply is mocked per question, so it runs
+deterministically as a sense-check of the example's plumbing without making a real call or
+needing an API key.
 
 ## Running
 
@@ -49,6 +51,6 @@ uv run pytest examples/01_deterministic -p no:randomly -q
 uv sync --extra litellm && ollama pull gemma4
 uv run pytest examples/02_local_ai -p no:randomly -q
 
-# 03 — skips without a key; runs with one:
-OPENAI_API_KEY=sk-... uv run pytest examples/03_hosted_ai -q
+# 03 — runs mocked, no key needed:
+uv run pytest examples/03_hosted_ai -q
 ```

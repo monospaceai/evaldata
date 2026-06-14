@@ -138,12 +138,15 @@ docstring-code-format = true
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 minversion = "8.0"
-testpaths = ["tests", "examples/01_deterministic", "examples/02_local_ai"]
+testpaths = ["tests", "examples"]
 addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
     "--showlocals",
+    # `importlib` lets sibling example tiers reuse a test filename without basename
+    # collisions, since dirs starting with a digit can't form unique package names.
+    "--import-mode=importlib",
 ]
 markers = [
     "unit: pure-Python unit tests (no external services)",
@@ -155,7 +158,7 @@ markers = [
 # ---------------------------------------------------------------------------
 [tool.coverage.run]
 branch = true
-source = ["src/data_eval", "examples/01_deterministic"]
+source = ["src/data_eval", "examples"]
 parallel = true
 omit = [
     "tests/*",

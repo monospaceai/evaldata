@@ -15,7 +15,7 @@ from data_eval.solvers import PromptSolver
 _DB_PATH = Path(tempfile.mkdtemp(prefix="data_eval_ex02_")) / "shop.duckdb"
 _PLATFORM = duckdb_platform(name="examples-local-ai", path=str(_DB_PATH))
 _MODEL = os.environ.get("DATA_EVAL_LOCAL_MODEL", "")
-if not _MODEL:
+if not _MODEL:  # pragma: no cover
     msg = "set DATA_EVAL_LOCAL_MODEL to your local model's id, e.g. ollama_chat/qwen2.5-coder:1.5b"
     raise RuntimeError(msg)
 
