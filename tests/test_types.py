@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from data_eval.types import (
+from dataeval.types import (
     Column,
     ColumnMismatch,
     ColumnPresenceExpectation,

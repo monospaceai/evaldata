@@ -1,6 +1,6 @@
 """Shared `PlatformAdapter` conformance battery, parametrised over every adapter via `under_test`."""
 
-from data_eval.platforms.base import PlatformAdapter, execute_within_budget
+from dataeval.platforms.base import PlatformAdapter, execute_within_budget
 
 from .conftest import UnderTest
 

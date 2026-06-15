@@ -6,26 +6,26 @@ from typing import Any
 
 import pytest
 
-import data_eval
-from data_eval import platforms, solvers
+import dataeval
+from dataeval import platforms, solvers
 
 
 def test_prompt_solver_top_level() -> None:
-    from data_eval.solvers.prompt import PromptSolver
+    from dataeval.solvers.prompt import PromptSolver
 
-    assert data_eval.PromptSolver is PromptSolver
-    assert "PromptSolver" in dir(data_eval)
+    assert dataeval.PromptSolver is PromptSolver
+    assert "PromptSolver" in dir(dataeval)
 
 
 def test_prompt_solver_subpackage() -> None:
-    from data_eval.solvers.prompt import PromptSolver
+    from dataeval.solvers.prompt import PromptSolver
 
     assert solvers.PromptSolver is PromptSolver
     assert "PromptSolver" in dir(solvers)
 
 
 def test_postgres_adapter_subpackage() -> None:
-    from data_eval.platforms.postgres import PostgresAdapter
+    from dataeval.platforms.postgres import PostgresAdapter
 
     assert platforms.PostgresAdapter is PostgresAdapter
     assert "PostgresAdapter" in dir(platforms)
@@ -33,7 +33,7 @@ def test_postgres_adapter_subpackage() -> None:
 
 def test_postgres_adapter_not_top_level() -> None:
     with pytest.raises(AttributeError):
-        _ = data_eval.PostgresAdapter
+        _ = dataeval.PostgresAdapter
 
 
 def _blocking_import(blocked: str) -> Callable[..., Any]:
@@ -49,22 +49,22 @@ def _blocking_import(blocked: str) -> Callable[..., Any]:
 
 
 def test_prompt_solver_missing_litellm(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delitem(__import__("sys").modules, "data_eval.solvers.prompt", raising=False)
+    monkeypatch.delitem(__import__("sys").modules, "dataeval.solvers.prompt", raising=False)
     monkeypatch.setattr(builtins, "__import__", _blocking_import("litellm"))
-    with pytest.raises(ImportError, match=r"data-eval\[litellm\]"):
+    with pytest.raises(ImportError, match=r"dataeval\[litellm\]"):
         solvers.__getattr__("PromptSolver")
 
 
 def test_postgres_adapter_missing_psycopg(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delitem(__import__("sys").modules, "data_eval.platforms.postgres", raising=False)
+    monkeypatch.delitem(__import__("sys").modules, "dataeval.platforms.postgres", raising=False)
     monkeypatch.setattr(builtins, "__import__", _blocking_import("psycopg"))
-    with pytest.raises(ImportError, match=r"data-eval\[postgres\]"):
+    with pytest.raises(ImportError, match=r"dataeval\[postgres\]"):
         platforms.__getattr__("PostgresAdapter")
 
 
 def test_unknown_attribute_top_level() -> None:
     with pytest.raises(AttributeError):
-        _ = data_eval.NoSuchThing
+        _ = dataeval.NoSuchThing
 
 
 def test_unknown_attribute_solvers() -> None:

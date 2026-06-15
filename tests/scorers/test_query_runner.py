@@ -2,8 +2,8 @@
 
 import pytest
 
-from data_eval.scorers import QueryRunner
-from data_eval.types import ExecutionResult, Sql
+from dataeval.scorers import QueryRunner
+from dataeval.types import ExecutionResult, Sql
 
 
 class _RecordingAdapter:

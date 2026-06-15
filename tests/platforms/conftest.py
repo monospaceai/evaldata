@@ -6,8 +6,8 @@ from typing import Protocol
 
 import pytest
 
-from data_eval.platforms.base import PlatformAdapter
-from data_eval.platforms.duckdb import DuckDBAdapter
+from dataeval.platforms.base import PlatformAdapter
+from dataeval.platforms.duckdb import DuckDBAdapter
 
 
 class ConformanceFixtures(Protocol):
@@ -102,7 +102,7 @@ def connect_postgres_or_skip() -> PlatformAdapter:
     `postgres` conformance param and `test_postgres.py`'s native-type tests.
     """
     try:
-        from data_eval.platforms.postgres import PostgresAdapter
+        from dataeval.platforms.postgres import PostgresAdapter
     except ImportError:
         pytest.skip("psycopg not installed; install the 'postgres' extra (uv sync --extra postgres)")
     import psycopg

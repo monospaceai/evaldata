@@ -3,7 +3,7 @@
 import pytest
 from sqlglot import exp
 
-from data_eval.platforms.base import PlatformAdapter
+from dataeval.platforms.base import PlatformAdapter
 
 from .conftest import connect_postgres_or_skip
 
@@ -64,7 +64,7 @@ class TestPostgresLifecycle:
 
     def test_context_manager_returns_self_and_closes(self) -> None:
         connect_postgres_or_skip().close()  # skip unless a Postgres is reachable
-        from data_eval.platforms.postgres import PostgresAdapter
+        from dataeval.platforms.postgres import PostgresAdapter
 
         from .conftest import _postgres_dsn
 

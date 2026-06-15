@@ -8,11 +8,11 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from data_eval import EvalCase, ResultSetEquivalence, assert_eval, eval_case
-from data_eval.platforms import duckdb_platform
-from data_eval.solvers import PromptSolver
+from dataeval import EvalCase, ResultSetEquivalence, assert_eval, eval_case
+from dataeval.platforms import duckdb_platform
+from dataeval.solvers import PromptSolver
 
-_DB_PATH = Path(tempfile.mkdtemp(prefix="data_eval_ex03_")) / "shop.duckdb"
+_DB_PATH = Path(tempfile.mkdtemp(prefix="dataeval_ex03_")) / "shop.duckdb"
 _PLATFORM = duckdb_platform(name="examples-hosted-ai", path=str(_DB_PATH))
 _MODEL = os.getenv("DATA_EVAL_HOSTED_MODEL", "openai/gpt-4o-mini")
 

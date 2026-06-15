@@ -2,9 +2,9 @@
 
 import pytest
 
-from data_eval.reporting.collector import CaseReport
-from data_eval.reporting.terminal import render_failure, render_solver_error, render_summary
-from data_eval.types import (
+from dataeval.reporting.collector import CaseReport
+from dataeval.reporting.terminal import render_failure, render_solver_error, render_summary
+from dataeval.types import (
     ColumnMismatch,
     EvalCase,
     ExecutionResult,

@@ -571,7 +571,28 @@ wheels = [
 ]
 
 [[package]]
-name = "data-eval"
+name = "databricks-sql-connector"
+version = "4.2.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "lz4" },
+    { name = "oauthlib" },
+    { name = "openpyxl" },
+    { name = "pandas" },
+    { name = "pybreaker" },
+    { name = "pyjwt" },
+    { name = "python-dateutil" },
+    { name = "requests" },
+    { name = "thrift" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2b/2f/2c1a96b1d40d53dc9a0abf639c823895b6da76b1b5dc2f2230df2ae1aa6c/databricks_sql_connector-4.2.6.tar.gz", hash = "sha256:65e59f08e55dcc563c05e02e2321d5171dd9482e5792328d99ac097377795d01", size = 189069, upload-time = "2026-04-23T10:40:33.878Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/4f/4ea282af1e413d26e47b9e987c1cbef1d3fc599da81eb54ac2bf74b6b822/databricks_sql_connector-4.2.6-py3-none-any.whl", hash = "sha256:61e0f425c990a0ec52c31165ea7dd0582cc0ad90c5fbd5fc9bea59bb38faeb00", size = 216743, upload-time = "2026-04-23T10:40:32.216Z" },
+]
+
+[[package]]
+name = "dataeval"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -637,9 +658,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "data-eval", extras = ["all-platforms", "litellm", "tracing"], marker = "extra == 'all'" },
-    { name = "data-eval", extras = ["postgres", "snowflake", "bigquery", "databricks"], marker = "extra == 'all-platforms'" },
     { name = "databricks-sql-connector", marker = "extra == 'databricks'", specifier = ">=4.2.6" },
+    { name = "dataeval", extras = ["all-platforms", "litellm", "tracing"], marker = "extra == 'all'" },
+    { name = "dataeval", extras = ["postgres", "snowflake", "bigquery", "databricks"], marker = "extra == 'all-platforms'" },
     { name = "duckdb", specifier = ">=1.5.3" },
     { name = "google-cloud-bigquery", marker = "extra == 'bigquery'", specifier = ">=3.41.0" },
     { name = "google-cloud-bigquery-storage", marker = "extra == 'bigquery'", specifier = ">=2.38.0" },
@@ -666,27 +687,6 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "ruff", specifier = ">=0.15.14" },
     { name = "ty", specifier = ">=0.0.39" },
-]
-
-[[package]]
-name = "databricks-sql-connector"
-version = "4.2.6"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "lz4" },
-    { name = "oauthlib" },
-    { name = "openpyxl" },
-    { name = "pandas" },
-    { name = "pybreaker" },
-    { name = "pyjwt" },
-    { name = "python-dateutil" },
-    { name = "requests" },
-    { name = "thrift" },
-    { name = "urllib3" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/2b/2f/2c1a96b1d40d53dc9a0abf639c823895b6da76b1b5dc2f2230df2ae1aa6c/databricks_sql_connector-4.2.6.tar.gz", hash = "sha256:65e59f08e55dcc563c05e02e2321d5171dd9482e5792328d99ac097377795d01", size = 189069, upload-time = "2026-04-23T10:40:33.878Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b7/4f/4ea282af1e413d26e47b9e987c1cbef1d3fc599da81eb54ac2bf74b6b822/databricks_sql_connector-4.2.6-py3-none-any.whl", hash = "sha256:61e0f425c990a0ec52c31165ea7dd0582cc0ad90c5fbd5fc9bea59bb38faeb00", size = 216743, upload-time = "2026-04-23T10:40:32.216Z" },
 ]
 
 [[package]]

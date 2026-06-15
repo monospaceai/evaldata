@@ -8,7 +8,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from data_eval import (
+from dataeval import (
     CallableSolver,
     EvalCase,
     ExpectationSuiteScorer,
@@ -16,9 +16,9 @@ from data_eval import (
     assert_eval,
     eval_case,
 )
-from data_eval.platforms import duckdb_platform
+from dataeval.platforms import duckdb_platform
 
-_DB_PATH = Path(tempfile.mkdtemp(prefix="data_eval_ex01_")) / "shop.duckdb"
+_DB_PATH = Path(tempfile.mkdtemp(prefix="dataeval_ex01_")) / "shop.duckdb"
 _PLATFORM = duckdb_platform(name="examples-deterministic", path=str(_DB_PATH))
 
 

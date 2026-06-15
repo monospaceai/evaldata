@@ -1,4 +1,4 @@
-"""Tests for the data-eval pytest plugin's `case` fixture, exercised via `pytester`."""
+"""Tests for the dataeval pytest plugin's `case` fixture, exercised via `pytester`."""
 
 import json
 import types
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from data_eval.pytest_plugin import plugin
+from dataeval.pytest_plugin import plugin
 
 pytest_plugins = ["pytester"]
 
@@ -15,8 +15,8 @@ pytest_plugins = ["pytester"]
 def test_case_fixture_injects_the_decorated_case(pytester: pytest.Pytester) -> None:
     pytester.makepyfile(
         """
-        from data_eval import eval_case
-        from data_eval.platforms import duckdb_platform
+        from dataeval import eval_case
+        from dataeval.platforms import duckdb_platform
 
         @eval_case(
             input="q",
@@ -50,8 +50,8 @@ _EVAL_TEST = """
 
     import duckdb
 
-    from data_eval import CallableSolver, ResultSetEquivalence, assert_eval, eval_case
-    from data_eval.platforms import duckdb_platform
+    from dataeval import CallableSolver, ResultSetEquivalence, assert_eval, eval_case
+    from dataeval.platforms import duckdb_platform
 
     _DB = Path(__DIR__) / "t.duckdb"
     _con = duckdb.connect(str(_DB))
@@ -77,7 +77,7 @@ def test_run_summary_printed_at_end_of_session(pytester: pytest.Pytester) -> Non
     _make_eval_test(pytester)
     result = pytester.runpytest()
     result.assert_outcomes(passed=1)
-    result.stdout.fnmatch_lines(["*data-eval summary*", "*test_eval*PASS*", "*1 passed, 0 failed*"])
+    result.stdout.fnmatch_lines(["*dataeval summary*", "*test_eval*PASS*", "*1 passed, 0 failed*"])
 
 
 @pytest.mark.unit
@@ -94,7 +94,7 @@ def test_terminal_summary_skipped_on_xdist_worker() -> None:
 
 @pytest.mark.unit
 def test_sessionfinish_on_xdist_worker_ships_results_not_json(tmp_path: Path) -> None:
-    from data_eval.reporting.collector import CaseReport, clear, record
+    from dataeval.reporting.collector import CaseReport, clear, record
 
     clear()
     record(CaseReport(id="w1", input="q", passed=True))
@@ -111,7 +111,7 @@ def test_sessionfinish_on_xdist_worker_ships_results_not_json(tmp_path: Path) ->
 
 @pytest.mark.unit
 def test_testnodedown_merges_worker_cases_into_controller() -> None:
-    from data_eval.reporting.collector import clear, reports
+    from dataeval.reporting.collector import clear, reports
 
     clear()
     node = types.SimpleNamespace(workeroutput={plugin._WORKEROUTPUT_KEY: [{"id": "w1", "input": "q", "passed": True}]})
@@ -122,7 +122,7 @@ def test_testnodedown_merges_worker_cases_into_controller() -> None:
 
 @pytest.mark.unit
 def test_testnodedown_without_worker_output_is_a_noop() -> None:
-    from data_eval.reporting.collector import clear, reports
+    from dataeval.reporting.collector import clear, reports
 
     clear()
     plugin.pytest_testnodedown(types.SimpleNamespace(), None)
@@ -133,7 +133,7 @@ def test_testnodedown_without_worker_output_is_a_noop() -> None:
 def test_json_artifact_written_when_flag_set(pytester: pytest.Pytester) -> None:
     _make_eval_test(pytester)
     artifact = pytester.path / "results.json"
-    result = pytester.runpytest(f"--data-eval-json={artifact}")
+    result = pytester.runpytest(f"--dataeval-json={artifact}")
     result.assert_outcomes(passed=1)
     assert artifact.exists()
     payload = json.loads(artifact.read_text())
@@ -145,8 +145,8 @@ def test_json_artifact_written_when_flag_set(pytester: pytest.Pytester) -> None:
 _XDIST_EVAL_TEST = """
     from pathlib import Path
 
-    from data_eval import CallableSolver, ResultSetEquivalence, assert_eval, eval_case
-    from data_eval.platforms import duckdb_platform
+    from dataeval import CallableSolver, ResultSetEquivalence, assert_eval, eval_case
+    from dataeval.platforms import duckdb_platform
 
     duck = duckdb_platform(name="p", path=str(Path(__DIR__) / "t.duckdb"))
 
@@ -169,9 +169,9 @@ def test_xdist_aggregates_worker_results_into_summary_and_json(pytester: pytest.
     pytester.makepyfile(_XDIST_EVAL_TEST.replace("__DIR__", repr(str(pytester.path))))
 
     artifact = pytester.path / "results.json"
-    result = pytester.runpytest_subprocess("-n", "2", f"--data-eval-json={artifact}")
+    result = pytester.runpytest_subprocess("-n", "2", f"--dataeval-json={artifact}")
     result.assert_outcomes(passed=1)
-    result.stdout.fnmatch_lines(["*data-eval summary*", "*test_eval*PASS*", "*1 passed, 0 failed*"])
+    result.stdout.fnmatch_lines(["*dataeval summary*", "*test_eval*PASS*", "*1 passed, 0 failed*"])
     payload = json.loads(artifact.read_text())
     assert payload["passed"] == 1
     assert payload["failed"] == 0

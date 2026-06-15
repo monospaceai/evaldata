@@ -6,10 +6,10 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from data_eval import CallableSolver, EvalCase, PlatformRef, ResultSetEquivalence, assert_eval
-from data_eval.platforms import DuckDBAdapter, duckdb_platform
-from data_eval.scorers import QueryRunner, ScoreContext
-from data_eval.types import (
+from dataeval import CallableSolver, EvalCase, PlatformRef, ResultSetEquivalence, assert_eval
+from dataeval.platforms import DuckDBAdapter, duckdb_platform
+from dataeval.scorers import QueryRunner, ScoreContext
+from dataeval.types import (
     CostBudget,
     ExecutionResult,
     ScoreResult,

@@ -1,4 +1,4 @@
-# Postgres for data-eval's e2e tests — the `postgres` conformance params in
+# Postgres for dataeval's e2e tests — the `postgres` conformance params in
 # tests/platforms/test_conformance.py and the native-type tests in test_postgres.py.
 #
 #   docker compose up -d

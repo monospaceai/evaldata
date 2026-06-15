@@ -1,4 +1,4 @@
-"""Tests for the `data-eval` CLI (`run` and `doctor`)."""
+"""Tests for the `dataeval` CLI (`run` and `doctor`)."""
 
 import subprocess
 import sys
@@ -9,9 +9,9 @@ from typing import get_args
 import pytest
 from typer.testing import CliRunner
 
-import data_eval.cli as cli
-from data_eval.cli import _build_refs, app
-from data_eval.types import PlatformKind
+import dataeval.cli as cli
+from dataeval.cli import _build_refs, app
+from dataeval.types import PlatformKind
 
 runner = CliRunner()
 
@@ -32,7 +32,7 @@ class TestRun:
         cmd = captured["cmd"]
         assert cmd[:3] == [sys.executable, "-m", "pytest"]
         assert "tests/unit" in cmd
-        assert "--data-eval-json=out.json" in cmd
+        assert "--dataeval-json=out.json" in cmd
         # Unknown pytest args pass straight through, in order.
         assert cmd[-2:] == ["-k", "foo"] or cmd[-3:] == ["-k", "foo", "-x"]
         assert "-x" in cmd
@@ -85,7 +85,7 @@ class TestDoctor:
 
     def test_fail_when_probe_query_returns_error_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # A connection that opens but whose SELECT 1 fails as an ExecutionResult.error is a FAIL.
-        from data_eval.types import ExecutionResult
+        from dataeval.types import ExecutionResult
 
         class _ErroringAdapter:
             def execute(self, sql: str) -> ExecutionResult:
@@ -115,8 +115,8 @@ _EVAL_TEST = """
 
     import duckdb
 
-    from data_eval import CallableSolver, ResultSetEquivalence, assert_eval, eval_case
-    from data_eval.platforms import duckdb_platform
+    from dataeval import CallableSolver, ResultSetEquivalence, assert_eval, eval_case
+    from dataeval.platforms import duckdb_platform
 
     _DB = Path(__DIR__) / "t.duckdb"
     _con = duckdb.connect(str(_DB))

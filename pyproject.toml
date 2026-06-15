@@ -1,12 +1,12 @@
 [project]
-name = "data-eval"
+name = "dataeval"
 version = "0.1.0"
 description = "AI evals framework for data & analytics engineering teams."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
-    { name = "code-alexander", email = "152750039+code-alexander@users.noreply.github.com" }
+    { name = "monospaceai" }
 ]
 requires-python = ">=3.11"
 keywords = [
@@ -60,26 +60,26 @@ tracing = [
     "opentelemetry-sdk>=1.42.1",
 ]
 all-platforms = [
-    "data-eval[postgres,snowflake,bigquery,databricks]",
+    "dataeval[postgres,snowflake,bigquery,databricks]",
 ]
 all = [
-    "data-eval[all-platforms,litellm,tracing]",
+    "dataeval[all-platforms,litellm,tracing]",
 ]
 
 [project.urls]
-Homepage = "https://github.com/code-alexander/data-eval"
-Repository = "https://github.com/code-alexander/data-eval"
-Issues = "https://github.com/code-alexander/data-eval/issues"
+Homepage = "https://github.com/monospaceai/dataeval"
+Repository = "https://github.com/monospaceai/dataeval"
+Issues = "https://github.com/monospaceai/dataeval/issues"
 
-# The `data-eval` console command. Points straight at the Typer `app` object (a Typer
+# The `dataeval` console command. Points straight at the Typer `app` object (a Typer
 # instance is callable) — the form the Typer packaging tutorial shows.
 [project.scripts]
-data-eval = "data_eval.cli:app"
+dataeval = "dataeval.cli:app"
 
-# Registers the data-eval pytest plugin (the `case` fixture + session-end adapter
+# Registers the dataeval pytest plugin (the `case` fixture + session-end adapter
 # cleanup) automatically on install, so `pytest tests/` works with zero conftest setup.
 [project.entry-points.pytest11]
-data_eval = "data_eval.pytest_plugin.plugin"
+dataeval = "dataeval.pytest_plugin.plugin"
 
 [build-system]
 requires = ["uv_build>=0.8.19,<0.9.0"]
@@ -126,7 +126,7 @@ ignore = [
 convention = "google"
 
 [tool.ruff.lint.isort]
-known-first-party = ["data_eval"]
+known-first-party = ["dataeval"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -158,7 +158,7 @@ markers = [
 # ---------------------------------------------------------------------------
 [tool.coverage.run]
 branch = true
-source = ["src/data_eval", "examples"]
+source = ["src/dataeval", "examples"]
 parallel = true
 omit = [
     "tests/*",

@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from data_eval.reporting.collector import CaseReport, clear, extend, record, reports, run_report_json
-from data_eval.types import ResultSetDiff, ScoreResult
+from dataeval.reporting.collector import CaseReport, clear, extend, record, reports, run_report_json
+from dataeval.types import ResultSetDiff, ScoreResult
 
 
 @pytest.fixture(autouse=True)

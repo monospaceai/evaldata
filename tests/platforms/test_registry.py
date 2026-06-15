@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from data_eval.platforms import duckdb_platform, postgres_platform, resolve
-from data_eval.platforms.registry import close_all
-from data_eval.types import PlatformRef
+from dataeval.platforms import duckdb_platform, postgres_platform, resolve
+from dataeval.platforms.registry import close_all
+from dataeval.types import PlatformRef
 
 
 @pytest.mark.unit
@@ -58,7 +58,7 @@ class TestResolve:
 
     def test_postgres_extra_missing_raises_runtime_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Simulate the 'postgres' extra not being installed: importing the adapter fails.
-        monkeypatch.setitem(sys.modules, "data_eval.platforms.postgres", None)
+        monkeypatch.setitem(sys.modules, "dataeval.platforms.postgres", None)
         with pytest.raises(RuntimeError, match="requires the 'postgres' extra"):
             resolve(postgres_platform(name="pg-missing-extra", conninfo=""))
 

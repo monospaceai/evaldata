@@ -1,6 +1,6 @@
 # Examples
 
-Runnable, pytest-native `data-eval` examples using the product surface: `@eval_case`
+Runnable, pytest-native `dataeval` examples using the product surface: `@eval_case`
 decorator + injected `case` fixture + `assert_eval`. Each file seeds its own
 `customers` + `orders` DuckDB in a tempdir via an autouse fixture.
 
@@ -18,8 +18,8 @@ solver = PromptSolver(model="openai/gpt-4o-mini")      # 03: hosted model
 | Dir | Solver | Purpose | Needs |
 | --- | --- | --- | --- |
 | `01_deterministic` | `CallableSolver` (fixed SQL) | Exercises each expected-type and scorer with no model or network | nothing |
-| `02_local_ai` | `PromptSolver` → local Ollama | Runs a self-hosted Ollama model through litellm | `data-eval[litellm]` + `ollama pull gemma4` |
-| `03_hosted_ai` | `PromptSolver` → hosted model | Sense-checks the hosted-model plumbing with a mocked reply (no live call) | `data-eval[litellm]` |
+| `02_local_ai` | `PromptSolver` → local Ollama | Runs a self-hosted Ollama model through litellm | `dataeval[litellm]` + `ollama pull gemma4` |
+| `03_hosted_ai` | `PromptSolver` → hosted model | Sense-checks the hosted-model plumbing with a mocked reply (no live call) | `dataeval[litellm]` |
 
 ### 01_deterministic
 The solver is a `CallableSolver` returning fixed SQL. One file covers the expected-types:
