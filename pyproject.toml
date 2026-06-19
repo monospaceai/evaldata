@@ -152,7 +152,7 @@ addopts = [
 markers = [
     "unit: pure-Python unit tests (no external services)",
     "e2e: end-to-end tests against a real platform",
-    "cloud: e2e against a hosted backend needing secret credentials (Databricks, …); excluded from the default run, run in a fork-gated CI job",
+    "cloud: e2e against a hosted backend needing secret credentials (Databricks, …); run by default, skipped only by the `not cloud` fast path",
 ]
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 # Examples
 
-Runnable, pytest-native `dataeval` examples using the product surface: `@eval_case`
-decorator + injected `case` fixture + `assert_eval`. Each file seeds its own
-`customers` + `orders` DuckDB in a tempdir via an autouse fixture.
+Runnable, pytest-native `dataeval` examples using the product surface: the `@eval_case`
+decorator, the injected `case` fixture, and `assert_eval`. Each seeds its own small dataset
+via an autouse fixture.
 
 Tiers 01-03 differ in the **solver** — the AI system under test — against the same kind of
 cases on a local DuckDB. Swapping tiers is a one-line change:
@@ -46,20 +46,19 @@ deterministically as a sense-check of the example's plumbing without making a re
 needing an API key.
 
 ### 04_databricks
-The same deterministic cases as 01, but executed against a real Databricks SQL Warehouse to
-show the platform features already built:
-- **Precise type resolution** — the typed case asserts `amount: DECIMAL(10, 2)`, which passes
-  only because dataeval recovers the scale via `DESCRIBE QUERY`; the connector's raw column
-  description reports a bare `DECIMAL` (i.e. `DECIMAL(10, 0)`) and would fail the assertion.
+The same deterministic cases as 01, executed against a real Databricks SQL Warehouse to show
+its platform features:
+- **Precise type resolution** — the typed case asserts `amount: DECIMAL(10, 2)`, which holds
+  only because dataeval resolves precise column types from the warehouse; the raw driver
+  reports a scaleless `DECIMAL`.
 - **Warehouse pushdown** — `ExpectationSuite` (`row_count` / `not_null` / `unique`) and
   result-set equivalence run server-side, not by pulling rows back.
 - **Secretless auth** — the `PlatformRef` holds only `server_hostname` / `http_path`;
   credentials resolve from the ambient environment via the Databricks SDK.
 
 Set `DATABRICKS_SERVER_HOSTNAME` and `DATABRICKS_HTTP_PATH` (plus whatever the Databricks SDK
-needs to authenticate, e.g. `DATABRICKS_TOKEN`). Every case is marked `cloud`: the default
-`just check` runs them, while `just check-nocloud` skips them for fast iteration. It seeds a
-session-scoped `TEMPORARY VIEW`, so it needs only query permissions and leaves nothing behind.
+needs to authenticate, e.g. `DATABRICKS_TOKEN`). It seeds a session-scoped `TEMPORARY VIEW`,
+so it needs only query permissions and leaves nothing behind.
 
 ## Running
 
@@ -74,8 +73,8 @@ uv run pytest examples/02_local_ai -p no:randomly -q
 # 03 — runs mocked, no key needed:
 uv run pytest examples/03_hosted_ai -q
 
-# 04 — needs the databricks extra + a reachable warehouse (cloud-marked):
+# 04 — needs the databricks extra + a reachable warehouse:
 uv sync --extra databricks
 DATABRICKS_SERVER_HOSTNAME=... DATABRICKS_HTTP_PATH=... DATABRICKS_TOKEN=... \
-  uv run pytest examples/04_databricks -m cloud -p no:randomly -q
+  uv run pytest examples/04_databricks -p no:randomly -q
 ```
