@@ -217,7 +217,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# data-eval — additional coverage formats and ty cache
+# dataeval — additional coverage formats and ty cache
 coverage.json
 coverage.lcov
 

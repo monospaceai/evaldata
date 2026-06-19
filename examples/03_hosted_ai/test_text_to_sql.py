@@ -14,7 +14,7 @@ from dataeval.solvers import PromptSolver
 
 _DB_PATH = Path(tempfile.mkdtemp(prefix="dataeval_ex03_")) / "shop.duckdb"
 _PLATFORM = duckdb_platform(name="examples-hosted-ai", path=str(_DB_PATH))
-_MODEL = os.getenv("DATA_EVAL_HOSTED_MODEL", "openai/gpt-4o-mini")
+_MODEL = os.getenv("DATAEVAL_HOSTED_MODEL", "openai/gpt-4o-mini")
 
 
 @pytest.fixture(scope="module", autouse=True)

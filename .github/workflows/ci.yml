@@ -63,7 +63,7 @@ jobs:
           ollama pull qwen2.5-coder:1.5b
           just ci
         env:
-          DATA_EVAL_LOCAL_MODEL: ollama_chat/qwen2.5-coder:1.5b
+          DATAEVAL_LOCAL_MODEL: ollama_chat/qwen2.5-coder:1.5b
 
   # Credentialed `cloud` e2e (Databricks). Runs on push to main and on same-repo (non-fork)
   # PRs — fork PRs can't access secrets, so it's skipped for them and `check` treats that as

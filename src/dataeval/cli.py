@@ -117,13 +117,13 @@ def _probe(ref: PlatformRef) -> tuple[bool, str]:
 @app.command()
 def doctor(
     duckdb: str | None = typer.Option(
-        None, "--duckdb", metavar="PATH", envvar="DATA_EVAL_DUCKDB_PATH", help="DuckDB database path to check."
+        None, "--duckdb", metavar="PATH", envvar="DATAEVAL_DUCKDB_PATH", help="DuckDB database path to check."
     ),
     postgres: str | None = typer.Option(
         None,
         "--postgres",
         metavar="CONNINFO",
-        envvar="DATA_EVAL_POSTGRES_CONNINFO",
+        envvar="DATAEVAL_POSTGRES_CONNINFO",
         help='PostgreSQL libpq conninfo to check (empty "" uses PG* env vars / libpq defaults).',
     ),
     databricks_server_hostname: str | None = typer.Option(
@@ -144,9 +144,9 @@ def doctor(
     """Check that the given platform connections work (one --<kind> flag per platform).
 
     Args:
-        duckdb: A DuckDB database path to check (also read from `DATA_EVAL_DUCKDB_PATH`).
+        duckdb: A DuckDB database path to check (also read from `DATAEVAL_DUCKDB_PATH`).
         postgres: A PostgreSQL conninfo to check (also read from
-            `DATA_EVAL_POSTGRES_CONNINFO`).
+            `DATAEVAL_POSTGRES_CONNINFO`).
         databricks_server_hostname: A Databricks workspace hostname to check (also read from
             `DATABRICKS_SERVER_HOSTNAME`); required together with `databricks_http_path`.
         databricks_http_path: A Databricks SQL Warehouse HTTP path to check (also read from

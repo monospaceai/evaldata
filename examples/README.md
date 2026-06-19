@@ -31,13 +31,13 @@ an untyped result set (values only), a typed result set (values + column types),
 `PromptSolver` calls a self-hosted Ollama model through litellm.
 Questions ask for plain column selections, whose output column names come from the table
 and are therefore stable, keeping exact-row `ResultSetEquivalence` scoring reliable.
-Override the model with `DATA_EVAL_LOCAL_MODEL` (default `ollama_chat/gemma4`; e.g. a coder
+Override the model with `DATAEVAL_LOCAL_MODEL` (default `ollama_chat/gemma4`; e.g. a coder
 model like `ollama_chat/qwen2.5-coder:1.5b`), and point at a remote Ollama instance with
 `OLLAMA_API_BASE`.
 
 ### 03_hosted_ai
 Mirrors 02 against a hosted model (`openai/gpt-4o-mini` by default, override with
-`DATA_EVAL_HOSTED_MODEL`). The model reply is mocked per question, so it runs
+`DATAEVAL_HOSTED_MODEL`). The model reply is mocked per question, so it runs
 deterministically as a sense-check of the example's plumbing without making a real call or
 needing an API key.
 
