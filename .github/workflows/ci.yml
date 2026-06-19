@@ -81,7 +81,9 @@ jobs:
           python-version: "3.11"
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
       - name: Run Databricks cloud e2e
-        run: just test-cloud
+        # Scope to tests/: this job has no local model, and the examples tier hard-fails at
+        # collection without one.
+        run: just test-cloud tests
         env:
           DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
           DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
