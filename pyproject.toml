@@ -93,6 +93,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
     "pytest-xdist>=3.8.0",
+    "python-dotenv>=1.0.1",
     "ruff>=0.15.14",
     "ty>=0.0.39",
 ]

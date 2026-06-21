@@ -56,12 +56,12 @@ its platform features:
   reports a scaleless `DECIMAL`.
 - **Warehouse pushdown** — `ExpectationSuite` (`row_count` / `not_null` / `unique`) and
   result-set equivalence run server-side, not by pulling rows back.
-- **Secretless auth** — the `PlatformRef` holds only `server_hostname` / `http_path`;
-  credentials resolve from the ambient environment via the Databricks SDK.
+- **Secretless platform reference** — the `PlatformRef` holds only `server_hostname` /
+  `http_path`; credentials are not part of it.
 
-Set `DATABRICKS_SERVER_HOSTNAME` and `DATABRICKS_HTTP_PATH` (plus whatever the Databricks SDK
-needs to authenticate, e.g. `DATABRICKS_TOKEN`). It seeds a session-scoped `TEMPORARY VIEW`,
-so it needs only query permissions and leaves nothing behind.
+Set `DATABRICKS_SERVER_HOSTNAME` and `DATABRICKS_HTTP_PATH`, and authenticate with the
+Databricks CLI (https://github.com/databricks/cli). It seeds a session-scoped
+`TEMPORARY VIEW`, so it needs only query permissions and leaves nothing behind.
 
 ## Running
 
@@ -76,8 +76,8 @@ uv run pytest examples/02_local_ai -p no:randomly -q
 # 03 — runs mocked, no key needed:
 uv run pytest examples/03_hosted_ai -q
 
-# 04 — needs the databricks extra + a reachable warehouse:
+# 04 — needs the databricks extra + a reachable warehouse (authenticate first via the Databricks CLI):
 uv sync --extra databricks
-DATABRICKS_SERVER_HOSTNAME=... DATABRICKS_HTTP_PATH=... DATABRICKS_TOKEN=... \
+DATABRICKS_SERVER_HOSTNAME=... DATABRICKS_HTTP_PATH=... \
   uv run pytest examples/04_databricks -p no:randomly -q
 ```

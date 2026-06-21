@@ -46,8 +46,7 @@ def databricks_platform(
 ) -> PlatformRef:
     """Build a `PlatformRef` for a Databricks SQL Warehouse.
 
-    Holds only non-secret connection details; credentials resolve from the ambient
-    environment through the Databricks SDK's unified authentication.
+    Holds only non-secret connection details; credentials are not included here.
 
     Args:
         name: A unique name identifying this platform connection.

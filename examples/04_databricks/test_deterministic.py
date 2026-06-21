@@ -1,11 +1,11 @@
 """Databricks example evals: fixed SQL run against a live Databricks SQL Warehouse.
 
-Precise column types are resolved from the warehouse, expectation and equivalence checks are
-pushed down into SQL, and credentials come from the ambient Databricks SDK environment, not
-the platform reference.
+Precise column types are resolved from the warehouse, and expectation and equivalence checks
+are pushed down into SQL.
 
-Point it at a warehouse with `DATABRICKS_SERVER_HOSTNAME` and `DATABRICKS_HTTP_PATH`; the
-Databricks SDK supplies the credentials (e.g. `DATABRICKS_TOKEN`).
+Point it at a warehouse with `DATABRICKS_SERVER_HOSTNAME` and `DATABRICKS_HTTP_PATH`.
+Credentials are not part of the platform reference — authenticate with the Databricks CLI
+(https://github.com/databricks/cli).
 """
 
 import os

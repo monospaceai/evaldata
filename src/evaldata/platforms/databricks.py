@@ -25,8 +25,7 @@ class DatabricksAdapter:
     ) -> None:
         """Open a Databricks SQL connection.
 
-        Credentials are not passed here: they resolve from the ambient environment through
-        the Databricks SDK's unified authentication, however the caller configured it.
+        Credentials are not passed here.
 
         Args:
             server_hostname: The workspace hostname (no scheme), e.g. `dbc-xxxx.cloud.databricks.com`.
