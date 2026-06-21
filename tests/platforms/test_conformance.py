@@ -45,7 +45,7 @@ def test_duplicate_output_columns_return_error(under_test: UnderTest) -> None:
     # Name-keyed rows cannot represent two columns sharing a name.
     result = under_test.adapter.execute(under_test.fixtures.duplicate_column_names)
     assert result.error is not None
-    assert "duplicate" in result.error
+    assert "duplicate" in result.error.message
     assert result.rows == []
     assert result.schema_ is None
 
@@ -88,7 +88,7 @@ def test_query_exceeding_budget_is_cancelled(under_test: UnderTest) -> None:
     # An overrunning query is surfaced as an error rather than blocking for its full runtime.
     result = execute_within_budget(under_test.adapter, under_test.fixtures.slow_query, max_seconds=0.5)
     assert result.error is not None
-    assert "budget" in result.error
+    assert "budget" in result.error.message
     assert result.rows == []
     assert result.schema_ is None
     assert result.latency_seconds >= 0.5

@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
 from typing import Any, Protocol, runtime_checkable
 
-from evaldata.types import Column, ExecutionResult, Schema, SqlType
+from evaldata.types import Column, ExecutionError, ExecutionResult, Schema, SqlType
 
 
 @runtime_checkable
@@ -19,8 +19,8 @@ class PlatformAdapter(Protocol):
           native type string parsed in the adapter's static dialect), non-negative
           `latency_seconds`, and `error is None`.
         * On query failure: return `ExecutionResult` with `rows=[]`,
-          `schema_=None`, a non-empty `error` string describing the failure,
-          and non-negative `latency_seconds`. **Do NOT raise.** (Errors-as-values.)
+          `schema_=None`, an `error` describing the failure, and non-negative
+          `latency_seconds`. **Do NOT raise.**
         * `latency_seconds` measures wall-clock time spent inside `execute()`.
     """
 
@@ -63,7 +63,7 @@ class TypeResolvingAdapter(Protocol):
         """
         ...
 
-    def types_from_probe(self, rows: list[dict[str, Any]]) -> list[SqlType] | str:
+    def types_from_probe(self, rows: list[dict[str, Any]]) -> list[SqlType] | ExecutionError:
         """Parse the probe's result rows into precise `SqlType`s, one per projected column.
 
         They must be returned in the order the query projects its columns.
@@ -72,8 +72,8 @@ class TypeResolvingAdapter(Protocol):
             rows: The rows returned by executing `type_probe_sql`, in projection order.
 
         Returns:
-            One precise `SqlType` per projected column, in order, or an error string when the
-            rows cannot yield types (errors-as-values).
+            One precise `SqlType` per projected column, in order, or an `ExecutionError` when
+            the rows cannot yield types.
         """
         ...
 
@@ -84,8 +84,8 @@ def execute_within_budget(adapter: PlatformAdapter, sql: str, max_seconds: float
     With `max_seconds` unset, runs `adapter.execute` directly. Otherwise runs it on a worker
     thread and waits up to `max_seconds`; if the query is still running, calls
     `adapter.cancel()` to abort it and returns an `ExecutionResult.error` describing the
-    overrun (errors-as-values — a budget overrun is a failure value, not an exception). The
-    cancelled query is awaited so its connection is released before returning.
+    overrun (a budget overrun is returned as a value, not raised). The cancelled query is
+    awaited so its connection is released before returning.
 
     Args:
         adapter: The platform adapter to execute against.
@@ -110,7 +110,9 @@ def execute_within_budget(adapter: PlatformAdapter, sql: str, max_seconds: float
         rows=[],
         schema=None,
         latency_seconds=elapsed,
-        error=f"exceeded cost budget: query did not complete within {max_seconds}s",
+        error=ExecutionError(
+            kind="budget_exceeded", message=f"exceeded cost budget: query did not complete within {max_seconds}s"
+        ),
     )
 
 
@@ -139,7 +141,7 @@ def rows_or_error(columns: list[Column], rows_raw: list[tuple[Any, ...]], latenc
             rows=[],
             schema=None,
             latency_seconds=latency_seconds,
-            error=f"duplicate output column name(s): {listed}",
+            error=ExecutionError(kind="duplicate_columns", message=f"duplicate output column name(s): {listed}"),
         )
     rows = [dict(zip(names, row, strict=True)) for row in rows_raw]
     return ExecutionResult(rows=rows, schema=schema, latency_seconds=latency_seconds)

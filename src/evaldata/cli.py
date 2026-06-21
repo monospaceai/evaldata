@@ -110,7 +110,7 @@ def _probe(ref: PlatformRef) -> tuple[bool, str]:
     except Exception as e:  # noqa: BLE001 - diagnostics: any failure is a reported FAIL
         return False, str(e)
     if result.error is not None:
-        return False, result.error
+        return False, result.error.message
     return True, "connected"
 
 

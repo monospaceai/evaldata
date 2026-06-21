@@ -8,7 +8,7 @@ databricks_sql = pytest.importorskip("databricks.sql")
 
 from evaldata.platforms.databricks import DatabricksAdapter  # noqa: E402
 from evaldata.scorers.query import QueryRunner  # noqa: E402
-from evaldata.types import Sql, SqlType  # noqa: E402
+from evaldata.types import ExecutionError, Sql, SqlType  # noqa: E402
 
 Description = list[tuple[str, str]]
 
@@ -79,7 +79,8 @@ class TestExecute:
         result = _adapter(_FakeCursor(None, [], error="boom")).execute("SELECT bad")
         assert result.rows == []
         assert result.schema_ is None
-        assert result.error == "boom"
+        assert result.error is not None
+        assert result.error.message == "boom"
 
     def test_non_row_returning_statement_has_no_schema(self) -> None:
         result = _adapter(_FakeCursor(None, [])).execute("CREATE TABLE t (n INT)")
@@ -99,7 +100,7 @@ class TestExecute:
         assert result.rows == []
         assert result.schema_ is None
         assert result.error is not None
-        assert "duplicate output column name(s)" in result.error
+        assert "duplicate output column name(s)" in result.error.message
 
     def test_non_connector_fetch_error_is_returned_not_raised(self) -> None:
         # A pyarrow-layer error during fetch must be caught and returned, not propagated.
@@ -109,7 +110,8 @@ class TestExecute:
                 raise ValueError(msg)
 
         result = _adapter(_ArrowFailCursor([("n", "int")], [])).execute("SELECT n")
-        assert result.error == "Can't unify schema with duplicate field names"
+        assert result.error is not None
+        assert result.error.message == "Can't unify schema with duplicate field names"
         assert result.rows == []
         assert result.schema_ is None
 
@@ -132,12 +134,14 @@ class TestTypeProbe:
         ]
 
     def test_types_from_probe_empty_is_error(self) -> None:
-        assert DatabricksAdapter.types_from_probe([]) == "DESCRIBE QUERY returned no rows"
+        result = DatabricksAdapter.types_from_probe([])
+        assert isinstance(result, ExecutionError)
+        assert result.message == "DESCRIBE QUERY returned no rows"
 
     def test_types_from_probe_missing_data_type_is_error(self) -> None:
         result = DatabricksAdapter.types_from_probe([{"col_name": "amount", "comment": ""}])
-        assert isinstance(result, str)
-        assert result.startswith("DESCRIBE QUERY row missing data_type:")
+        assert isinstance(result, ExecutionError)
+        assert result.message.startswith("DESCRIBE QUERY row missing data_type:")
 
 
 @pytest.mark.unit
@@ -223,7 +227,7 @@ class TestTypeResolutionLive:
             assert result.schema_ is not None
 
             resolved = QueryRunner(adapter, sql, "databricks", None).resolved_schema(result.schema_, sql)
-            assert not isinstance(resolved, str), f"type resolution failed: {resolved}"
+            assert not isinstance(resolved, ExecutionError), f"type resolution failed: {resolved}"
             precise = {c.name: c.type for c in resolved.root}
             # `.raw` surfaces the real DESCRIBE QUERY string if the assumption is wrong.
             assert precise["amount"] == SqlType.parse("decimal(10,2)", "databricks"), precise["amount"].raw
@@ -245,7 +249,7 @@ class TestTypeResolutionLive:
             assert result.schema_ is not None
 
             resolved = QueryRunner(adapter, sql, "databricks", None).resolved_schema(result.schema_, sql)
-            assert not isinstance(resolved, str), f"type resolution failed: {resolved}"
+            assert not isinstance(resolved, ExecutionError), f"type resolution failed: {resolved}"
             precise = {c.name: c.type for c in resolved.root}
             assert precise["amount"] == SqlType.parse("decimal(10,2)", "databricks"), precise["amount"].raw
             assert precise["s"] == SqlType.parse("struct<x:int,y:string>", "databricks"), precise["s"].raw

@@ -5,21 +5,21 @@ from typing import Any
 
 from evaldata.platforms.base import PlatformAdapter, TypeResolvingAdapter, execute_within_budget
 from evaldata.scorers.sql import Dialect
-from evaldata.types import Column, ExecutionResult, Schema, Sql
+from evaldata.types import Column, ExecutionError, ExecutionResult, Schema, Sql
 
 
 @dataclass(frozen=True)
 class ScalarResult:
-    """The single cell returned by a derived query, or an error (errors-as-values).
+    """The single cell returned by a derived query, or an error.
 
     Attributes:
         value: The single cell value, or `None` when `error` is set.
-        error: A failure message, or `None` on success.
+        error: The failure, or `None` on success.
         latency_seconds: Wall-clock time the underlying query took.
     """
 
     value: Any | None
-    error: str | None
+    error: ExecutionError | None
     latency_seconds: float
 
 
@@ -29,7 +29,7 @@ class QueryRunner:
     Holds a live adapter, the model's SQL, the case dialect, and a remaining-time pool
     seeded from the case budget. Each completed query decrements the pool by its
     `latency_seconds`; once the pool is exhausted, further runs short-circuit to an
-    errors-as-value `ExecutionResult` without touching the adapter. A `None` budget means
+    `ExecutionResult` carrying an error without touching the adapter. A `None` budget means
     the pool is unbounded.
     """
 
@@ -72,7 +72,9 @@ class QueryRunner:
                 rows=[],
                 schema=None,
                 latency_seconds=0.0,
-                error="exceeded cost budget: derived-query budget pool exhausted",
+                error=ExecutionError(
+                    kind="budget_exceeded", message="exceeded cost budget: derived-query budget pool exhausted"
+                ),
             )
         result = execute_within_budget(self._adapter, sql, self._remaining)
         if self._remaining is not None:
@@ -80,7 +82,7 @@ class QueryRunner:
         return result
 
     def scalar(self, sql: Sql) -> ScalarResult:
-        """Run `sql` and read back its single cell, or an error (errors-as-values).
+        """Run `sql` and read back its single cell, or an error.
 
         Delegates to `run`, so the budget pool is drawn exactly as for any derived query.
         An underlying `error` is propagated; a result that is not exactly one row by one
@@ -98,13 +100,13 @@ class QueryRunner:
         if len(result.rows) != 1 or len(result.rows[0]) != 1:
             return ScalarResult(
                 value=None,
-                error="expected one row and one column",
+                error=ExecutionError(kind="query_failed", message="expected one row and one column"),
                 latency_seconds=result.latency_seconds,
             )
         (value,) = result.rows[0].values()
         return ScalarResult(value=value, error=None, latency_seconds=result.latency_seconds)
 
-    def resolved_schema(self, base: Schema, sql: Sql) -> Schema | str:
+    def resolved_schema(self, base: Schema, sql: Sql) -> Schema | ExecutionError:
         """Return `base` with its column types resolved to the platform's precise types.
 
         Backends that already report precise types return `base` unchanged; otherwise the
@@ -116,7 +118,7 @@ class QueryRunner:
             sql: The statement that produced `base`, re-probed for precise types.
 
         Returns:
-            `base`, a new `Schema` with precise types, or an error string (errors-as-values).
+            `base`, a new `Schema` with precise types, or an `ExecutionError`.
         """
         adapter = self._adapter
         if not isinstance(adapter, TypeResolvingAdapter):
@@ -125,10 +127,13 @@ class QueryRunner:
         if probe.error is not None:
             return probe.error
         types = adapter.types_from_probe(probe.rows)
-        if isinstance(types, str):
+        if isinstance(types, ExecutionError):
             return types
         if len(types) != len(base.root):
-            return f"type probe returned {len(types)} column type(s) for a {len(base.root)}-column result"
+            return ExecutionError(
+                kind="type_probe_failed",
+                message=f"type probe returned {len(types)} column type(s) for a {len(base.root)}-column result",
+            )
         return Schema(
             root=[Column(name=c.name, type=t, nullable=c.nullable) for c, t in zip(base.root, types, strict=True)]
         )

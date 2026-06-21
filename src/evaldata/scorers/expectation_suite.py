@@ -9,6 +9,7 @@ from evaldata.types import (
     ColumnPresenceExpectation,
     ColumnTypeExpectation,
     EvalCase,
+    ExecutionError,
     ExecutionResult,
     Expectation,
     ExpectationOutcome,
@@ -61,17 +62,17 @@ class ExpectationSuiteScorer:
             return ScoreResult(
                 scorer=SCORER_NAME,
                 passed=False,
-                explanation=f"query execution failed: {result.error}",
+                explanation=f"query execution failed: {result.error.message}",
             )
 
         checked = result
         if result.schema_ is not None and any(isinstance(e, ColumnTypeExpectation) for e in expected.expectations):
             resolved = context.queries.resolved_schema(result.schema_, context.queries.model_sql)
-            if isinstance(resolved, str):
+            if isinstance(resolved, ExecutionError):
                 return ScoreResult(
                     scorer=SCORER_NAME,
                     passed=False,
-                    explanation=f"could not resolve column types for type comparison: {resolved}",
+                    explanation=f"could not resolve column types for type comparison: {resolved.message}",
                 )
             checked = result.model_copy(update={"schema_": resolved})
 
@@ -200,13 +201,13 @@ def _evaluate_one(expectation: Expectation, result: ExecutionResult, queries: Qu
             assert_never(expectation)
 
 
-def _query_error_outcome(kind: str, column: str | None, error: str) -> ExpectationOutcome:
+def _query_error_outcome(kind: str, column: str | None, error: ExecutionError) -> ExpectationOutcome:
     """Build a failing outcome for an expectation whose derived query errored.
 
     Args:
         kind: The expectation's kind.
         column: The checked column, or `None` for column-less checks.
-        error: The derived-query error message.
+        error: The derived-query error.
 
     Returns:
         A failing `ExpectationOutcome` carrying the error in `detail`.
@@ -215,7 +216,7 @@ def _query_error_outcome(kind: str, column: str | None, error: str) -> Expectati
         kind=kind,
         passed=False,
         column=column,
-        detail=f"{kind}: query failed: {error}",
+        detail=f"{kind}: query failed: {error.message}",
     )
 
 

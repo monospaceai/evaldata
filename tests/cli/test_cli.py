@@ -95,11 +95,16 @@ class TestDoctor:
 
     def test_fail_when_probe_query_returns_error_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # A connection that opens but whose SELECT 1 fails as an ExecutionResult.error is a FAIL.
-        from evaldata.types import ExecutionResult
+        from evaldata.types import ExecutionError, ExecutionResult
 
         class _ErroringAdapter:
             def execute(self, sql: str) -> ExecutionResult:
-                return ExecutionResult(rows=[], schema=None, latency_seconds=0.0, error="probe blew up")
+                return ExecutionResult(
+                    rows=[],
+                    schema=None,
+                    latency_seconds=0.0,
+                    error=ExecutionError(kind="query_failed", message="probe blew up"),
+                )
 
             def close(self) -> None: ...
 

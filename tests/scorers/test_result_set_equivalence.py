@@ -9,6 +9,7 @@ from evaldata.types import (
     Column,
     ComparisonConfig,
     EvalCase,
+    ExecutionError,
     ExecutionResult,
     ExpectationSuite,
     Expected,
@@ -62,7 +63,7 @@ def _count(value: int) -> ExecutionResult:
 
 
 def _err(message: str) -> ExecutionResult:
-    return ExecutionResult(rows=[], latency_seconds=0.0, error=message)
+    return ExecutionResult(rows=[], latency_seconds=0.0, error=ExecutionError(kind="query_failed", message=message))
 
 
 def _scripted_score(case: EvalCase, result: ExecutionResult, results: list[ExecutionResult]) -> object:
@@ -113,7 +114,9 @@ class TestResultSetEquivalence:
 
     def test_execution_error_fails_with_explanation(self) -> None:
         case = _case(UntypedResultSet(rows=[{"count": 1297}]))
-        result = ExecutionResult(rows=[], latency_seconds=0.0, error="relation does not exist")
+        result = ExecutionResult(
+            rows=[], latency_seconds=0.0, error=ExecutionError(kind="query_failed", message="relation does not exist")
+        )
         score = _score(case, result, "SELECT 1")
         assert score.passed is False
         assert score.diff is None

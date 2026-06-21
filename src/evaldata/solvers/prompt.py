@@ -96,7 +96,7 @@ class PromptSolver:
         """Produce SQL for `case`, returning a success or a typed `SolverError`.
 
         Renders the prompt, calls the model, and extracts the SQL. Expected provider failures
-        are mapped to a `SolverError` and returned as `SolverOutput.error` (errors-as-values).
+        are mapped to a `SolverError` and returned as `SolverOutput.error`, not raised.
 
         Args:
             case: The eval case to solve.

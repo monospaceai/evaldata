@@ -35,7 +35,7 @@ def render_failure(
         f"  sql:   {output.output}",
     ]
     if result.error is not None:
-        lines.append(f"  execution error: {result.error}")
+        lines.append(f"  execution error: {result.error.message}")
     for score in failures:
         lines.append(f"  scorer {score.scorer!r}: FAIL")
         if score.explanation:

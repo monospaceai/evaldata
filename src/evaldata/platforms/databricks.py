@@ -9,7 +9,7 @@ import databricks.sql
 from databricks.sdk.core import Config
 
 from evaldata.platforms.base import rows_or_error
-from evaldata.types import Column, ExecutionResult, SqlType
+from evaldata.types import Column, ExecutionError, ExecutionResult, SqlType
 
 
 class DatabricksAdapter:
@@ -95,9 +95,10 @@ class DatabricksAdapter:
             names = [col[0] for col in description] if description is not None else []
             has_duplicates = len(names) != len(set(names))
             rows_raw = cursor.fetchall() if description is not None and not has_duplicates else []
-        except Exception as e:  # noqa: BLE001 - errors-as-values: execute must never raise (incl. pyarrow)
+        except Exception as e:  # noqa: BLE001 - execute must never raise; failures return as ExecutionResult.error
             elapsed = time.perf_counter() - start
-            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=str(e))
+            error = ExecutionError(kind="query_failed", message=str(e))
+            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=error)
         finally:
             self._cursor = None
             with contextlib.suppress(Exception):
@@ -130,23 +131,25 @@ class DatabricksAdapter:
         return f"DESCRIBE QUERY {stripped}"
 
     @staticmethod
-    def types_from_probe(rows: list[dict[str, Any]]) -> list[SqlType] | str:
+    def types_from_probe(rows: list[dict[str, Any]]) -> list[SqlType] | ExecutionError:
         """Parse `DESCRIBE QUERY` rows into precise `SqlType`s, in projection order.
 
         Args:
             rows: The rows returned by executing `type_probe_sql`, in projection order.
 
         Returns:
-            One precise `SqlType` per projected column, in order, or an error string when the
-            probe returns no rows or a row without a `data_type` (errors-as-values).
+            One precise `SqlType` per projected column, in order, or an `ExecutionError` when
+            the probe returns no rows or a row without a `data_type`.
         """
         if not rows:
-            return "DESCRIBE QUERY returned no rows"
+            return ExecutionError(kind="type_probe_failed", message="DESCRIBE QUERY returned no rows")
         # `DESCRIBE QUERY` yields one row per projected column, in projection order.
         types: list[SqlType] = []
         for row in rows:
             data_type = row.get("data_type")
             if not data_type:
-                return f"DESCRIBE QUERY row missing data_type: {row!r}"
+                return ExecutionError(
+                    kind="type_probe_failed", message=f"DESCRIBE QUERY row missing data_type: {row!r}"
+                )
             types.append(SqlType.parse(str(data_type), "databricks"))
         return types

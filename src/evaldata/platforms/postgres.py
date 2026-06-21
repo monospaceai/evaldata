@@ -8,7 +8,7 @@ from typing import Self
 import psycopg
 
 from evaldata.platforms.base import rows_or_error
-from evaldata.types import Column, ExecutionResult, SqlType
+from evaldata.types import Column, ExecutionError, ExecutionResult, SqlType
 
 
 class PostgresAdapter:
@@ -74,7 +74,8 @@ class PostgresAdapter:
                 rows_raw = cursor.fetchall() if description is not None else []
         except psycopg.Error as e:
             elapsed = time.perf_counter() - start
-            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=str(e))
+            error = ExecutionError(kind="query_failed", message=str(e), sqlstate=e.sqlstate)
+            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=error)
         elapsed = time.perf_counter() - start
         if description is None:
             # Non-row-returning statement (DDL/DML): success, no schema.
