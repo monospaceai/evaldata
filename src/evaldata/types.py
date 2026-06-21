@@ -367,6 +367,22 @@ class EvalCase(BaseModel):
         return self
 
 
+class Error(BaseModel):
+    """Base for the typed failures returned as values, not raised.
+
+    Holds the fields every typed error shares. Subclasses add a `kind` discriminator and any
+    domain-specific structured fields (an `ExecutionError`'s `sqlstate`, a `SolverError`'s
+    `provider`). `cause` keeps the original exception — and its traceback — for in-process
+    debugging and logging; it is excluded from serialization, so reports carry only the
+    structured surface.
+    """
+
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    message: Annotated[str, Field(min_length=1)]
+    cause: Exception | None = Field(default=None, exclude=True, repr=False)
+
+
 SolverErrorKind = Literal[
     "timeout",
     "rate_limit",
@@ -380,13 +396,10 @@ SolverErrorKind = Literal[
 ]
 
 
-class SolverError(BaseModel):
+class SolverError(Error):
     """A typed, expected failure from a Solver call: returned as a value, not raised."""
 
-    model_config = ConfigDict(extra="forbid")
-
     kind: SolverErrorKind
-    message: Annotated[str, Field(min_length=1)]
     provider: str | None = None
 
 
@@ -426,27 +439,26 @@ class SolverOutput(BaseModel):
 ExecutionErrorKind = Literal["query_failed", "budget_exceeded", "duplicate_columns", "type_probe_failed"]
 
 
-class ExecutionError(BaseModel):
+class ExecutionError(Error):
     """A typed failure from running SQL against a platform, returned as a value, not raised.
 
-    `kind` is a stable, low-cardinality classifier; `message` is the human-readable detail;
-    `sqlstate` carries the driver's SQLSTATE code when one is reported.
+    `kind` is a stable, low-cardinality classifier. `sqlstate` carries the driver's SQLSTATE
+    code when one is reported; `condition` carries an engine error condition/class (e.g.
+    Spark's `TABLE_OR_VIEW_NOT_FOUND`) when the driver exposes one, since not every engine
+    reports SQLSTATE; `params` carries the engine's structured message parameters when
+    available. All three are `None` when the driver does not report them.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     kind: ExecutionErrorKind
-    message: Annotated[str, Field(min_length=1)]
     sqlstate: str | None = None
+    condition: str | None = None
+    params: dict[str, str] | None = None
 
 
-class NormalizeError(BaseModel):
+class NormalizationError(Error):
     """A typed failure from parsing or normalizing SQL for comparison, returned as a value."""
 
-    model_config = ConfigDict(extra="forbid")
-
     kind: Literal["parse_failed", "not_single_statement", "normalize_failed"]
-    message: Annotated[str, Field(min_length=1)]
 
 
 class ExecutionResult(BaseModel):

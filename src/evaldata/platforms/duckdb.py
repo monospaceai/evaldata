@@ -6,8 +6,8 @@ from typing import Self
 
 import duckdb
 
-from evaldata.platforms.base import rows_or_error
-from evaldata.types import Column, ExecutionError, ExecutionResult, SqlType
+from evaldata.platforms.base import execution_error, rows_or_error
+from evaldata.types import Column, ExecutionResult, SqlType
 
 
 class DuckDBAdapter:
@@ -63,12 +63,7 @@ class DuckDBAdapter:
             rows_raw = cursor.fetchall()
         except duckdb.Error as e:
             elapsed = time.perf_counter() - start
-            return ExecutionResult(
-                rows=[],
-                schema=None,
-                latency_seconds=elapsed,
-                error=ExecutionError(kind="query_failed", message=str(e)),
-            )
+            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=execution_error(e))
         elapsed = time.perf_counter() - start
         columns: list[Column] = []
         for desc in description:

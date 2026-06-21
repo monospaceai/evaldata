@@ -8,7 +8,7 @@ from typing import Any, Self
 import databricks.sql
 from databricks.sdk.core import Config
 
-from evaldata.platforms.base import rows_or_error
+from evaldata.platforms.base import execution_error, rows_or_error
 from evaldata.types import Column, ExecutionError, ExecutionResult, SqlType
 
 
@@ -97,8 +97,7 @@ class DatabricksAdapter:
             rows_raw = cursor.fetchall() if description is not None and not has_duplicates else []
         except Exception as e:  # noqa: BLE001 - execute must never raise; failures return as ExecutionResult.error
             elapsed = time.perf_counter() - start
-            error = ExecutionError(kind="query_failed", message=str(e))
-            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=error)
+            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=execution_error(e))
         finally:
             self._cursor = None
             with contextlib.suppress(Exception):

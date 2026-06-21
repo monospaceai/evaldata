@@ -24,7 +24,7 @@ from evaldata.types import (
     EvalCase,
     ExecutionResult,
     GoldQuery,
-    NormalizeError,
+    NormalizationError,
     ScoreResult,
     SemanticEquivalenceMethod,
     SemanticVerdict,
@@ -92,10 +92,10 @@ class AstEquivalence:
             return _unknown("expected is not a gold query")
         dialect = context.queries.dialect
         model_tree = _normalize(context.queries.model_sql, dialect)
-        if isinstance(model_tree, NormalizeError):
+        if isinstance(model_tree, NormalizationError):
             return _unknown(f"model query: {model_tree.message}")
         gold_tree = _normalize(Sql(gold.sql), dialect)
-        if isinstance(gold_tree, NormalizeError):
+        if isinstance(gold_tree, NormalizationError):
             return _unknown(f"gold query: {gold_tree.message}")
         if model_tree == gold_tree:
             return SemanticVerdict(
@@ -116,32 +116,34 @@ def _unknown(detail: str) -> SemanticVerdict:
     return SemanticVerdict(method="ast", equivalence="unknown", detail=detail)
 
 
-def _normalize(sql: Sql, dialect: Dialect) -> exp.Expression | NormalizeError:
-    """Parse and normalize `sql` into a comparable expression, or return a `NormalizeError`.
+def _normalize(sql: Sql, dialect: Dialect) -> exp.Expression | NormalizationError:
+    """Parse and normalize `sql` into a comparable expression, or return a `NormalizationError`.
 
     The normalization is conservative, schema-free, and truth-preserving. Returns a
-    `NormalizeError` (rather than raising) when `sql` does not parse or is not a single statement.
+    `NormalizationError` (rather than raising) when `sql` does not parse or is not a single statement.
 
     Args:
         sql: The query to normalize.
         dialect: The SQLGlot dialect to parse and normalize in (the same for both queries).
 
     Returns:
-        The normalized expression, or a `NormalizeError`.
+        The normalized expression, or a `NormalizationError`.
     """
     try:
         statements = sqlglot.parse(sql, dialect=dialect)
     except SqlglotError as error:
-        return NormalizeError(kind="parse_failed", message=f"could not parse ({error})")
+        return NormalizationError(kind="parse_failed", message=f"could not parse ({error})", cause=error)
     parsed = [statement for statement in statements if statement is not None]
     if len(parsed) != 1:
-        return NormalizeError(kind="not_single_statement", message=f"expected exactly one statement, got {len(parsed)}")
+        return NormalizationError(
+            kind="not_single_statement", message=f"expected exactly one statement, got {len(parsed)}"
+        )
     try:
         expression = normalize_identifiers(parsed[0], dialect=dialect)
         expression = normalize(expression)
         return simplify(expression, dialect=dialect)
     except SqlglotError as error:  # pragma: no cover - defensive: these passes don't raise on parseable input
-        return NormalizeError(kind="normalize_failed", message=f"could not normalize ({error})")
+        return NormalizationError(kind="normalize_failed", message=f"could not normalize ({error})", cause=error)
 
 
 class ExecutionEquivalence:

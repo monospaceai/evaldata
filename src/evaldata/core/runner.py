@@ -41,7 +41,7 @@ def assert_eval(
     output = solver.solve(case)
     if output.error is not None:
         error = output.error
-        record(CaseReport(id=case.id, input=case.input, passed=False, error=f"solver error [{error.kind}]"))
+        record(CaseReport(id=case.id, input=case.input, passed=False, error=error))
         raise AssertionError(render_solver_error(case, error))
     sql = output.output
     if sql is None:  # pragma: no cover - unreachable: SolverOutput's validator guarantees output XOR error

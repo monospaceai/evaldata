@@ -5,7 +5,7 @@ from collections.abc import Iterable, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from evaldata.types import ScoreResult
+from evaldata.types import ScoreResult, SolverError
 
 
 class CaseReport(BaseModel):
@@ -17,7 +17,7 @@ class CaseReport(BaseModel):
     input: str
     passed: bool
     scores: list[ScoreResult] = Field(default_factory=list)
-    error: str | None = None
+    error: SolverError | None = None
 
 
 _RUN: list[CaseReport] = []

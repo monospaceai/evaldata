@@ -40,11 +40,12 @@ def _extract_structured_sql(content: str | None) -> Sql | SolverError:
     """
     try:
         reply = SqlOutput.model_validate_json(content or "{}")
-    except ValidationError:
+    except ValidationError as e:
         return SolverError(
             kind="invalid_structured_output",
             message=f"model returned malformed structured output: {(content or '')[:200]!r}",
             provider=None,
+            cause=e,
         )
     return Sql(reply.sql.strip())
 
@@ -175,4 +176,6 @@ class PromptSolver:
         Returns:
             A `SolverError` carrying the kind, message, and provider (if available).
         """
-        return SolverError(kind=kind, message=str(exc), provider=getattr(exc, "llm_provider", None))
+        return SolverError(
+            kind=kind, message=str(exc) or type(exc).__name__, provider=getattr(exc, "llm_provider", None), cause=exc
+        )

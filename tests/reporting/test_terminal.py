@@ -141,5 +141,7 @@ class TestRenderSummary:
         assert "1 passed, 1 failed" in summary
 
     def test_solver_error_shown_in_detail(self) -> None:
-        summary = render_summary([CaseReport(id="x", input="q", passed=False, error="solver error [auth]")])
+        summary = render_summary(
+            [CaseReport(id="x", input="q", passed=False, error=SolverError(kind="auth", message="invalid api key"))]
+        )
         assert "solver error [auth]" in summary

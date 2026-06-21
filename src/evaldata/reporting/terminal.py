@@ -98,7 +98,7 @@ def _summary_detail(report: CaseReport) -> str:
         The solver error if present, else a comma-separated list of failed scorer names.
     """
     if report.error is not None:
-        return report.error
+        return f"solver error [{report.error.kind}]: {report.error.message}"
     return ", ".join(score.scorer for score in report.scores if not score.passed)
 
 

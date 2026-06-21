@@ -5,7 +5,7 @@ import json
 import pytest
 
 from evaldata.reporting.collector import CaseReport, clear, extend, record, reports, run_report_json
-from evaldata.types import ResultSetDiff, ScoreResult
+from evaldata.types import ResultSetDiff, ScoreResult, SolverError
 
 
 @pytest.fixture(autouse=True)
@@ -55,7 +55,9 @@ class TestRunReportJson:
                 scores=[ScoreResult(scorer="result_set_equivalence", passed=False, diff=diff)],
             )
         )
-        record(CaseReport(id="solver", input="q3", passed=False, error="solver error [auth]"))
+        record(
+            CaseReport(id="solver", input="q3", passed=False, error=SolverError(kind="auth", message="invalid api key"))
+        )
 
         payload = json.loads(run_report_json(reports()))
         assert payload["passed"] == 1
@@ -63,4 +65,5 @@ class TestRunReportJson:
         assert [c["id"] for c in payload["cases"]] == ["ok", "bad", "solver"]
         # nested diff structure survives serialization
         assert payload["cases"][1]["scores"][0]["diff"]["expected_row_count"] == 1
-        assert payload["cases"][2]["error"] == "solver error [auth]"
+        # the typed solver error serializes as a structured object; `cause` is excluded
+        assert payload["cases"][2]["error"] == {"kind": "auth", "message": "invalid api key", "provider": None}

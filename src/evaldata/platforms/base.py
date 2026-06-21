@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
 from typing import Any, Protocol, runtime_checkable
 
-from evaldata.types import Column, ExecutionError, ExecutionResult, Schema, SqlType
+from evaldata.types import Column, ExecutionError, ExecutionErrorKind, ExecutionResult, Schema, SqlType
 
 
 @runtime_checkable
@@ -113,6 +113,58 @@ def execute_within_budget(adapter: PlatformAdapter, sql: str, max_seconds: float
         error=ExecutionError(
             kind="budget_exceeded", message=f"exceeded cost budget: query did not complete within {max_seconds}s"
         ),
+    )
+
+
+def _driver_call(exc: Exception, name: str) -> Any:
+    """Return `exc.<name>()` when it is a no-arg method that doesn't raise, else `None`.
+
+    Args:
+        exc: The exception to probe.
+        name: The accessor method to call (e.g. `"getSqlState"`).
+
+    Returns:
+        The method's return value, or `None` when the attribute is absent, not callable, or
+        raises.
+    """
+    method = getattr(exc, name, None)
+    if not callable(method):
+        return None
+    try:
+        return method()
+    except Exception:  # noqa: BLE001 - probing an optional driver accessor; any failure means "unavailable"
+        return None
+
+
+def execution_error(exc: Exception, kind: ExecutionErrorKind = "query_failed") -> ExecutionError:
+    """Translate a driver exception into a typed `ExecutionError`, preserving structured detail.
+
+    Reads whatever structured attributes the exception happens to expose — SQLSTATE, an error
+    condition/class, message parameters — by duck-typing, so no driver package is imported or
+    enumerated and no driver message is parsed. The live exception is kept as `cause` for
+    debugging; `message` falls back to the exception's class name when its string form is empty.
+
+    Args:
+        exc: The driver exception to translate.
+        kind: The `ExecutionError` classifier to assign.
+
+    Returns:
+        An `ExecutionError` carrying `kind`, a non-empty `message`, any recovered structured
+        fields, and `exc` as `cause`.
+    """
+    sqlstate = getattr(exc, "sqlstate", None) or getattr(exc, "pgcode", None) or _driver_call(exc, "getSqlState")
+    condition = (
+        _driver_call(exc, "getCondition") or _driver_call(exc, "getErrorClass") or getattr(exc, "error_code", None)
+    )
+    raw_params = _driver_call(exc, "getMessageParameters")
+    params = {str(k): str(v) for k, v in raw_params.items()} if isinstance(raw_params, dict) and raw_params else None
+    return ExecutionError(
+        kind=kind,
+        message=str(exc) or type(exc).__name__,
+        sqlstate=str(sqlstate) if sqlstate else None,
+        condition=str(condition) if condition else None,
+        params=params,
+        cause=exc,
     )
 
 
