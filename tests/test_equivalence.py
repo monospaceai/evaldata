@@ -5,9 +5,10 @@ import pytest
 from evaldata.equivalence import (
     ColumnReconciliation,
     build_result_set_diff,
+    combine,
     reconcile_columns,
 )
-from evaldata.types import ColumnMismatch, TypeMismatch
+from evaldata.types import ColumnMismatch, ResultSetDiff, SemanticVerdict, TypeMismatch
 
 # ---------- column reconciliation ----------
 
@@ -123,3 +124,58 @@ class TestBuildResultSetDiff:
         assert diff is not None
         assert diff.expected_row_count == 3
         assert diff.actual_row_count == 5
+
+
+# ---------- combine (semantic-equivalence verdicts) ----------
+
+_SCORER = "semantic_equivalence"
+
+
+def _verdict(equivalence: str, *, method: str = "ast", diff: ResultSetDiff | None = None) -> SemanticVerdict:
+    return SemanticVerdict(method=method, equivalence=equivalence, diff=diff)  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+class TestCombine:
+    def test_no_verdicts_fails_as_undecided(self) -> None:
+        score = combine([], scorer=_SCORER)
+        assert score.scorer == _SCORER
+        assert score.passed is False
+        assert score.explanation == "no check could decide equivalence"
+
+    def test_all_unknown_fails_as_undecided(self) -> None:
+        score = combine([_verdict("unknown"), _verdict("unknown", method="execution")], scorer=_SCORER)
+        assert score.passed is False
+        assert score.explanation == "no check could decide equivalence"
+        assert len(score.metadata["verdicts"]) == 2
+
+    def test_equivalent_passes_with_no_explanation(self) -> None:
+        score = combine([_verdict("equivalent")], scorer=_SCORER)
+        assert score.passed is True
+        assert score.explanation is None
+        assert score.diff is None
+
+    def test_not_equivalent_fails_and_surfaces_diff(self) -> None:
+        diff = ResultSetDiff(expected_row_count=1, actual_row_count=0, missing_row_count=1)
+        score = combine([_verdict("not_equivalent", method="execution", diff=diff)], scorer=_SCORER)
+        assert score.passed is False
+        assert score.diff is diff
+
+    def test_first_decisive_verdict_wins_over_later_ones(self) -> None:
+        score = combine(
+            [_verdict("not_equivalent", method="execution"), _verdict("equivalent")],
+            scorer=_SCORER,
+        )
+        assert score.passed is False
+
+    def test_skips_leading_unknowns_to_first_decision(self) -> None:
+        score = combine([_verdict("unknown"), _verdict("equivalent", method="execution")], scorer=_SCORER)
+        assert score.passed is True
+
+    def test_records_every_verdict_in_metadata(self) -> None:
+        score = combine(
+            [_verdict("unknown"), _verdict("unknown", method="plan"), _verdict("equivalent", method="execution")],
+            scorer=_SCORER,
+        )
+        methods = [v["method"] for v in score.metadata["verdicts"]]
+        assert methods == ["ast", "plan", "execution"]

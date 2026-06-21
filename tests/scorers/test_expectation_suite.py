@@ -9,6 +9,7 @@ from evaldata.types import (
     ColumnPresenceExpectation,
     ColumnTypeExpectation,
     EvalCase,
+    ExecutionError,
     ExecutionResult,
     ExpectationOutcome,
     ExpectationSuite,
@@ -47,7 +48,9 @@ class _TypeProbeFailingAdapter:
     """A `TypeResolvingAdapter` whose type probe errors, exercising the resolve-failure path."""
 
     def execute(self, sql: str) -> ExecutionResult:
-        return ExecutionResult(rows=[], latency_seconds=0.0, error="probe boom")
+        return ExecutionResult(
+            rows=[], latency_seconds=0.0, error=ExecutionError(kind="query_failed", message="probe boom")
+        )
 
     def cancel(self) -> None: ...
 
@@ -56,7 +59,7 @@ class _TypeProbeFailingAdapter:
     def type_probe_sql(self, sql: str) -> str:
         return f"PROBE {sql}"
 
-    def types_from_probe(self, rows: list[dict[str, object]]) -> list[SqlType] | str:
+    def types_from_probe(self, rows: list[dict[str, object]]) -> list[SqlType] | ExecutionError:
         return [SqlType.parse("INTEGER", "duckdb") for _ in rows]
 
 
@@ -123,7 +126,9 @@ class TestRowCount:
     def test_query_error_fails_outcome(self) -> None:
         case = _suite(RowCountExpectation(exact=1))
         result = ExecutionResult(rows=[], latency_seconds=0.0)
-        errored = ExecutionResult(rows=[], latency_seconds=0.0, error="missing table")
+        errored = ExecutionResult(
+            rows=[], latency_seconds=0.0, error=ExecutionError(kind="query_failed", message="missing table")
+        )
         score = ExpectationSuiteScorer().score(case, _OUTPUT, result, context=_ctx(errored))
         assert score.passed is False
         outcome = _sole(score)
@@ -309,7 +314,9 @@ class TestNotNull:
     def test_query_error_fails_outcome(self) -> None:
         case = _suite(NotNullExpectation(column="email"))
         result = ExecutionResult(rows=[{"email": "a"}], latency_seconds=0.0)
-        errored = ExecutionResult(rows=[], latency_seconds=0.0, error="boom")
+        errored = ExecutionResult(
+            rows=[], latency_seconds=0.0, error=ExecutionError(kind="query_failed", message="boom")
+        )
         score = ExpectationSuiteScorer().score(case, _OUTPUT, result, context=_ctx(errored))
         assert score.passed is False
         outcome = _sole(score)
@@ -366,7 +373,9 @@ class TestUnique:
     def test_query_error_fails_outcome(self) -> None:
         case = _suite(UniqueExpectation(column="id"))
         result = ExecutionResult(rows=[{"id": 1}], latency_seconds=0.0)
-        errored = ExecutionResult(rows=[], latency_seconds=0.0, error="boom")
+        errored = ExecutionResult(
+            rows=[], latency_seconds=0.0, error=ExecutionError(kind="query_failed", message="boom")
+        )
         score = ExpectationSuiteScorer().score(case, _OUTPUT, result, context=_ctx(errored))
         assert score.passed is False
         outcome = _sole(score)
@@ -380,7 +389,9 @@ class TestUnique:
 class TestSuiteAggregation:
     def test_execution_error_passthrough(self) -> None:
         case = _suite(RowCountExpectation(exact=1))
-        result = ExecutionResult(rows=[], latency_seconds=0.0, error="boom")
+        result = ExecutionResult(
+            rows=[], latency_seconds=0.0, error=ExecutionError(kind="query_failed", message="boom")
+        )
         score = ExpectationSuiteScorer().score(case, _OUTPUT, result, context=_ctx())
         assert score.passed is False
         assert score.diff is None

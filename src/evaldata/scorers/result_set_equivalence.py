@@ -20,6 +20,7 @@ from evaldata.types import (
     ColumnMismatch,
     ComparisonConfig,
     EvalCase,
+    ExecutionError,
     ExecutionResult,
     GoldQuery,
     Schema,
@@ -101,7 +102,7 @@ class ResultSetEquivalence:
             return ScoreResult(
                 scorer=SCORER_NAME,
                 passed=False,
-                explanation=f"query execution failed: {result.error}",
+                explanation=f"query execution failed: {result.error.message}",
             )
 
         source = _resolve_expected(expected, context.queries)
@@ -112,8 +113,8 @@ class ResultSetEquivalence:
         actual_schema = result.schema_
         if isinstance(expected, TypedResultSet) and actual_schema is not None:
             actual_schema = context.queries.resolved_schema(actual_schema, context.queries.model_sql)
-            if isinstance(actual_schema, str):
-                return _failure(f"could not resolve column types for type comparison: {actual_schema}")
+            if isinstance(actual_schema, ExecutionError):
+                return _failure(f"could not resolve column types for type comparison: {actual_schema.message}")
         actual_names = _column_names(actual_schema, result.rows)
         columns = reconcile_columns(actual_names, source.names, config.column_order)
         type_mismatches = _type_mismatches(actual_schema, source.schema_, columns.in_both)
@@ -129,8 +130,10 @@ class ResultSetEquivalence:
             )
 
         diff_or_error = _diff_rows(source, columns.in_both, config.float_tolerance, context.queries)
-        if isinstance(diff_or_error, str):
-            return ScoreResult(scorer=SCORER_NAME, passed=False, explanation=f"query execution failed: {diff_or_error}")
+        if isinstance(diff_or_error, ExecutionError):
+            return ScoreResult(
+                scorer=SCORER_NAME, passed=False, explanation=f"query execution failed: {diff_or_error.message}"
+            )
         missing_count, extra_count, sample_missing, sample_extra = diff_or_error
 
         diff = build_result_set_diff(
@@ -147,7 +150,7 @@ class ResultSetEquivalence:
         return ScoreResult(scorer=SCORER_NAME, passed=diff is None, diff=diff)
 
 
-def _gold_failure(error: str) -> ScoreResult:
+def _gold_failure(error: ExecutionError) -> ScoreResult:
     """Build a failing `ScoreResult` attributing `error` to the gold/reference query.
 
     Args:
@@ -159,7 +162,7 @@ def _gold_failure(error: str) -> ScoreResult:
     return ScoreResult(
         scorer=SCORER_NAME,
         passed=False,
-        explanation=f"gold query failed: {error}",
+        explanation=f"gold query failed: {error.message}",
         metadata={"gold_query_failed": True},
     )
 
@@ -224,7 +227,7 @@ def _resolve_gold(expected: GoldQuery, queries: QueryRunner) -> _ExpectedSource 
 
 
 def _failure(explanation: str) -> ScoreResult:
-    """Build a failing `ScoreResult` carrying `explanation` (errors-as-values).
+    """Build a failing `ScoreResult` carrying `explanation`.
 
     Args:
         explanation: The human-readable reason the comparison could not pass.
@@ -276,7 +279,7 @@ def _keyed_score(
     for relation, side in ((expected_rel, "expected"), (actual_rel, "actual")):
         dupes = queries.scalar(sql.keyed_dupes_count(relation, config.match_key, dialect))
         if dupes.error is not None:
-            return _failure(f"query execution failed: {dupes.error}")
+            return _failure(f"query execution failed: {dupes.error.message}")
         if int(dupes.value or 0) > 0:
             return _failure(
                 f"match_key is not unique in the {side} result set; omit match_key to compare with bag semantics"
@@ -296,7 +299,7 @@ def _keyed_score(
         )
     )
     if stats.error is not None:
-        return _failure(f"query execution failed: {stats.error}")
+        return _failure(f"query execution failed: {stats.error.message}")
     row = stats.rows[0]
     missing_count = int(row["missing"] or 0)
     extra_count = int(row["extra"] or 0)
@@ -307,8 +310,8 @@ def _keyed_score(
     ]
 
     samples = _keyed_samples(expected_rel, actual_rel, config.match_key, in_both, missing_count, extra_count, queries)
-    if isinstance(samples, str):
-        return _failure(f"query execution failed: {samples}")
+    if isinstance(samples, ExecutionError):
+        return _failure(f"query execution failed: {samples.message}")
     sample_missing, sample_extra = samples
 
     diff = build_result_set_diff(
@@ -336,7 +339,7 @@ def _keyed_samples(
     missing_count: int,
     extra_count: int,
     queries: QueryRunner,
-) -> _Samples | str:
+) -> _Samples | ExecutionError:
     """Read bounded samples of the key-only buckets, only for non-empty buckets.
 
     Args:
@@ -349,8 +352,8 @@ def _keyed_samples(
         queries: The budget-aware runner used to execute the derived sample queries.
 
     Returns:
-        `(sample_missing, sample_extra)` on success, or an error message string when a
-        derived sample query fails.
+        `(sample_missing, sample_extra)` on success, or an `ExecutionError` when a derived
+        sample query fails.
     """
     sample_missing: list[dict[str, Any]] = []
     if missing_count:
@@ -375,8 +378,8 @@ def _diff_rows(
     in_both: list[str],
     float_tolerance: float,
     queries: QueryRunner,
-) -> _RowDiff | str:
-    """Compute the bag diff over `in_both` via two `EXCEPT ALL` runs, or return an error string.
+) -> _RowDiff | ExecutionError:
+    """Compute the bag diff over `in_both` via two `EXCEPT ALL` runs, or return an `ExecutionError`.
 
     Args:
         source: The resolved expected side (schema, relation builder).
@@ -387,7 +390,7 @@ def _diff_rows(
     Returns:
         `(missing_count, extra_count, sample_missing, sample_extra)` on success, where
         `missing` are expected rows absent from actual and `extra` are actual rows absent
-        from expected; or an error message string when a derived query fails. With no shared
+        from expected; or an `ExecutionError` when a derived query fails. With no shared
         columns the diff is empty `(0, 0, [], [])` and no query runs.
     """
     if not in_both:

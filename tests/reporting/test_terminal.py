@@ -7,6 +7,7 @@ from evaldata.reporting.terminal import render_failure, render_solver_error, ren
 from evaldata.types import (
     ColumnMismatch,
     EvalCase,
+    ExecutionError,
     ExecutionResult,
     PlatformRef,
     ResultSetDiff,
@@ -102,7 +103,9 @@ class TestRenderFailure:
 
     def test_renders_execution_error(self) -> None:
         out = SolverOutput(output="SELECT * FROM nope")
-        result = ExecutionResult(rows=[], latency_seconds=0.0, error="table nope does not exist")
+        result = ExecutionResult(
+            rows=[], latency_seconds=0.0, error=ExecutionError(kind="query_failed", message="table nope does not exist")
+        )
         score = ScoreResult(scorer="result_set_equivalence", passed=False, explanation="query failed")
         msg = render_failure(_case(), out, result, [score])
         assert "execution error: table nope does not exist" in msg

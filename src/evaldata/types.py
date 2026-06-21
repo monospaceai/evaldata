@@ -381,7 +381,7 @@ SolverErrorKind = Literal[
 
 
 class SolverError(BaseModel):
-    """A typed, expected failure from a Solver call (errors-as-values, not a raised exception)."""
+    """A typed, expected failure from a Solver call: returned as a value, not raised."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -423,6 +423,32 @@ class SolverOutput(BaseModel):
         return self
 
 
+ExecutionErrorKind = Literal["query_failed", "budget_exceeded", "duplicate_columns", "type_probe_failed"]
+
+
+class ExecutionError(BaseModel):
+    """A typed failure from running SQL against a platform, returned as a value, not raised.
+
+    `kind` is a stable, low-cardinality classifier; `message` is the human-readable detail;
+    `sqlstate` carries the driver's SQLSTATE code when one is reported.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: ExecutionErrorKind
+    message: Annotated[str, Field(min_length=1)]
+    sqlstate: str | None = None
+
+
+class NormalizeError(BaseModel):
+    """A typed failure from parsing or normalizing SQL for comparison, returned as a value."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["parse_failed", "not_single_statement", "normalize_failed"]
+    message: Annotated[str, Field(min_length=1)]
+
+
 class ExecutionResult(BaseModel):
     """The result of running SQL against a platform: returned rows plus execution measurements."""
 
@@ -431,7 +457,7 @@ class ExecutionResult(BaseModel):
     rows: list[dict[str, Any]]
     schema_: Schema | None = Field(default=None, alias="schema")
     latency_seconds: Annotated[float, Field(ge=0)]
-    error: Annotated[str, Field(min_length=1)] | None = None
+    error: ExecutionError | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -508,3 +534,27 @@ class ScoreResult(BaseModel):
     outcomes: list[ExpectationOutcome] = Field(default_factory=list)
     explanation: Annotated[str, Field(min_length=1)] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+# A three-valued equivalence outcome: a check may be unable to decide, so "unknown" is a
+# first-class value distinct from "not_equivalent".
+Equivalence = Literal["equivalent", "not_equivalent", "unknown"]
+
+# The kinds of semantic-equivalence check; dispatch over this Literal is exhaustively checked.
+SemanticEquivalenceMethod = Literal["ast", "plan", "execution", "llm"]
+
+
+class SemanticVerdict(BaseModel):
+    """One equivalence check's three-valued judgment on whether two queries are equivalent.
+
+    `equivalence` is `"equivalent"`/`"not_equivalent"` when the check decides, else `"unknown"`
+    (it could not decide). `diff` carries the structured difference when a check refutes;
+    `detail` is a human-readable note on how the verdict was reached.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    method: SemanticEquivalenceMethod
+    equivalence: Equivalence
+    detail: Annotated[str, Field(min_length=1)] | None = None
+    diff: ResultSetDiff | None = None

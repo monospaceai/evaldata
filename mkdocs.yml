@@ -93,6 +93,7 @@ nav:
       - Evaluate a local Ollama model: guides/local-ollama.md
       - Evaluate a hosted model: guides/hosted-model.md
       - Evaluate against Databricks: guides/databricks.md
+      - Check semantic equivalence: guides/semantic-equivalence.md
   - Concepts: concepts.md
   - API reference:
       - reference/index.md

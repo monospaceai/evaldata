@@ -13,6 +13,7 @@ from evaldata.types import (
     ComparisonConfig,
     CostBudget,
     EvalCase,
+    ExecutionError,
     ExecutionResult,
     Expectation,
     ExpectationOutcome,
@@ -708,9 +709,10 @@ class TestExecutionResult:
         result = ExecutionResult(
             rows=[],
             latency_seconds=0.005,
-            error="syntax error at or near 'FROMM'",
+            error=ExecutionError(kind="query_failed", message="syntax error at or near 'FROMM'"),
         )
-        assert result.error == "syntax error at or near 'FROMM'"
+        assert result.error is not None
+        assert result.error.message == "syntax error at or near 'FROMM'"
 
     def test_with_metadata(self) -> None:
         result = ExecutionResult(
