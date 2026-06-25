@@ -1,8 +1,11 @@
 """Scorers: pluggable pass/fail checks.
 
-Ships `ResultSetEquivalence`, `ExpectationSuiteScorer`, and `SemanticEquivalence`, plus the
-`FirstDecisive` combinator and the `query_equivalence` composition it powers.
+Ships `ResultSetEquivalence`, `ExpectationSuiteScorer`, `SemanticEquivalence`, and the
+litellm-backed `LlmJudge`, plus the `FirstDecisive` combinator and the `query_equivalence`
+composition it powers.
 """
+
+from typing import TYPE_CHECKING, Any
 
 from evaldata.scorers.base import Scorer
 from evaldata.scorers.combinators import FirstDecisive
@@ -18,11 +21,15 @@ from evaldata.scorers.semantic_equivalence import (
     default_equivalence_checks,
 )
 
+if TYPE_CHECKING:
+    from evaldata.scorers.llm_judge import LlmJudge
+
 __all__ = [
     "AstEquivalence",
     "EquivalenceCheck",
     "ExpectationSuiteScorer",
     "FirstDecisive",
+    "LlmJudge",
     "QueryRunner",
     "ResultSetEquivalence",
     "ScalarResult",
@@ -32,3 +39,19 @@ __all__ = [
     "default_equivalence_checks",
     "query_equivalence",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "LlmJudge":
+        try:
+            from evaldata.scorers.llm_judge import LlmJudge
+        except ImportError as e:
+            msg = "LlmJudge requires the 'litellm' extra: install evaldata[litellm]"
+            raise ImportError(msg) from e
+        return LlmJudge
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
+
+
+def __dir__() -> list[str]:
+    return sorted([*globals(), "LlmJudge"])

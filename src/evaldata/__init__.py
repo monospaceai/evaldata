@@ -15,6 +15,7 @@ from evaldata.solvers import CallableSolver
 from evaldata.types import EvalCase, PlatformRef
 
 if TYPE_CHECKING:
+    from evaldata.scorers import LlmJudge as LlmJudge
     from evaldata.solvers import PromptSolver as PromptSolver
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "EvalCase",
     "ExpectationSuiteScorer",
     "FirstDecisive",
+    "LlmJudge",
     "PlatformRef",
     "ResultSetEquivalence",
     "SemanticEquivalence",
@@ -30,15 +32,18 @@ __all__ = [
     "query_equivalence",
 ]
 
+_LAZY = {"PromptSolver": "evaldata.solvers", "LlmJudge": "evaldata.scorers"}
+
 
 def __getattr__(name: str) -> Any:
-    if name == "PromptSolver":
-        from evaldata.solvers import PromptSolver
+    module = _LAZY.get(name)
+    if module is not None:
+        import importlib
 
-        return PromptSolver
+        return getattr(importlib.import_module(module), name)
     msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(msg)
 
 
 def __dir__() -> list[str]:
-    return sorted([*globals(), "PromptSolver"])
+    return sorted([*globals(), *_LAZY])
