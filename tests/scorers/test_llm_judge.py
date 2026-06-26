@@ -151,11 +151,11 @@ class TestLlmJudge:
         LlmJudge(model=stub, criteria="c").score(
             _case(UntypedResultSet(rows=[{"n": 1}])), _OUTPUT, _RESULT, context=_context()
         )
-        assert "Reference SQL" not in stub.prompts[-1]
+        assert "Expected Output" not in stub.prompts[-1]
 
     def test_show_limits_fields(self) -> None:
         stub = StubLlm(JudgeReply(score=0.9, reason="r"))
-        LlmJudge(model=stub, criteria="c", show=["question"]).score(
+        LlmJudge(model=stub, criteria="c", show=["input"]).score(
             _case(), _OUTPUT, _RESULT, context=_context(model="SELECT secret")
         )
         prompt = stub.prompts[-1]
@@ -208,25 +208,25 @@ class TestLlmJudge:
     def test_examples_render_only_present_fields(self) -> None:
         stub = StubLlm(JudgeReply(score=0.9, reason="r"))
         examples = [
-            JudgeExample(candidate_sql="SELECT 1", score=0.2, reason="too few rows"),
+            JudgeExample(actual_output="SELECT 1", score=0.2, reason="too few rows"),
             JudgeExample(
-                candidate_sql="SELECT count(*) FROM t",
+                actual_output="SELECT count(*) FROM t",
                 score=0.9,
                 reason="matches gold",
-                question="how many?",
-                gold_query="SELECT count(*) FROM t",
+                input="how many?",
+                expected_output="SELECT count(*) FROM t",
             ),
         ]
         LlmJudge(model=stub, criteria="c", examples=examples).score(_case(), _OUTPUT, _RESULT, context=_context())
         prompt = stub.prompts[-1]
         assert "Examples:" in prompt
-        # The first example carries no question; the block runs up to its reason line.
+        # The first example carries no input; the block runs up to its reason line.
         first_block = prompt.split("Reason: too few rows")[0].split("Examples:")[1]
-        assert "Question:" not in first_block
-        assert "Candidate SQL:\nSELECT 1" in first_block
+        assert "Input:" not in first_block
+        assert "Actual Output:\nSELECT 1" in first_block
         assert "Score: 0.2" in first_block
-        # The second example carries both a question and a reference query.
-        assert "Question:\nhow many?" in prompt
+        # The second example carries both an input and an expected output.
+        assert "Input:\nhow many?" in prompt
         assert "Reason: matches gold" in prompt
 
     def test_examples_absent_when_not_provided(self) -> None:
@@ -236,7 +236,7 @@ class TestLlmJudge:
 
     def test_judge_example_rejects_out_of_range_score(self) -> None:
         with pytest.raises(ValidationError):
-            JudgeExample(candidate_sql="SELECT 1", score=1.5, reason="r")
+            JudgeExample(actual_output="SELECT 1", score=1.5, reason="r")
 
     def test_scorer_name(self) -> None:
         stub = StubLlm(JudgeReply(score=0.9, reason="r"))

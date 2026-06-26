@@ -15,13 +15,13 @@ from evaldata.types import EvalCase, ExecutionResult, GoldQuery, LlmError, Score
 
 SCORER_NAME = "llm_judge"
 
-# A case field shown to the grader: the question, the candidate SQL, or the gold query.
-JudgeField = Literal["question", "model_sql", "gold_query"]
+# A case field shown to the grader: the input, the actual output, or the expected output.
+JudgeField = Literal["input", "actual_output", "expected_output"]
 
-_ALL_FIELDS: tuple[JudgeField, ...] = ("question", "model_sql", "gold_query")
+_ALL_FIELDS: tuple[JudgeField, ...] = ("input", "actual_output", "expected_output")
 
 JUDGE_INSTRUCTION = (
-    "You are an expert SQL reviewer. Grade the candidate SQL query against the criteria below. "
+    "You are an expert SQL reviewer. Grade the actual output below against the criteria. "
     "Reason about how well it meets each criterion, then assign a score from 0.0 (does not meet "
     "the criteria) to 1.0 (fully meets them)."
 )
@@ -38,17 +38,17 @@ class JudgeReply(BaseModel):
 
 
 class JudgeExample(BaseModel):
-    """A few-shot anchor: a candidate SQL query and the score it should receive.
+    """A few-shot anchor: a graded output and the score it should receive.
 
-    `question` and `gold_query` are optional context; only the fields that are present are
+    `input` and `expected_output` are optional context; only the fields that are present are
     rendered into the prompt.
     """
 
-    candidate_sql: str
+    actual_output: str
     score: Score
     reason: str
-    question: str | None = None
-    gold_query: str | None = None
+    input: str | None = None
+    expected_output: str | None = None
 
 
 class RubricBand(BaseModel):
@@ -104,7 +104,7 @@ class LlmJudge:
             criteria: The natural-language standard the grader scores the case against.
             steps: Ordered evaluation steps the grader should work through, rendered as a
                 numbered block. Omitted from the prompt when absent.
-            examples: Few-shot anchors mapping candidate queries to scores. Omitted from the
+            examples: Few-shot anchors mapping graded outputs to scores. Omitted from the
                 prompt when absent.
             rubric: Scoring bands that describe what each score range means. Omitted from the
                 prompt when absent.
@@ -113,7 +113,7 @@ class LlmJudge:
                 `0.0` for deterministic grading.
             timeout: Per-request timeout in seconds.
             show: The case fields to offer the grader, each included only when available.
-                Defaults to all of `question`, `model_sql`, and `gold_query`.
+                Defaults to all of `input`, `actual_output`, and `expected_output`.
         """
         self._llm = resolve_llm(model, temperature=temperature, timeout=timeout)
         self._model = model if isinstance(model, str) else type(model).__name__
@@ -133,7 +133,7 @@ class LlmJudge:
         and maps its score to a verdict against the threshold.
 
         Args:
-            case: The eval case, supplying the question and (optionally) the gold query.
+            case: The eval case, supplying the input and (optionally) the expected output.
             output: The solver output (part of the `Scorer` protocol; unused here).
             result: The executed model result (part of the `Scorer` protocol; unused here).
             context: The score context, supplying the model's SQL.
@@ -169,7 +169,7 @@ class LlmJudge:
         """Render the grader prompt from the configured guidance and the available fields.
 
         Args:
-            case: The eval case, supplying the question and (optionally) the gold query.
+            case: The eval case, supplying the input and (optionally) the expected output.
             context: The score context, supplying the model's SQL.
 
         Returns:
@@ -189,12 +189,12 @@ class LlmJudge:
         if self._examples:
             parts.append(f"Examples:\n\n{self._render_examples()}")
 
-        if "question" in self._show:
-            parts.append(f"Question:\n{case.input}")
-        if "model_sql" in self._show:
-            parts.append(f"Candidate SQL:\n{context.queries.model_sql}")
-        if "gold_query" in self._show and isinstance(case.expected, GoldQuery):
-            parts.append(f"Reference SQL:\n{case.expected.sql}")
+        if "input" in self._show:
+            parts.append(f"Input:\n{case.input}")
+        if "actual_output" in self._show:
+            parts.append(f"Actual Output:\n{context.queries.model_sql}")
+        if "expected_output" in self._show and isinstance(case.expected, GoldQuery):
+            parts.append(f"Expected Output:\n{case.expected.sql}")
 
         parts.append(_OUTPUT_FORMAT)
         return "\n\n".join(parts)
@@ -209,11 +209,11 @@ class LlmJudge:
         blocks = []
         for example in self._examples:
             lines = []
-            if example.question is not None:
-                lines.append(f"Question:\n{example.question}")
-            lines.append(f"Candidate SQL:\n{example.candidate_sql}")
-            if example.gold_query is not None:
-                lines.append(f"Reference SQL:\n{example.gold_query}")
+            if example.input is not None:
+                lines.append(f"Input:\n{example.input}")
+            lines.append(f"Actual Output:\n{example.actual_output}")
+            if example.expected_output is not None:
+                lines.append(f"Expected Output:\n{example.expected_output}")
             lines.append(f"Score: {example.score}")
             lines.append(f"Reason: {example.reason}")
             blocks.append("\n".join(lines))
