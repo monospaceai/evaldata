@@ -7,11 +7,11 @@ verdict, or an inconclusive result when no verdict can be reached.
 from collections.abc import Sequence
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from evaldata.llm import Llm, resolve_llm
 from evaldata.scorers.context import ScoreContext
-from evaldata.types import EvalCase, ExecutionResult, GoldQuery, LlmError, ScoreResult, SolverOutput
+from evaldata.types import EvalCase, ExecutionResult, GoldQuery, LlmError, Score, ScoreResult, SolverOutput
 
 SCORER_NAME = "llm_judge"
 
@@ -20,18 +20,58 @@ JudgeField = Literal["question", "model_sql", "gold_query"]
 
 _ALL_FIELDS: tuple[JudgeField, ...] = ("question", "model_sql", "gold_query")
 
-_INSTRUCTION = (
-    "You are grading a candidate SQL query against the criteria below. Judge how well it meets "
-    "them and return JSON with a `score` between 0.0 (fails the criteria) and 1.0 (fully meets "
-    "them) and a short `reason` explaining the score."
+JUDGE_INSTRUCTION = (
+    "You are an expert SQL reviewer. Grade the candidate SQL query against the criteria below. "
+    "Reason about how well it meets each criterion, then assign a score from 0.0 (does not meet "
+    "the criteria) to 1.0 (fully meets them)."
 )
+
+_OUTPUT_FORMAT = "Return a JSON object with a numeric `score` in [0.0, 1.0] and a short `reason`."
 
 
 class JudgeReply(BaseModel):
-    """Structured grader reply: a 0-1 correctness score and its rationale."""
+    """Structured grader reply: the grader's rationale and a 0-1 correctness score."""
 
-    score: float
+    # `reason` precedes `score` so the grader reasons before committing to a number.
     reason: str
+    score: float
+
+
+class JudgeExample(BaseModel):
+    """A few-shot anchor: a candidate SQL query and the score it should receive.
+
+    `question` and `gold_query` are optional context; only the fields that are present are
+    rendered into the prompt.
+    """
+
+    candidate_sql: str
+    score: Score
+    reason: str
+    question: str | None = None
+    gold_query: str | None = None
+
+
+class RubricBand(BaseModel):
+    """A scoring band: a `[min_score, max_score]` range and what it describes."""
+
+    min_score: Score
+    max_score: Score
+    description: str
+
+    @model_validator(mode="after")
+    def _ordered_bounds(self) -> "RubricBand":
+        """Reject a band whose `min_score` exceeds its `max_score`.
+
+        Returns:
+            The validated `RubricBand`.
+
+        Raises:
+            ValueError: If `min_score` is greater than `max_score`.
+        """
+        if self.min_score > self.max_score:
+            msg = "RubricBand min_score cannot exceed max_score"
+            raise ValueError(msg)
+        return self
 
 
 class LlmJudge:
@@ -47,6 +87,9 @@ class LlmJudge:
         *,
         model: str | Llm,
         criteria: str,
+        steps: Sequence[str] | None = None,
+        examples: Sequence[JudgeExample] | None = None,
+        rubric: Sequence[RubricBand] | None = None,
         threshold: float = 0.5,
         temperature: float | None = 0.0,
         timeout: float | None = None,
@@ -59,6 +102,12 @@ class LlmJudge:
                 `Llm` to use directly. `temperature` and `timeout` apply only to the
                 model-string path.
             criteria: The natural-language standard the grader scores the case against.
+            steps: Ordered evaluation steps the grader should work through, rendered as a
+                numbered block. Omitted from the prompt when absent.
+            examples: Few-shot anchors mapping candidate queries to scores. Omitted from the
+                prompt when absent.
+            rubric: Scoring bands that describe what each score range means. Omitted from the
+                prompt when absent.
             threshold: The minimum score (inclusive) for a passing verdict. Defaults to `0.5`.
             temperature: Sampling temperature; `None` leaves the provider default. Defaults to
                 `0.0` for deterministic grading.
@@ -69,6 +118,9 @@ class LlmJudge:
         self._llm = resolve_llm(model, temperature=temperature, timeout=timeout)
         self._model = model if isinstance(model, str) else type(model).__name__
         self._criteria = criteria
+        self._steps = tuple(steps) if steps is not None else ()
+        self._examples = tuple(examples) if examples is not None else ()
+        self._rubric = tuple(rubric) if rubric is not None else ()
         self._threshold = threshold
         self._show = tuple(show) if show is not None else _ALL_FIELDS
 
@@ -114,22 +166,55 @@ class LlmJudge:
         )
 
     def _build_prompt(self, case: EvalCase, context: ScoreContext) -> str:
-        """Render the grader prompt from the criteria and the selected available fields.
+        """Render the grader prompt from the configured guidance and the available fields.
 
         Args:
             case: The eval case, supplying the question and (optionally) the gold query.
             context: The score context, supplying the model's SQL.
 
         Returns:
-            The grader prompt: the instruction, the criteria, each available selected field,
-            and the JSON-output request.
+            The grader prompt: the framing, the criteria, any steps/rubric/examples,
+            each available selected field, and the fixed JSON output-format request.
         """
-        parts = [_INSTRUCTION, f"Criteria:\n{self._criteria}"]
+        parts = [JUDGE_INSTRUCTION, f"Criteria:\n{self._criteria}"]
+
+        if self._steps:
+            numbered = "\n".join(f"{i}. {step}" for i, step in enumerate(self._steps, start=1))
+            parts.append(f"Evaluation steps:\n{numbered}")
+
+        if self._rubric:
+            bands = "\n".join(f"- {band.min_score}-{band.max_score}: {band.description}" for band in self._rubric)
+            parts.append(f"Scoring rubric:\n{bands}")
+
+        if self._examples:
+            parts.append(f"Examples:\n\n{self._render_examples()}")
+
         if "question" in self._show:
             parts.append(f"Question:\n{case.input}")
         if "model_sql" in self._show:
             parts.append(f"Candidate SQL:\n{context.queries.model_sql}")
         if "gold_query" in self._show and isinstance(case.expected, GoldQuery):
             parts.append(f"Reference SQL:\n{case.expected.sql}")
-        parts.append("Return JSON with a `score` between 0.0 and 1.0 and a `reason`.")
+
+        parts.append(_OUTPUT_FORMAT)
         return "\n\n".join(parts)
+
+    def _render_examples(self) -> str:
+        """Render the configured few-shot examples, each showing only its present fields.
+
+        Returns:
+            The examples joined by blank lines; each example lists its present context fields
+            followed by its `Score:` and `Reason:`.
+        """
+        blocks = []
+        for example in self._examples:
+            lines = []
+            if example.question is not None:
+                lines.append(f"Question:\n{example.question}")
+            lines.append(f"Candidate SQL:\n{example.candidate_sql}")
+            if example.gold_query is not None:
+                lines.append(f"Reference SQL:\n{example.gold_query}")
+            lines.append(f"Score: {example.score}")
+            lines.append(f"Reason: {example.reason}")
+            blocks.append("\n".join(lines))
+        return "\n\n".join(blocks)

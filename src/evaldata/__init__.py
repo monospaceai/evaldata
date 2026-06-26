@@ -6,10 +6,13 @@ from evaldata.core import assert_eval
 from evaldata.llm import Llm
 from evaldata.loaders import eval_case
 from evaldata.scorers import (
+    JUDGE_INSTRUCTION,
     ExpectationSuiteScorer,
     FirstDecisive,
+    JudgeExample,
     LlmJudge,
     ResultSetEquivalence,
+    RubricBand,
     SemanticEquivalence,
     query_equivalence,
 )
@@ -20,16 +23,19 @@ if TYPE_CHECKING:
     from evaldata.llm import LiteLlm
 
 __all__ = [
+    "JUDGE_INSTRUCTION",
     "CallableSolver",
     "EvalCase",
     "ExpectationSuiteScorer",
     "FirstDecisive",
+    "JudgeExample",
     "LiteLlm",
     "Llm",
     "LlmJudge",
     "PlatformRef",
     "PromptSolver",
     "ResultSetEquivalence",
+    "RubricBand",
     "SemanticEquivalence",
     "assert_eval",
     "eval_case",

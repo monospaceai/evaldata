@@ -7,10 +7,18 @@ network). The litellm backend itself is covered in `tests/llm/test_lite.py`.
 import os
 
 import pytest
+from pydantic import ValidationError
 
 from evaldata.llm import StubLlm
 from evaldata.scorers import QueryRunner, ScoreContext, Scorer
-from evaldata.scorers.llm_judge import SCORER_NAME, JudgeReply, LlmJudge
+from evaldata.scorers.llm_judge import (
+    JUDGE_INSTRUCTION,
+    SCORER_NAME,
+    JudgeExample,
+    JudgeReply,
+    LlmJudge,
+    RubricBand,
+)
 from evaldata.scorers.sql import Dialect
 from evaldata.types import (
     EvalCase,
@@ -153,6 +161,82 @@ class TestLlmJudge:
         prompt = stub.prompts[-1]
         assert "How many tracks?" in prompt
         assert "SELECT secret" not in prompt
+
+    def test_default_instruction_and_output_format_appear(self) -> None:
+        stub = StubLlm(JudgeReply(score=0.9, reason="r"))
+        LlmJudge(model=stub, criteria="c").score(_case(), _OUTPUT, _RESULT, context=_context())
+        prompt = stub.prompts[-1]
+        assert JUDGE_INSTRUCTION in prompt
+        assert "Return a JSON object with a numeric `score` in [0.0, 1.0]" in prompt
+
+    def test_steps_render_as_numbered_block(self) -> None:
+        stub = StubLlm(JudgeReply(score=0.9, reason="r"))
+        LlmJudge(model=stub, criteria="c", steps=["read the question", "check the SQL"]).score(
+            _case(), _OUTPUT, _RESULT, context=_context()
+        )
+        prompt = stub.prompts[-1]
+        assert "Evaluation steps:" in prompt
+        assert "1. read the question" in prompt
+        assert "2. check the SQL" in prompt
+
+    def test_steps_absent_when_not_provided(self) -> None:
+        stub = StubLlm(JudgeReply(score=0.9, reason="r"))
+        LlmJudge(model=stub, criteria="c").score(_case(), _OUTPUT, _RESULT, context=_context())
+        assert "Evaluation steps:" not in stub.prompts[-1]
+
+    def test_rubric_renders_when_provided(self) -> None:
+        stub = StubLlm(JudgeReply(score=0.9, reason="r"))
+        rubric = [
+            RubricBand(min_score=0.0, max_score=0.3, description="wrong result"),
+            RubricBand(min_score=0.7, max_score=1.0, description="correct result"),
+        ]
+        LlmJudge(model=stub, criteria="c", rubric=rubric).score(_case(), _OUTPUT, _RESULT, context=_context())
+        prompt = stub.prompts[-1]
+        assert "Scoring rubric:" in prompt
+        assert "- 0.0-0.3: wrong result" in prompt
+        assert "- 0.7-1.0: correct result" in prompt
+
+    def test_rubric_absent_when_not_provided(self) -> None:
+        stub = StubLlm(JudgeReply(score=0.9, reason="r"))
+        LlmJudge(model=stub, criteria="c").score(_case(), _OUTPUT, _RESULT, context=_context())
+        assert "Scoring rubric:" not in stub.prompts[-1]
+
+    def test_rubric_band_rejects_inverted_bounds(self) -> None:
+        with pytest.raises(ValidationError):
+            RubricBand(min_score=0.8, max_score=0.2, description="x")
+
+    def test_examples_render_only_present_fields(self) -> None:
+        stub = StubLlm(JudgeReply(score=0.9, reason="r"))
+        examples = [
+            JudgeExample(candidate_sql="SELECT 1", score=0.2, reason="too few rows"),
+            JudgeExample(
+                candidate_sql="SELECT count(*) FROM t",
+                score=0.9,
+                reason="matches gold",
+                question="how many?",
+                gold_query="SELECT count(*) FROM t",
+            ),
+        ]
+        LlmJudge(model=stub, criteria="c", examples=examples).score(_case(), _OUTPUT, _RESULT, context=_context())
+        prompt = stub.prompts[-1]
+        assert "Examples:" in prompt
+        # The first example carries no question; the block runs up to its reason line.
+        first_block = prompt.split("Reason: too few rows")[0].split("Examples:")[1]
+        assert "Question:" not in first_block
+        assert "Candidate SQL:\nSELECT 1" in first_block
+        assert "Score: 0.2" in first_block
+        # The second example carries both a question and a reference query.
+        assert "Question:\nhow many?" in prompt
+        assert "Reason: matches gold" in prompt
+
+    def test_examples_absent_when_not_provided(self) -> None:
+        stub = StubLlm(JudgeReply(score=0.9, reason="r"))
+        LlmJudge(model=stub, criteria="c").score(_case(), _OUTPUT, _RESULT, context=_context())
+        assert "Examples:" not in stub.prompts[-1]
+
+    def test_judge_example_rejects_out_of_range_score(self) -> None:
+        with pytest.raises(ValidationError):
+            JudgeExample(candidate_sql="SELECT 1", score=1.5, reason="r")
 
     def test_scorer_name(self) -> None:
         stub = StubLlm(JudgeReply(score=0.9, reason="r"))
