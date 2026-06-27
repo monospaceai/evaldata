@@ -66,21 +66,44 @@ class TestExecutionAccuracy:
         assert _score(adapter, gold, "SELECT id FROM items ORDER BY id").verdict == "pass"
         assert _score(adapter, gold, "SELECT id FROM items ORDER BY id DESC").verdict == "fail"
 
-    def test_order_mode_ignore_overrides_gold_order_by(self, adapter: SqliteAdapter) -> None:
-        # Same rows, different order: order_mode="ignore" makes it pass despite the gold ORDER BY.
+    def test_row_order_ignore_overrides_gold_order_by(self, adapter: SqliteAdapter) -> None:
+        # Same rows, different order: row_order="ignore" makes it pass despite the gold ORDER BY.
         score = _score(
             adapter,
             "SELECT id FROM items ORDER BY id",
             "SELECT id FROM items ORDER BY id DESC",
-            order_mode="ignore",
+            row_order="ignore",
         )
         assert score.verdict == "pass"
 
-    def test_dedup_compares_distinct_rows(self, adapter: SqliteAdapter) -> None:
+    def test_multiplicity_set_compares_distinct_rows(self, adapter: SqliteAdapter) -> None:
         gold = "SELECT name FROM items UNION ALL SELECT name FROM items"  # each name twice
         model = "SELECT name FROM items"  # each name once
         assert _score(adapter, gold, model).verdict == "fail"  # multiset differs
-        assert _score(adapter, gold, model, dedup=True).verdict == "pass"  # set matches
+        assert _score(adapter, gold, model, multiplicity="set").verdict == "pass"  # set matches
+
+    def test_by_value_passes_when_columns_reordered(self, adapter: SqliteAdapter) -> None:
+        gold = "SELECT id, name FROM items"
+        model = "SELECT name, id FROM items"  # same data, columns swapped
+        assert _score(adapter, gold, model).verdict == "fail"  # by_position is position-strict
+        assert _score(adapter, gold, model, column_alignment="by_value").verdict == "pass"
+
+    def test_by_value_fails_when_data_differs(self, adapter: SqliteAdapter) -> None:
+        gold = "SELECT id, name FROM items"
+        model = "SELECT name, id FROM items WHERE id < 3"  # column-swapped but missing a row
+        assert _score(adapter, gold, model, column_alignment="by_value").verdict == "fail"
+
+    def test_by_value_fails_when_column_counts_differ(self, adapter: SqliteAdapter) -> None:
+        gold = "SELECT id, name FROM items"
+        model = "SELECT id FROM items"  # one column vs two
+        assert _score(adapter, gold, model, column_alignment="by_value").verdict == "fail"
+
+    def test_by_value_passes_with_four_columns(self, adapter: SqliteAdapter) -> None:
+        # Four columns exercises the >3 pruning branch; a permutation aligns the swapped pair.
+        gold = "SELECT id, name, price, id * 10 AS big FROM items"
+        model = "SELECT id, price, name, id * 10 AS big FROM items"  # name/price swapped
+        assert _score(adapter, gold, model).verdict == "fail"
+        assert _score(adapter, gold, model, column_alignment="by_value").verdict == "pass"
 
     def test_model_execution_error_fails(self, adapter: SqliteAdapter) -> None:
         score = _score(adapter, "SELECT id FROM items", "SELECT FROM nope")

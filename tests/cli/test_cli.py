@@ -108,6 +108,73 @@ class TestBench:
         assert result.exit_code == 0
         assert "EX (spider): 50.0% (1/2)" in result.output
 
+    def _make_bird(self, root: Path) -> None:
+        db_dir = root / "dev_databases" / "clibench"
+        db_dir.mkdir(parents=True)
+        con = sqlite3.connect(db_dir / "clibench.sqlite")
+        con.execute("CREATE TABLE items (id INTEGER, name TEXT)")
+        # Two rows share a name, so set semantics dedups them to one.
+        con.executemany("INSERT INTO items VALUES (?, ?)", [(1, "a"), (2, "a"), (3, "b")])
+        con.commit()
+        con.close()
+        (root / "dev.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "db_id": "clibench",
+                        "question": "distinct names?",
+                        "evidence": "",
+                        "SQL": "SELECT name FROM items",
+                        "question_id": 0,
+                        "difficulty": "simple",
+                    },
+                    {
+                        "db_id": "clibench",
+                        "question": "how many items?",
+                        "evidence": "",
+                        "SQL": "SELECT count(*) FROM items",
+                        "question_id": 1,
+                        "difficulty": "moderate",
+                    },
+                ]
+            )
+        )
+
+    def test_bird_breakdown_and_json_artifact(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import litellm
+
+        self._make_bird(tmp_path)
+        # The model answers with a deduping DISTINCT query. Under BIRD set semantics it matches
+        # the first gold (which returns duplicate names), and misses the count, so EX is 1/2.
+        real_completion = litellm.completion
+        monkeypatch.setattr(
+            "litellm.completion",
+            lambda **kwargs: real_completion(**kwargs, mock_response="SELECT DISTINCT name FROM items"),
+        )
+        artifact = tmp_path / "stats.json"
+
+        result = runner.invoke(
+            app,
+            ["bench", "bird", str(tmp_path), "--model", "openai/gpt-4o-mini", "--json", str(artifact)],
+        )
+
+        assert result.exit_code == 0
+        assert "EX (bird): 50.0% (1/2)" in result.output
+        assert "simple" in result.output
+        assert "moderate" in result.output
+
+        assert artifact.exists()
+        stats = json.loads(artifact.read_text())
+        assert stats["dataset"] == "bird"
+        assert stats["model"] == "openai/gpt-4o-mini"
+        assert stats["total"] == 2
+        assert stats["passed"] == 1
+        assert stats["by_difficulty"] == {
+            "simple": {"total": 1, "passed": 1, "accuracy": 1.0},
+            "moderate": {"total": 1, "passed": 0, "accuracy": 0.0},
+        }
+        assert len(stats["cases"]) == 2
+
 
 @pytest.mark.unit
 class TestDoctor:
