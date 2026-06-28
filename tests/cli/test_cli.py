@@ -175,6 +175,26 @@ class TestBench:
         }
         assert len(stats["cases"]) == 2
 
+    def test_no_path_and_no_cache_guides_to_fetch(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(cli, "cached_dataset_path", lambda name: None)
+        result = runner.invoke(app, ["bench", "bird", "--model", "openai/gpt-4o-mini"])
+        assert result.exit_code != 0
+        assert "run: evaldata fetch bird" in result.output
+
+    def test_no_path_resolves_from_cache(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import litellm
+
+        self._make_bird(tmp_path)
+        monkeypatch.setattr(cli, "cached_dataset_path", lambda name: tmp_path)
+        real_completion = litellm.completion
+        monkeypatch.setattr(
+            "litellm.completion",
+            lambda **kwargs: real_completion(**kwargs, mock_response="SELECT DISTINCT name FROM items"),
+        )
+        result = runner.invoke(app, ["bench", "bird", "--model", "openai/gpt-4o-mini"])
+        assert result.exit_code == 0
+        assert "EX (bird): 50.0% (1/2)" in result.output
+
 
 @pytest.mark.unit
 class TestDoctor:

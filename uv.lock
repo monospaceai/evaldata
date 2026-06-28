@@ -715,6 +715,7 @@ all = [
     { name = "openinference-instrumentation" },
     { name = "opentelemetry-exporter-otlp" },
     { name = "opentelemetry-sdk" },
+    { name = "platformdirs" },
     { name = "psycopg", extra = ["binary"] },
     { name = "snowflake-connector-python" },
 ]
@@ -725,6 +726,9 @@ all-platforms = [
     { name = "google-cloud-bigquery-storage" },
     { name = "psycopg", extra = ["binary"] },
     { name = "snowflake-connector-python" },
+]
+benchmarks = [
+    { name = "platformdirs" },
 ]
 bigquery = [
     { name = "google-cloud-bigquery" },
@@ -772,7 +776,7 @@ requires-dist = [
     { name = "databricks-sdk", marker = "extra == 'databricks'", specifier = ">=0.30.0" },
     { name = "databricks-sql-connector", marker = "extra == 'databricks'", specifier = ">=4.2.6" },
     { name = "duckdb", specifier = ">=1.5.3" },
-    { name = "evaldata", extras = ["all-platforms", "litellm", "tracing"], marker = "extra == 'all'" },
+    { name = "evaldata", extras = ["all-platforms", "litellm", "tracing", "benchmarks"], marker = "extra == 'all'" },
     { name = "evaldata", extras = ["postgres", "snowflake", "bigquery", "databricks"], marker = "extra == 'all-platforms'" },
     { name = "google-cloud-bigquery", marker = "extra == 'bigquery'", specifier = ">=3.41.0" },
     { name = "google-cloud-bigquery-storage", marker = "extra == 'bigquery'", specifier = ">=2.38.0" },
@@ -780,6 +784,7 @@ requires-dist = [
     { name = "openinference-instrumentation", marker = "extra == 'tracing'", specifier = ">=0.1.52" },
     { name = "opentelemetry-exporter-otlp", marker = "extra == 'tracing'", specifier = ">=1.42.1" },
     { name = "opentelemetry-sdk", marker = "extra == 'tracing'", specifier = ">=1.42.1" },
+    { name = "platformdirs", marker = "extra == 'benchmarks'", specifier = ">=4.0" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.3.4" },
     { name = "pyarrow", specifier = ">=24.0.0" },
     { name = "pydantic", specifier = ">=2.13.4" },
@@ -789,7 +794,7 @@ requires-dist = [
     { name = "sqlglot", specifier = ">=30.9.0" },
     { name = "typer", specifier = ">=0.25.1" },
 ]
-provides-extras = ["postgres", "snowflake", "bigquery", "databricks", "litellm", "tracing", "all-platforms", "all"]
+provides-extras = ["postgres", "snowflake", "bigquery", "databricks", "litellm", "benchmarks", "tracing", "all-platforms", "all"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -7,6 +7,21 @@ both run on the `sqlite` platform.
 """
 
 from evaldata.loaders.benchmarks.bird import load_bird
+from evaldata.loaders.benchmarks.fetch import (
+    SOURCES,
+    BenchmarkSource,
+    cache_root,
+    cached_dataset_path,
+    fetch_benchmark,
+)
 from evaldata.loaders.benchmarks.spider import load_spider
 
-__all__ = ["load_bird", "load_spider"]
+__all__ = [
+    "SOURCES",
+    "BenchmarkSource",
+    "cache_root",
+    "cached_dataset_path",
+    "fetch_benchmark",
+    "load_bird",
+    "load_spider",
+]
