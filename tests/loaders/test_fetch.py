@@ -36,11 +36,10 @@ def _build_benchmark_zip(
     db_name: str = "shop",
     corrupt: bool = False,
 ) -> Path:
-    """Build a benchmark archive in either the BIRD or Spider layout.
+    """Build a benchmark archive under `wrapper_name/`, with `dev.json` and databases.
 
-    BIRD ships its databases as a nested `<databases_dirname>.zip` alongside a `__MACOSX`
-    folder; Spider ships a plain `<databases_dirname>/` directory. Both sit under a wrapper
-    folder to exercise the rglob locate.
+    When `nested_databases_zip=True`, the databases directory is packed as a nested zip and a
+    `__MACOSX/` dir is included (exercises both extraction and cleanup).
     """
     staging = tmp / "staging"
     wrapper = staging / wrapper_name

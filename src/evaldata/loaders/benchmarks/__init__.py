@@ -1,9 +1,7 @@
-"""Benchmark loaders: turn standard text-to-SQL datasets into runnable `EvalCase`s.
+"""Loaders for standard text-to-SQL benchmark datasets (Spider, BIRD).
 
-Each loader reads a user-downloaded dataset directory (the datasets are not redistributed) and
-yields `EvalCase`s whose expected outcome is the benchmark's gold query (`GoldQuery`), to be
-scored with `ExecutionAccuracy`. Spider and BIRD both ship a per-`db_id` SQLite database, so
-both run on the `sqlite` platform.
+Each loader reads a dataset directory and yields `EvalCase`s with a `GoldQuery` expected,
+suitable for scoring with `ExecutionAccuracy`.
 """
 
 from evaldata.loaders.benchmarks.bird import load_bird

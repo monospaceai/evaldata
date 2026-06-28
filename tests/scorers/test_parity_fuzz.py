@@ -1,15 +1,11 @@
 """Property/fuzz parity: `ExecutionAccuracy._compare` vs the official Spider/BIRD oracles.
 
-Isolates the comparison logic from SQL execution and order detection: random result sets are
-fed straight to `_compare` and to the official comparators, asserting they agree across many
-seeded cases. Rows are tuples of hashable cells drawn from a tiny domain so duplicates, NULLs,
-and column collisions are common.
+Feeds random result sets straight to `_compare` and the official comparators, asserting they
+agree across many seeded cases. Rows are tuples of hashable cells drawn from a tiny domain so
+duplicates, NULLs, and column collisions are common.
 
 - Spider config (`column_alignment="by_value"`) is checked against the vendored `result_eq`.
 - BIRD config (`row_order="ignore", multiplicity="set"`) is checked against `set == set`.
-
-Argument order matches `test_official_parity.py`: our `_compare(actual=pred, gold=gold)` and the
-oracle `result_eq(result1=pred, result2=gold)`.
 """
 
 import random

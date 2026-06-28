@@ -1,31 +1,21 @@
 """Full-dev differential harness: `ExecutionAccuracy` vs the official oracle over real dev data.
 
-Parametrized over each cached benchmark (BIRD, Spider): runs over the entire dev set against the
-real schemas and SQLite databases. For each case the gold SQL is executed, then deterministic
-SQL-safe transforms of the gold (wrapped as a subquery) stand in as model predictions, exercising
-pass and edge paths without parsing arbitrary SQL or calling a model. For every prediction that
-executes cleanly, the scorer's verdict is compared to the official comparator (Spider's
-`result_eq` and BIRD's `set == set`) over rows fetched by raw `sqlite3` against the same database.
+Runs over the entire dev set for each cached benchmark. For each case the gold SQL is executed,
+then deterministic subquery-wrapped transforms stand in as predictions. For every prediction that
+executes cleanly, the scorer's verdict is compared to the official comparator (Spider's `result_eq`
+and BIRD's `set == set`) over rows fetched by raw `sqlite3` against the same database.
 
-The one documented intentional divergence is held out: Spider keys order-sensitivity off the
-`'order by'` substring in the gold SQL, while evaldata parses for a *top-level* `ORDER BY` (a
-window `OVER (ORDER BY …)` or a subquery `ORDER BY` does not count). To compare only the
-comparison logic, the Spider oracle here is driven with evaldata's own top-level-`ORDER BY` rule,
-so the two never disagree merely because they detected order-sensitivity differently.
+Two cases are held out rather than compared:
 
-A second, structural mismatch is also held out: evaldata's adapter keys result rows by output
-column name and rejects a result with duplicate output column names (`kind="duplicate_columns"`),
-which a positional-tuple oracle cannot model. Some BIRD golds project the same name twice (e.g.
-`SELECT T1.name, T2.name …`); the scorer then fails the case because it cannot represent the
-gold's rows, while the positional oracle passes. Such cases are skipped (and counted) since the
-result is unrepresentable for the scorer rather than a comparison disagreement. Likewise a few
-golds touch non-UTF-8 text (e.g. Spider's `wta_1`): the official eval sets
-`text_factory = decode(errors="ignore")` while our adapter raises on the bytes, so those cases
-fail to execute on our side and are skipped, not compared.
+- Order-sensitivity divergence: Spider keys off the `'order by'` substring; evaldata parses for a
+  top-level `ORDER BY`. The Spider oracle here is driven with evaldata's rule so they agree.
+- Duplicate output column names: evaldata's adapter rejects results where two columns share a name
+  (`kind="duplicate_columns"`); a positional-tuple oracle cannot model that, so those cases are
+  skipped. Likewise a few golds touch non-UTF-8 text; those fail to execute on our side and are
+  skipped.
 
-A benchmark must already be cached; the test fails loudly if it is not, matching the fail-loud
-philosophy of the other e2e tests. Per-query execution is bounded by a wall-clock timeout so a
-pathological gold cannot hang the run.
+The test fails loudly if a benchmark is not cached. Per-query execution is bounded by a wall-clock
+timeout.
 """
 
 import sqlite3
@@ -48,8 +38,6 @@ from tests._vendor.spider_exec_eval import result_eq
 _OUTPUT = SolverOutput(output=Sql("SELECT ..."))
 _QUERY_TIMEOUT_SECONDS = 15.0
 
-# The datasets the harness can validate, each with its loader. A dataset must be fetched
-# (`evaldata fetch <name>`) for its parametrization to run; otherwise the test fails loudly.
 _DATASETS: list[tuple[str, Callable[[str], Iterator[EvalCase]]]] = [
     ("bird", load_bird),
     ("spider", load_spider),
@@ -161,8 +149,6 @@ _SPIDER = ExecutionAccuracy(column_alignment="by_value")
 _BIRD = ExecutionAccuracy(row_order="ignore", multiplicity="set")
 
 
-# The full dev set runs thousands of real queries; the global per-test timeout is far too tight,
-# and per-query execution is already bounded by `_execute_bounded`.
 @pytest.mark.e2e
 @pytest.mark.timeout(0)
 @pytest.mark.parametrize(("dataset", "loader"), _DATASETS, ids=[d[0] for d in _DATASETS])
@@ -186,9 +172,8 @@ def test_full_dev_parity(dataset: str, loader: Callable[[str], Iterator[EvalCase
             order_matters = _top_level_order_by(gold_sql)
             adapter = adapters.setdefault(db_path, SqliteAdapter(db_path))
 
-            # The scorer re-runs the gold through the name-keyed adapter; if the gold's projection
-            # has duplicate output column names the adapter rejects it, so every variant of this
-            # case is unrepresentable for the scorer and held out.
+            # Gold with duplicate output column names is unrepresentable in the name-keyed adapter;
+            # skip all variants rather than count them as mismatches.
             if adapter.execute(gold_sql).error is not None:
                 skips += 1
                 continue
@@ -209,7 +194,6 @@ def test_full_dev_parity(dataset: str, loader: Callable[[str], Iterator[EvalCase
                     if spider_ours is None or bird_ours is None:
                         skips += 2
                         continue
-                    # Spider config vs result_eq, and BIRD config vs set==set, share the rows.
                     spider_official = result_eq(pred_rows, gold_rows, order_matters=order_matters)
                     bird_official = set(pred_rows) == set(gold_rows)
                     comparisons += 2

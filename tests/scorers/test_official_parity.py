@@ -1,22 +1,15 @@
-"""Differential parity test: evaldata's `ExecutionAccuracy` vs the official Spider/BIRD oracles.
+"""Differential parity: `ExecutionAccuracy` vs the official Spider/BIRD oracles.
 
-This proves evaldata's execution-accuracy (EX) scorer produces the same pass/fail verdicts as
-the official Spider and BIRD execution-accuracy comparators across the edge cases that separate
-them (duplicate rows, reordered columns, row order vs `ORDER BY`, NULLs, differing column counts,
-empty results). The official comparators are used verbatim as oracles:
+Checks that the scorer produces the same pass/fail verdict as the official comparators across
+the edge cases that separate them (duplicate rows, reordered columns, row order vs `ORDER BY`,
+NULLs, differing column counts, empty results).
 
-- Spider: `result_eq` from `tests/_vendor/spider_exec_eval.py` (Apache-2.0), with the Spider
-  scorer config `column_alignment="by_value"`.
-- BIRD: `set(pred_rows) == set(gold_rows)`, with the BIRD scorer config
-  `row_order="ignore", multiplicity="set"`.
+- Spider oracle: `result_eq` (Apache-2.0, vendored), with `column_alignment="by_value"`.
+- BIRD oracle: `set(pred_rows) == set(gold_rows)`, with `row_order="ignore", multiplicity="set"`.
 
-Both oracles consume rows fetched by raw `sqlite3` over the same file-based DB the scorer reads,
-so the only thing under test is the comparison logic.
-
-One documented intentional divergence is NOT exercised here: Spider keys order-sensitivity off
-the substring `'order by'` in the gold SQL, while evaldata parses for a top-level `ORDER BY`.
-They differ only when the gold's sole `ORDER BY` sits inside a subquery; every case below keeps
-`'order by'` and the top-level parse in agreement so the oracle and scorer stay comparable.
+One intentional divergence is held out: Spider keys order-sensitivity off the `'order by'`
+substring while evaldata parses for a top-level `ORDER BY`. Every case below keeps both in
+agreement so the only thing under test is the comparison logic.
 """
 
 import sqlite3

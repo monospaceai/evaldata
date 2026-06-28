@@ -246,9 +246,8 @@ def _build_refs(
 ) -> list[PlatformRef]:
     """Build a `PlatformRef` for each platform flag that was provided.
 
-    Each branch routes through the typed registry builder, so a flag can only ever name a
-    real `PlatformKind`. The Databricks ref is built only when both its server hostname and
-    HTTP path are given (it has no single-value form).
+    The Databricks ref requires both `databricks_server_hostname` and `databricks_http_path`;
+    either alone produces no entry.
 
     Args:
         duckdb: A DuckDB database path, or `None` if the flag was not given.

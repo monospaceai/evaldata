@@ -1,11 +1,11 @@
 # ruff: noqa
-"""Verbatim Spider execution-accuracy comparison functions, used as an oracle in tests.
+"""Spider execution-accuracy comparison functions, vendored as a test oracle.
 
 Source: taoyds/test-suite-sql-eval, exec_eval.py
 (https://github.com/taoyds/test-suite-sql-eval/blob/master/exec_eval.py)
-Licensed under the Apache License 2.0.
+Licensed under the Apache License 2.0. See tests/_vendor/NOTICE.
 
-Kept byte-faithful to the upstream functions; do not reformat. See tests/_vendor/NOTICE.
+Do not reformat these function bodies.
 """
 import random
 from collections import defaultdict

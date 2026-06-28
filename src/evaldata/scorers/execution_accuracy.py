@@ -29,15 +29,13 @@ from evaldata.types import (
 
 SCORER_NAME = "execution_accuracy"
 
-# How many differing rows to carry as concrete samples in the diff; the counts give the full
-# magnitude.
+# Differing rows to carry as concrete samples in the diff; counts give the full magnitude.
 _SAMPLE_CAP = 5
 
-# Permutation search above this column count prunes candidates against sampled rows rather than
+# Above this column count, permutation candidates are pruned against sampled rows rather than
 # enumerating the full cartesian product.
 _FULL_PRODUCT_MAX_COLS = 3
 
-# How many rows to sample when pruning permutation candidates.
 _PRUNE_SAMPLE_ROWS = 20
 
 _Row = dict[str, Any]

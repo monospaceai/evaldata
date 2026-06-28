@@ -1,4 +1,4 @@
-"""Tests for `ExecutionAccuracy` — the faithful execution-accuracy (EX) scorer, run on SQLite."""
+"""Tests for `ExecutionAccuracy`, run on SQLite."""
 
 from collections.abc import Iterator
 
