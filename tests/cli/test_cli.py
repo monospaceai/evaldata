@@ -313,6 +313,35 @@ class TestDbtBench:
         assert result.exit_code == 0, result.output
         assert "EX (dbt): 0.0% (0/3)" in result.output
 
+    def test_tests_mode_runs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import litellm
+
+        project = _copy_dbt_project(tmp_path)
+        # `customers` has unique + not_null tests on customer_id, which `select * from customers`
+        # satisfies, so the one tests-mode case passes.
+        real_completion = litellm.completion
+        monkeypatch.setattr(
+            "litellm.completion",
+            lambda **kwargs: real_completion(**kwargs, mock_response="select * from customers"),
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "dbt-bench",
+                str(project),
+                "--model",
+                "openai/gpt-4o-mini",
+                "--mode",
+                "tests",
+                "--target-dir",
+                str(project / "artifacts"),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "EX (dbt): 100.0% (1/1)" in result.output
+
     def test_profile_error_exits_1(self, tmp_path: Path) -> None:
         result = runner.invoke(
             app, ["dbt-bench", str(tmp_path), "--model", "openai/gpt-4o-mini", "--target-dir", str(tmp_path)]

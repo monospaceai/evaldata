@@ -66,6 +66,15 @@ class SourceRef:
 
 
 @dataclass(frozen=True)
+class DbtTest:
+    """A dbt data test: its type, the model it guards, and the column it targets (if any)."""
+
+    name: str
+    model: str
+    column: str | None
+
+
+@dataclass(frozen=True)
 class SchemaContext:
     """A selection of tables rendered as schema context for a text-to-SQL prompt."""
 
@@ -143,16 +152,25 @@ class DbtContext:
     the manifest's declared types otherwise.
     """
 
-    def __init__(self, *, models: Iterable[ModelRef], sources: Iterable[SourceRef], schema_version: str) -> None:
-        """Build a context from pre-built models and sources.
+    def __init__(
+        self,
+        *,
+        models: Iterable[ModelRef],
+        sources: Iterable[SourceRef],
+        tests: Iterable[DbtTest],
+        schema_version: str,
+    ) -> None:
+        """Build a context from pre-built models, sources, and tests.
 
         Args:
             models: The project's models.
             sources: The project's source tables.
+            tests: The project's data tests.
             schema_version: The manifest schema version the parts were read from.
         """
         self._models = tuple(models)
         self._sources = tuple(sources)
+        self._tests = tuple(tests)
         self._schema_version = schema_version
         self._by_key: dict[str, ModelRef] = {}
         for model in self._models:
@@ -208,7 +226,20 @@ class DbtContext:
                 )
             )
 
-        return cls(models=models, sources=sources, schema_version=artifacts.schema_version)
+        name_by_uid = {model.unique_id: model.name for model in models}
+        tests: list[DbtTest] = []
+        for node in manifest["nodes"].values():
+            if node.get("resource_type") != "test":
+                continue
+            metadata = node.get("test_metadata")
+            if not isinstance(metadata, dict):
+                continue
+            model_name = name_by_uid.get(node.get("attached_node"))
+            if model_name is None:
+                continue
+            tests.append(DbtTest(name=metadata["name"], model=model_name, column=node.get("column_name")))
+
+        return cls(models=models, sources=sources, tests=tests, schema_version=artifacts.schema_version)
 
     def model(self, name_or_uid: str) -> ModelRef | None:
         """Return the model addressed by short name or unique id, or `None` if there is none.
@@ -261,6 +292,14 @@ class DbtContext:
             The models, in manifest order.
         """
         return list(self._models)
+
+    def tests(self) -> list[DbtTest]:
+        """Return the project's data tests attached to models.
+
+        Returns:
+            The data tests, in manifest order.
+        """
+        return list(self._tests)
 
     def sources(self) -> list[SourceRef]:
         """Return the project's source tables.

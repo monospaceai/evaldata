@@ -6,11 +6,19 @@ from typing import Annotated, Any, Literal, assert_never
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from evaldata.dbt._yaml import read_yaml
-from evaldata.dbt.context import DbtContext
+from evaldata.dbt.context import DbtContext, DbtTest
 from evaldata.dbt.errors import DbtError
-from evaldata.types import EvalCase, GoldQuery, PlatformRef
+from evaldata.types import (
+    EvalCase,
+    Expectation,
+    ExpectationSuite,
+    GoldQuery,
+    NotNullExpectation,
+    PlatformRef,
+    UniqueExpectation,
+)
 
-Mode = Literal["authored", "model"]
+Mode = Literal["authored", "model", "tests"]
 
 
 class _AuthoredCase(BaseModel):
@@ -39,14 +47,17 @@ def load_dbt(
     In `authored` mode (the default), `cases` is a YAML/JSON file of `{question, gold_sql,
     select?, id?}` entries; `select` scopes the schema context to named tables. In `model` mode,
     each documented, compiled model becomes a case whose question is the model's description and
-    whose gold query is the model's compiled SQL.
+    whose gold query is the model's compiled SQL. In `tests` mode, each documented model with
+    `not_null` or `unique` tests becomes a case whose expected outcome is an `ExpectationSuite`
+    built from those tests.
 
     Args:
         target_dir: A dbt `target/` directory holding `manifest.json` (and optionally
             `catalog.json`).
         platform: The warehouse the project is built in; every case runs against it.
         cases: Path to the cases file (required for `authored` mode; ignored for `model`).
-        mode: `authored` to read `cases`, or `model` to derive cases from documented models.
+        mode: `authored` to read `cases`, `model` to derive cases from documented models, or
+            `tests` to build expectation suites from documented models' data tests.
 
     Returns:
         The eval cases, or a `DbtError` if the artifacts, cases, or mode inputs cannot be read.
@@ -59,6 +70,8 @@ def load_dbt(
             return _authored_cases(context, platform, cases)
         case "model":
             return _model_cases(context, platform)
+        case "tests":
+            return _test_cases(context, platform)
         case _ as unreachable:  # pragma: no cover - exhaustiveness guard
             assert_never(unreachable)
 
@@ -101,6 +114,41 @@ def _model_cases(context: DbtContext, platform: PlatformRef) -> list[EvalCase]:
                 id=f"dbt/model/{model.name}",
                 input=model.description,
                 expected=GoldQuery(sql=model.compiled_sql),
+                platform=platform,
+                metadata=_metadata(schema_ddl, model=model.name),
+            )
+        )
+    return out
+
+
+def _expectation_for(test: DbtTest) -> Expectation | None:
+    if test.column is None:
+        return None
+    if test.name == "not_null":
+        return NotNullExpectation(column=test.column)
+    if test.name == "unique":
+        return UniqueExpectation(column=test.column)
+    return None
+
+
+def _test_cases(context: DbtContext, platform: PlatformRef) -> list[EvalCase]:
+    suites: dict[str, list[Expectation]] = {}
+    for test in context.tests():
+        expectation = _expectation_for(test)
+        if expectation is not None:
+            suites.setdefault(test.model, []).append(expectation)
+
+    schema_ddl = context.schema_context().as_text()
+    out: list[EvalCase] = []
+    for model in context.models():
+        expectations = suites.get(model.name)
+        if not model.description or not expectations:
+            continue
+        out.append(
+            EvalCase(
+                id=f"dbt/test/{model.name}",
+                input=model.description,
+                expected=ExpectationSuite(expectations=expectations),
                 platform=platform,
                 metadata=_metadata(schema_ddl, model=model.name),
             )

@@ -56,6 +56,53 @@ def test_models_returns_all_models_in_order(ctx: DbtContext) -> None:
     assert [m.name for m in ctx.models()] == ["stg_customers", "stg_orders", "customers"]
 
 
+def test_tests_returns_model_tests(ctx: DbtContext) -> None:
+    assert {(t.name, t.model, t.column) for t in ctx.tests()} == {
+        ("unique", "customers", "customer_id"),
+        ("not_null", "customers", "customer_id"),
+    }
+
+
+def test_tests_skip_singular_and_unattached(tmp_path: Path) -> None:
+    manifest = {
+        "metadata": {"dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json"},
+        "nodes": {
+            "model.p.m": {
+                "resource_type": "model",
+                "name": "m",
+                "database": "db",
+                "schema": "sc",
+                "alias": "m",
+                "relation_name": '"db"."sc"."m"',
+                "columns": {},
+                "compiled_code": "select 1",
+                "description": "m",
+            },
+            "test.p.generic": {
+                "resource_type": "test",
+                "test_metadata": {"name": "not_null"},
+                "column_name": "id",
+                "attached_node": "model.p.m",
+            },
+            "test.p.singular": {"resource_type": "test", "column_name": None, "attached_node": "model.p.m"},
+            "test.p.unattached": {
+                "resource_type": "test",
+                "test_metadata": {"name": "unique"},
+                "column_name": "id",
+                "attached_node": "model.p.unknown",
+            },
+        },
+        "sources": {},
+    }
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    ctx = DbtContext.from_target_dir(target)
+    assert isinstance(ctx, DbtContext)
+    # The singular test (no test_metadata) and the test on an unknown model are dropped.
+    assert [(t.name, t.model, t.column) for t in ctx.tests()] == [("not_null", "m", "id")]
+
+
 def test_model_addressable_by_name_and_uid(ctx: DbtContext) -> None:
     by_name = ctx.model("customers")
     by_uid = ctx.model("model.jaffle_duckdb.customers")

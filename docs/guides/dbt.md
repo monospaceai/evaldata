@@ -59,6 +59,8 @@ EX (dbt): 72.0% (18/25)
 
 - `--mode model` — skip the cases file; instead take every documented model, asking its
   description as the question and using its compiled SQL as the gold answer.
+- `--mode tests` — instead check each documented model's result against its `not_null` and
+  `unique` data tests, rather than against a gold query.
 - `--target-dir DIR` — where the artifacts live, if not `<project>/target`.
 - `--profiles-dir DIR` / `--target NAME` — find and select the dbt profile target.
 - `--limit N` — run only the first `N` questions.

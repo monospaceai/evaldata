@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from evaldata.dbt.context import DbtContext, ModelRef, Relation
+from evaldata.dbt.context import DbtContext, DbtTest, ModelRef, Relation
 from evaldata.dbt.errors import DbtError
-from evaldata.dbt.loader import _model_cases, load_dbt
+from evaldata.dbt.loader import _expectation_for, _model_cases, _test_cases, load_dbt
 from evaldata.platforms.registry import duckdb_platform
-from evaldata.types import GoldQuery
+from evaldata.types import ExpectationSuite, GoldQuery
 
 pytestmark = pytest.mark.unit
 
@@ -104,7 +104,41 @@ def test_model_mode_skips_undocumented_or_uncompiled() -> None:
     documented = ModelRef("m1", "model.x.m1", relation, "select 1", "documented", ())
     no_description = ModelRef("m2", "model.x.m2", relation, "select 2", None, ())
     no_compiled_sql = ModelRef("m3", "model.x.m3", relation, None, "documented but not compiled", ())
-    context = DbtContext(models=[documented, no_description, no_compiled_sql], sources=[], schema_version="v12")
+    context = DbtContext(
+        models=[documented, no_description, no_compiled_sql], sources=[], tests=[], schema_version="v12"
+    )
 
     cases = _model_cases(context, PLATFORM)
     assert [c.id for c in cases] == ["dbt/model/m1"]
+
+
+def test_tests_mode(tmp_path: Path) -> None:
+    cases = load_dbt(ARTIFACTS, platform=PLATFORM, mode="tests")
+    assert not isinstance(cases, DbtError)
+    assert [c.id for c in cases] == ["dbt/test/customers"]
+    suite = cases[0].expected
+    assert isinstance(suite, ExpectationSuite)
+    assert sorted(e.kind for e in suite.expectations) == ["not_null", "unique"]
+    assert cases[0].metadata["model"] == "customers"
+
+
+def test_expectation_for_maps_supported_tests() -> None:
+    assert _expectation_for(DbtTest("not_null", "m", "c")).kind == "not_null"
+    assert _expectation_for(DbtTest("unique", "m", "c")).kind == "unique"
+    assert _expectation_for(DbtTest("relationships", "m", "c")) is None
+    assert _expectation_for(DbtTest("not_null", "m", None)) is None
+
+
+def test_test_cases_filters_models_and_unsupported_tests() -> None:
+    relation = Relation("db", "sc", "m", '"db"."sc"."m"')
+    with_tests = ModelRef("m1", "model.x.m1", relation, "select 1", "documented", ())
+    no_tests = ModelRef("m2", "model.x.m2", relation, "select 2", "documented", ())
+    undocumented = ModelRef("m3", "model.x.m3", relation, "select 3", None, ())
+    tests = [DbtTest("not_null", "m1", "c"), DbtTest("relationships", "m1", "c"), DbtTest("not_null", "m3", "c")]
+    context = DbtContext(models=[with_tests, no_tests, undocumented], sources=[], tests=tests, schema_version="v12")
+
+    cases = _test_cases(context, PLATFORM)
+    assert [c.id for c in cases] == ["dbt/test/m1"]
+    suite = cases[0].expected
+    assert isinstance(suite, ExpectationSuite)
+    assert [e.kind for e in suite.expectations] == ["not_null"]

@@ -8,6 +8,7 @@ and exposes models, sources, and schema context. `load_dbt` converts them into e
 from evaldata.dbt.context import (
     Column,
     DbtContext,
+    DbtTest,
     ModelRef,
     Relation,
     SchemaContext,
@@ -15,13 +16,15 @@ from evaldata.dbt.context import (
     TableSchema,
 )
 from evaldata.dbt.errors import DbtError
-from evaldata.dbt.loader import load_dbt
+from evaldata.dbt.loader import Mode, load_dbt
 from evaldata.dbt.profile import platform_from_profile
 
 __all__ = [
     "Column",
     "DbtContext",
     "DbtError",
+    "DbtTest",
+    "Mode",
     "ModelRef",
     "Relation",
     "SchemaContext",

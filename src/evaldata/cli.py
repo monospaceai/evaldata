@@ -26,7 +26,7 @@ from evaldata.platforms.registry import (
     resolve,
     sqlite_platform,
 )
-from evaldata.scorers import ExecutionAccuracy, Scorer
+from evaldata.scorers import ExecutionAccuracy, ExpectationSuiteScorer, Scorer
 from evaldata.solvers import SCHEMA_PROMPT_TEMPLATE, PromptSolver
 from evaldata.types import EvalCase, PlatformRef
 
@@ -205,6 +205,7 @@ class _DbtMode(enum.StrEnum):
 
     authored = "authored"
     model = "model"
+    tests = "tests"
 
 
 @app.command(name="dbt-bench")
@@ -213,7 +214,7 @@ def dbt_bench(
     model: str = typer.Option(..., "--model", help="litellm model id for the solver under test."),
     cases_file: Path | None = typer.Option(None, "--cases", help="Cases YAML file (required for --mode authored)."),
     mode: _DbtMode = typer.Option(
-        _DbtMode.authored, "--mode", help="Build cases from a cases file or documented models."
+        _DbtMode.authored, "--mode", help="Build cases from a cases file, documented models, or their data tests."
     ),
     target_dir: Path | None = typer.Option(
         None, "--target-dir", help="dbt artifacts directory; defaults to <project_dir>/target."
@@ -231,16 +232,17 @@ def dbt_bench(
 ) -> None:
     """Run a dbt project as a text-to-SQL benchmark and print its execution accuracy (EX).
 
-    Resolves the project's warehouse from its dbt profile, builds cases from a cases file
-    (`authored`) or the project's documented models (`model`), runs a single-prompt LLM solver
-    with the project's schema in the prompt, scores each case with order-insensitive set
-    execution accuracy, and prints the aggregate EX.
+    Resolves the project's warehouse from its dbt profile, builds cases (from a cases file, the
+    documented models, or their data tests), runs a single-prompt LLM solver with the project's
+    schema in the prompt, scores each case (execution accuracy, or the expectation suite in
+    `tests` mode), and prints the aggregate pass rate.
 
     Args:
         project_dir: The dbt project directory (holding `dbt_project.yml`).
         model: A litellm model id for the solver under test.
         cases_file: Path to the cases YAML file (required for `authored` mode).
-        mode: `authored` to read the cases file, or `model` to derive cases from documented models.
+        mode: `authored` to read the cases file, `model` to derive cases from documented models,
+            or `tests` to build expectation suites from documented models' data tests.
         target_dir: The dbt artifacts directory; defaults to `<project_dir>/target`.
         profiles_dir: Directory holding `profiles.yml`; defaults to `project_dir`.
         target: The dbt profile target name; defaults to the profile's `target`.
@@ -257,18 +259,17 @@ def dbt_bench(
         raise typer.Exit(1)
 
     artifacts = target_dir if target_dir is not None else project_dir / "target"
-    cases = load_dbt(
-        artifacts,
-        platform=platform,
-        cases=cases_file,
-        mode="authored" if mode is _DbtMode.authored else "model",
-    )
+    cases = load_dbt(artifacts, platform=platform, cases=cases_file, mode=mode.value)
     if isinstance(cases, DbtError):
         console.print(Text(cases.message, style="red"))
         raise typer.Exit(1)
 
     solver = PromptSolver(model, prompt_template=SCHEMA_PROMPT_TEMPLATE, temperature=0)
-    scorer = ExecutionAccuracy(row_order="ignore", multiplicity="set")
+    scorer: Scorer = (
+        ExpectationSuiteScorer()
+        if mode is _DbtMode.tests
+        else ExecutionAccuracy(row_order="ignore", multiplicity="set")
+    )
     try:
         summary = run_benchmark(cases, solver, scorers=[scorer], limit=limit)
     finally:
