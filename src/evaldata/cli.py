@@ -15,7 +15,15 @@ from rich.text import Text
 
 from evaldata.core import run_benchmark
 from evaldata.core.runner import BenchmarkSummary
-from evaldata.dbt import DbtError, load_dbt, platform_from_profile
+from evaldata.dbt import (
+    DbtError,
+    MetricLayerSolver,
+    load_dbt,
+    load_dbt_metrics,
+    metric_layer_equivalence,
+    platform_from_profile,
+    run_metric_benchmark,
+)
 from evaldata.loaders import load_bird, load_spider
 from evaldata.loaders.benchmarks import SOURCES, cached_dataset_path, fetch_benchmark
 from evaldata.platforms.registry import (
@@ -280,6 +288,78 @@ def dbt_bench(
         stats = {
             "model": model,
             "mode": mode.value,
+            "total": summary.total,
+            "passed": summary.passed,
+            "accuracy": summary.accuracy,
+            "cases": [r.model_dump(mode="json") for r in summary.cases],
+        }
+        json_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")
+
+
+@app.command(name="sl-bench")
+def sl_bench(
+    project_dir: Path = typer.Argument(..., help="dbt project directory (holds dbt_project.yml and profiles.yml)."),
+    model: str = typer.Option(..., "--model", help="litellm model id for the Semantic Layer solver under test."),
+    cases_file: Path = typer.Option(..., "--cases", help="Metric cases YAML file."),
+    grader_model: str | None = typer.Option(
+        None, "--grader-model", help="litellm model id for the judge tier; defaults to --model."
+    ),
+    target_dir: Path | None = typer.Option(
+        None, "--target-dir", help="dbt artifacts directory; defaults to <project_dir>/target."
+    ),
+    profiles_dir: Path | None = typer.Option(
+        None, "--profiles-dir", help="Directory holding profiles.yml; defaults to the project directory."
+    ),
+    target: str | None = typer.Option(
+        None, "--target", help="dbt profile target name; defaults to the profile's target."
+    ),
+    limit: int | None = typer.Option(None, "--limit", help="Run at most this many cases."),
+    json_path: Path | None = typer.Option(
+        None, "--json", metavar="PATH", help="Also write a JSON stats artifact to PATH."
+    ),
+) -> None:
+    """Run a dbt Semantic Layer project as a MetricFlow benchmark and print its accuracy.
+
+    Resolves the project's warehouse from its dbt profile, builds metric cases from the cases file,
+    runs a single-prompt LLM solver that writes a MetricFlow query per question, scores each with
+    a cost-ordered cascade (resolve-and-compare, run-and-compare, LLM judge), and prints the
+    aggregate pass rate.
+
+    Args:
+        project_dir: The dbt project directory (holding `dbt_project.yml`).
+        model: A litellm model id for the solver under test.
+        cases_file: Path to the metric cases YAML file.
+        grader_model: A litellm model id for the judge tier; defaults to `model`.
+        target_dir: The dbt artifacts directory; defaults to `<project_dir>/target`.
+        profiles_dir: Directory holding `profiles.yml`; defaults to `project_dir`.
+        target: The dbt profile target name; defaults to the profile's `target`.
+        limit: Run at most this many cases, or all of them when omitted.
+        json_path: If given, also write a JSON stats artifact to this path.
+
+    Raises:
+        Exit: With code 1 if the profile or cases cannot be resolved.
+    """
+    console = Console()
+    platform = platform_from_profile(project_dir, profiles_dir=profiles_dir, target=target)
+    if isinstance(platform, DbtError):
+        console.print(Text(platform.message, style="red"))
+        raise typer.Exit(1)
+
+    artifacts = target_dir if target_dir is not None else project_dir / "target"
+    cases = load_dbt_metrics(artifacts, platform=platform, cases=cases_file)
+    if isinstance(cases, DbtError):
+        console.print(Text(cases.message, style="red"))
+        raise typer.Exit(1)
+
+    solver = MetricLayerSolver(model, temperature=0)
+    scorers = [metric_layer_equivalence(grader_model or model)]
+    summary = run_metric_benchmark(cases, solver, scorers=scorers, limit=limit)
+
+    console.print(f"SL accuracy: {summary.accuracy:.1%} ({summary.passed}/{summary.total})")
+    if json_path is not None:
+        stats = {
+            "model": model,
+            "grader_model": grader_model or model,
             "total": summary.total,
             "passed": summary.passed,
             "accuracy": summary.accuracy,

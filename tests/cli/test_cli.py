@@ -360,6 +360,94 @@ class TestDbtBench:
 
 
 @pytest.mark.unit
+class TestSlBench:
+    def _project(self, tmp_path: Path) -> Path:
+        project = _copy_dbt_project(tmp_path)
+        target = project / "target"
+        shutil.copytree(project / "artifacts", target)
+        return project
+
+    def test_prints_accuracy_and_writes_json(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import litellm
+
+        project = self._project(tmp_path)
+        (project / "cases.yml").write_text(
+            "- question: revenue by month?\n  metrics: [revenue]\n  group_by: [metric_time__month]\n"
+        )
+        # The solver returns the gold query, so the spec tier confirms without running `mf`.
+        real_completion = litellm.completion
+        monkeypatch.setattr(
+            "litellm.completion",
+            lambda **kwargs: real_completion(
+                **kwargs, mock_response='{"metrics": ["revenue"], "group_by": ["metric_time__month"]}'
+            ),
+        )
+        artifact = tmp_path / "stats.json"
+
+        result = runner.invoke(
+            app,
+            [
+                "sl-bench",
+                str(project),
+                "--model",
+                "openai/gpt-4o-mini",
+                "--cases",
+                str(project / "cases.yml"),
+                "--json",
+                str(artifact),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "SL accuracy: 100.0% (1/1)" in result.output
+        stats = json.loads(artifact.read_text())
+        assert stats["passed"] == 1
+        assert stats["grader_model"] == "openai/gpt-4o-mini"
+
+    def test_grader_model_without_json(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import litellm
+
+        project = self._project(tmp_path)
+        (project / "cases.yml").write_text(
+            "- question: revenue by month?\n  metrics: [revenue]\n  group_by: [metric_time__month]\n"
+        )
+        real_completion = litellm.completion
+        monkeypatch.setattr(
+            "litellm.completion",
+            lambda **kwargs: real_completion(
+                **kwargs, mock_response='{"metrics": ["revenue"], "group_by": ["metric_time__month"]}'
+            ),
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "sl-bench",
+                str(project),
+                "--model",
+                "openai/gpt-4o-mini",
+                "--grader-model",
+                "openai/gpt-4o",
+                "--cases",
+                str(project / "cases.yml"),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "SL accuracy: 100.0% (1/1)" in result.output
+
+    def test_profile_error_exits_1(self, tmp_path: Path) -> None:
+        result = runner.invoke(app, ["sl-bench", str(tmp_path), "--model", "m", "--cases", str(tmp_path / "c.yml")])
+        assert result.exit_code == 1
+        assert "dbt_project.yml" in result.output
+
+    def test_missing_cases_exits_1(self, tmp_path: Path) -> None:
+        project = self._project(tmp_path)
+        result = runner.invoke(app, ["sl-bench", str(project), "--model", "m", "--cases", str(project / "missing.yml")])
+        assert result.exit_code == 1
+
+
+@pytest.mark.unit
 class TestFetchCommand:
     def test_unknown_dataset_bad_parameter(self) -> None:
         result = runner.invoke(app, ["fetch", "notadataset"])
