@@ -128,16 +128,17 @@ class Metric:
 
 @dataclass(frozen=True)
 class SemanticLayerContext:
-    """A project's semantic-layer metrics, dimensions, and entities as prompt context."""
+    """A project's metrics and semantic models as prompt context for an SL-query solver."""
 
     metrics: tuple[Metric, ...]
-    dimensions: tuple[Dimension, ...]
-    entities: tuple[Entity, ...]
+    semantic_models: tuple[SemanticModel, ...]
 
     def as_text(self) -> str:
-        """Render the metrics, dimensions, and entities as a prompt block.
+        """Render the metrics and each semantic model's entities, dimensions, and measures.
 
-        Sections with no members are omitted; an empty layer renders as the empty string.
+        Rendering per semantic model keeps a dimension's owning model and entities visible, so a
+        same-named dimension on two models stays distinguishable. Sections with no members are
+        omitted; an empty layer renders as the empty string.
 
         Returns:
             The rendered semantic-layer context block.
@@ -149,19 +150,21 @@ class SemanticLayerContext:
                 described = f" -- {metric.description}" if metric.description else ""
                 lines.append(f"  {metric.name} ({metric.type}){described}")
             sections.append("\n".join(lines))
-        if self.dimensions:
-            lines = ["Dimensions:"]
-            for dimension in self.dimensions:
-                grain = f", {dimension.granularity}" if dimension.granularity else ""
-                described = f" -- {dimension.description}" if dimension.description else ""
-                lines.append(f"  {dimension.name} ({dimension.type}{grain}){described}")
-            sections.append("\n".join(lines))
-        if self.entities:
-            lines = ["Entities:"]
-            for entity in self.entities:
-                lines.append(f"  {entity.name} ({entity.type})")
-            sections.append("\n".join(lines))
+        for model in self.semantic_models:
+            sections.append(_render_semantic_model(model))
         return "\n\n".join(sections)
+
+
+def _render_semantic_model(model: SemanticModel) -> str:
+    lines = [f"Semantic model: {model.name}"]
+    if model.entities:
+        lines.append("  entities: " + ", ".join(f"{e.name} ({e.type})" for e in model.entities))
+    if model.dimensions:
+        dimensions = [f"{d.name} ({d.type}{f', {d.granularity}' if d.granularity else ''})" for d in model.dimensions]
+        lines.append("  dimensions: " + ", ".join(dimensions))
+    if model.measures:
+        lines.append("  measures: " + ", ".join(f"{m.name} ({m.agg})" for m in model.measures))
+    return "\n".join(lines)
 
 
 @dataclass(frozen=True)
@@ -503,18 +506,12 @@ class DbtContext:
         return list(_unique_by_name(d for model in self._semantic_models for d in model.dimensions))
 
     def sl_context(self) -> SemanticLayerContext:
-        """Build a `SemanticLayerContext` from the project's metrics, dimensions, and entities.
+        """Build a `SemanticLayerContext` from the project's metrics and semantic models.
 
         Returns:
-            A `SemanticLayerContext` with dimensions and entities deduplicated by name across all
-            semantic models (first occurrence kept).
+            A `SemanticLayerContext` over the project's metrics and semantic models.
         """
-        entities = _unique_by_name(e for model in self._semantic_models for e in model.entities)
-        return SemanticLayerContext(
-            metrics=self._metrics,
-            dimensions=tuple(self.dimensions()),
-            entities=entities,
-        )
+        return SemanticLayerContext(metrics=self._metrics, semantic_models=self._semantic_models)
 
     def schema_context(
         self,

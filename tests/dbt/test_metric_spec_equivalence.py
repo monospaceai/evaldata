@@ -103,12 +103,22 @@ def test_scorer_is_inconclusive_for_different_queries() -> None:
     assert score.verdict == "inconclusive"
 
 
-def test_scorer_is_inconclusive_when_model_query_is_invalid() -> None:
+def test_scorer_fails_invalid_candidate() -> None:
+    # An unresolvable candidate is a decisive fail, not routed onward to the judge.
     case = _case(MetricQuery(metrics=["revenue"]))
     score = _score(case, MetricQuery(metrics=["does_not_exist"]))
-    assert score.verdict == "inconclusive"
+    assert score.verdict == "fail"
+    assert score.basis == "proven"
     assert score.explanation is not None
     assert score.explanation.startswith("model query:")
+
+
+def test_scorer_is_inconclusive_when_manifest_missing(tmp_path: Path) -> None:
+    case = MetricCase(
+        id="c", input="q", gold=MetricQuery(metrics=["revenue"]), platform=PLATFORM, target_dir=str(tmp_path)
+    )
+    score = _score(case, MetricQuery(metrics=["revenue"]))
+    assert score.verdict == "inconclusive"
 
 
 def test_scorer_is_inconclusive_when_gold_query_is_invalid() -> None:

@@ -341,7 +341,7 @@ def sl_bench(
         raise typer.Exit(1)
 
     artifacts = target_dir if target_dir is not None else project_dir / "target"
-    cases = load_dbt_metrics(artifacts, platform=platform, cases=cases_file)
+    cases = load_dbt_metrics(artifacts, platform=platform, cases=cases_file, profiles_dir=profiles_dir)
     if isinstance(cases, DbtError):
         console.print(Text(cases.message, style="red"))
         raise typer.Exit(1)

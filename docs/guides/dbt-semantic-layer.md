@@ -9,10 +9,11 @@ cheapest check first and exits as soon as one reaches a verdict.
 ## Prerequisites
 
 ```bash
-uv add "evaldata[dbt,dbt-sl]"
+uv add "evaldata[dbt,dbt-sl,litellm]"
 ```
 
-The `dbt-sl` extra pulls in `dbt-metricflow`, the toolchain that resolves and runs metric queries.
+The `dbt-sl` extra pulls in `dbt-metricflow`, the toolchain that resolves and runs metric queries;
+`litellm` backs the solver and the judge when you pass a model id.
 
 You also need a built dbt project with a semantic layer (semantic models and metrics). Parse it so
 `target/` holds the semantic manifest, and build it so the warehouse has the data to query:

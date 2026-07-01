@@ -1,5 +1,6 @@
-"""Unit tests for the `mf`-command wiring: command building and the missing-toolchain path."""
+"""Unit tests for the `mf`-command wiring: command building, profiles dir, and error paths."""
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,19 @@ from evaldata.dbt import DbtError, MetricQuery, run
 from evaldata.dbt.metricflow import _query_command
 
 pytestmark = pytest.mark.unit
+
+
+def _fake_mf(monkeypatch: pytest.MonkeyPatch, captured: dict, *, returncode: int = 0) -> None:
+    """Stub out `mf` discovery and execution, writing a CSV and recording the call's env/cwd."""
+    monkeypatch.setattr("evaldata.dbt.metricflow.shutil.which", lambda _: "mf")
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured["env"] = kwargs["env"]
+        captured["cwd"] = kwargs["cwd"]
+        Path(command[command.index("--csv") + 1]).write_text("a,b\n1,2\n", encoding="utf-8")
+        return subprocess.CompletedProcess(command, returncode, stdout="", stderr="boom")
+
+    monkeypatch.setattr("evaldata.dbt.metricflow.subprocess.run", fake_run)
 
 
 def test_query_command_includes_all_parts() -> None:
@@ -41,3 +55,28 @@ def test_run_without_mf_on_path(monkeypatch: pytest.MonkeyPatch) -> None:
     result = run(MetricQuery(metrics=["revenue"]), "target")
     assert isinstance(result, DbtError)
     assert result.kind == "metricflow_unavailable"
+
+
+def test_run_parses_csv_and_defaults_profiles_to_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict = {}
+    _fake_mf(monkeypatch, captured)
+    rows = run(MetricQuery(metrics=["revenue"]), "/proj/target")
+    assert rows == [{"a": "1", "b": "2"}]
+    assert captured["env"]["DBT_PROFILES_DIR"] == str(Path("/proj"))
+    assert str(captured["cwd"]) == str(Path("/proj"))
+
+
+def test_run_honours_explicit_profiles_dir(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict = {}
+    _fake_mf(monkeypatch, captured)
+    run(MetricQuery(metrics=["revenue"]), "/proj/target", profiles_dir="/home/me/.dbt")
+    assert captured["env"]["DBT_PROFILES_DIR"] == "/home/me/.dbt"
+
+
+def test_run_reports_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict = {}
+    _fake_mf(monkeypatch, captured, returncode=1)
+    result = run(MetricQuery(metrics=["revenue"]), "/proj/target")
+    assert isinstance(result, DbtError)
+    assert result.kind == "metric_query_invalid"
+    assert "boom" in result.message

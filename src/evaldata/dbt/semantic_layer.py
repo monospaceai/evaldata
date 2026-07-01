@@ -29,7 +29,8 @@ class MetricCase(BaseModel):
     """One Semantic Layer evaluation case: a question, a gold metric query, and its resolution context.
 
     `target_dir` is the dbt `target/` directory used to resolve both the gold and candidate queries;
-    `sl_context` is the rendered semantic layer offered to a solver.
+    `profiles_dir` is where `mf` looks for `profiles.yml` when running them (the project directory
+    when omitted); `sl_context` is the rendered semantic layer offered to a solver.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -39,6 +40,7 @@ class MetricCase(BaseModel):
     gold: MetricQuery
     platform: PlatformRef
     target_dir: Annotated[str, Field(min_length=1)]
+    profiles_dir: str | None = None
     sl_context: str = ""
     metadata: dict[str, object] = Field(default_factory=dict)
 

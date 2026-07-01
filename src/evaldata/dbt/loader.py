@@ -92,7 +92,7 @@ def load_dbt(
 
 
 def load_dbt_metrics(
-    target_dir: str | Path, *, platform: PlatformRef, cases: str | Path
+    target_dir: str | Path, *, platform: PlatformRef, cases: str | Path, profiles_dir: str | Path | None = None
 ) -> list[MetricCase] | DbtError:
     """Build Semantic Layer `MetricCase`s from a metric cases file.
 
@@ -104,6 +104,8 @@ def load_dbt_metrics(
         target_dir: A dbt `target/` directory holding `manifest.json` and `semantic_manifest.json`.
         platform: The warehouse the project is built in; every case runs against it.
         cases: Path to the metric cases file.
+        profiles_dir: Where `mf` looks for `profiles.yml` when running queries; defaults to the
+            project directory.
 
     Returns:
         The metric cases, or a `DbtError` if the artifacts or cases cannot be read.
@@ -137,6 +139,7 @@ def load_dbt_metrics(
                 ),
                 platform=platform,
                 target_dir=str(target_dir),
+                profiles_dir=str(profiles_dir) if profiles_dir is not None else None,
                 sl_context=sl_context,
             )
         )

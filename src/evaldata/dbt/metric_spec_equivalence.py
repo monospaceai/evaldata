@@ -9,9 +9,12 @@ SCORER_NAME = "metric_spec_equivalence"
 
 
 class MetricSpecEquivalence:
-    """Confirms equivalence by comparing MetricFlow-resolved forms; never refutes.
+    """Compares two metric queries by the forms MetricFlow resolves them to.
 
-    Equal resolved forms pass (proven); unequal forms or any resolution failure is inconclusive.
+    Equal forms pass (proven). A candidate that MetricFlow rejects fails (proven) — an
+    unresolvable query cannot answer the question. Everything else — unequal forms, an invalid
+    gold, or the toolchain being unavailable — is inconclusive; it never refutes on a structural
+    difference alone.
     """
 
     def score(self, case: MetricCase, query: MetricQuery) -> ScoreResult:
@@ -22,11 +25,15 @@ class MetricSpecEquivalence:
             query: The candidate metric query.
 
         Returns:
-            A passing, proven `ScoreResult` when both queries resolve to the same MetricFlow query,
-            else an inconclusive result.
+            A proven pass when the queries resolve to the same form, a proven fail when the
+            candidate does not resolve against the manifest, else an inconclusive result.
         """
         candidate = canonicalize(query, case.target_dir)
         if isinstance(candidate, DbtError):
+            if candidate.kind == "metric_query_invalid":
+                return ScoreResult(
+                    scorer=SCORER_NAME, verdict="fail", basis="proven", explanation=f"model query: {candidate.message}"
+                )
             return _inconclusive(f"model query: {candidate.message}")
         gold = canonicalize(case.gold, case.target_dir)
         if isinstance(gold, DbtError):

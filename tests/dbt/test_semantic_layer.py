@@ -13,11 +13,13 @@ from evaldata.dbt import (
     Metric,
     Relation,
     SemanticLayerContext,
+    SemanticModel,
 )
 
 pytestmark = pytest.mark.unit
 
 FIXTURE_ARTIFACTS = Path(__file__).parent / "fixtures" / "jaffle_duckdb" / "artifacts"
+_RELATION = Relation(database="db", schema="sc", identifier="m", quoted='"db"."sc"."m"')
 
 MANIFEST_HEADER = {
     "metadata": {"dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json"},
@@ -91,14 +93,11 @@ def test_dimensions_dedupes_by_name(ctx: DbtContext) -> None:
 
 def test_sl_context_renders_fixture(ctx: DbtContext) -> None:
     text = ctx.sl_context().as_text()
-    assert "Metrics:" in text
     assert "  revenue (simple) -- Sum of order amounts." in text
-    assert "Dimensions:" in text
-    assert "  ordered_at (time, day) -- The date the order was placed." in text
-    assert "  is_large_order (categorical) -- Whether the order total is at least 50." in text
-    assert "Entities:" in text
-    assert "  order_id (primary)" in text
-    assert "  customer (foreign)" in text
+    assert "Semantic model: orders" in text
+    assert "  entities: order_id (primary), customer (foreign)" in text
+    assert "  dimensions: ordered_at (time, day), is_large_order (categorical)" in text
+    assert "  measures: order_total (sum), order_count (sum)" in text
 
 
 def test_project_without_semantic_layer(tmp_path: Path) -> None:
@@ -158,16 +157,21 @@ def test_parses_optional_fields_and_dedupes_across_models(tmp_path: Path) -> Non
     assert model_a.dimensions[0] == Dimension(
         name="region", type="categorical", expr=None, granularity=None, description=None
     )
-    # The shared entity and dimension names collapse to one each.
+    # The flat `dimensions()` accessor dedupes by name...
     assert [d.name for d in built.dimensions()] == ["region"]
-    assert [e.name for e in built.sl_context().entities] == ["shared"]
+    # ...but the prompt context keeps each model's dimensions distinct, so a same-named dimension
+    # on two models stays disambiguable.
+    text = built.sl_context().as_text()
+    assert "Semantic model: a" in text
+    assert "Semantic model: b" in text
+    assert text.count("region (categorical)") == 2
 
 
 def test_sl_context_renders_optional_fields_and_empty() -> None:
+    empty_model = SemanticModel(name="m", description=None, relation=_RELATION, entities=(), dimensions=(), measures=())
     context = SemanticLayerContext(
-        metrics=(Metric(name="m", type="simple", label=None, description=None),),
-        dimensions=(Dimension(name="d", type="categorical", expr=None, granularity=None, description=None),),
-        entities=(),
+        metrics=(Metric(name="rev", type="simple", label=None, description=None),),
+        semantic_models=(empty_model,),
     )
-    assert context.as_text() == "Metrics:\n  m (simple)\n\nDimensions:\n  d (categorical)"
-    assert SemanticLayerContext(metrics=(), dimensions=(), entities=()).as_text() == ""
+    assert context.as_text() == "Metrics:\n  rev (simple)\n\nSemantic model: m"
+    assert SemanticLayerContext(metrics=(), semantic_models=()).as_text() == ""

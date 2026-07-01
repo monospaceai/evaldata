@@ -16,7 +16,7 @@ def _case() -> MetricCase:
 
 def _stub_run(monkeypatch: pytest.MonkeyPatch, results: list[object]) -> None:
     calls = iter(results)
-    monkeypatch.setattr("evaldata.dbt.metric_result_equivalence.run", lambda query, target_dir: next(calls))
+    monkeypatch.setattr("evaldata.dbt.metric_result_equivalence.run", lambda *a, **k: next(calls))
 
 
 def test_pass_when_rows_match(monkeypatch: pytest.MonkeyPatch) -> None:

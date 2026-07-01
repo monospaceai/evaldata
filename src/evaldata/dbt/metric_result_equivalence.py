@@ -32,10 +32,10 @@ class MetricResultEquivalence:
             A passing or failing, observed `ScoreResult` when both queries run, else an
             inconclusive result.
         """
-        candidate = run(query, case.target_dir)
+        candidate = run(query, case.target_dir, profiles_dir=case.profiles_dir)
         if isinstance(candidate, DbtError):
             return _inconclusive(f"model query: {candidate.message}")
-        gold = run(case.gold, case.target_dir)
+        gold = run(case.gold, case.target_dir, profiles_dir=case.profiles_dir)
         if isinstance(gold, DbtError):
             return _inconclusive(f"gold query: {gold.message}")
 

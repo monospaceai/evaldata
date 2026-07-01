@@ -109,12 +109,15 @@ def _query_command(mf: str, query: MetricQuery, out_csv: Path) -> list[str]:
     return [*command, "--csv", str(out_csv)]
 
 
-def run(query: MetricQuery, target_dir: str | Path) -> list[dict[str, str]] | DbtError:
+def run(
+    query: MetricQuery, target_dir: str | Path, *, profiles_dir: str | Path | None = None
+) -> list[dict[str, str]] | DbtError:
     """Execute `query` with the `mf` CLI against the project whose `target/` is `target_dir`.
 
     Args:
         query: The metric query to run.
         target_dir: A dbt `target/` directory; its parent is the project root `mf` runs in.
+        profiles_dir: Where `mf` looks for `profiles.yml`; defaults to the project root.
 
     Returns:
         The result rows (column-to-value maps from the CSV export), or a `DbtError` if `mf`
@@ -129,7 +132,7 @@ def run(query: MetricQuery, target_dir: str | Path) -> list[dict[str, str]] | Db
     with tempfile.TemporaryDirectory() as tmp:
         out_csv = Path(tmp) / "result.csv"
         command = _query_command(mf, query, out_csv)
-        env = {**os.environ, "DBT_PROFILES_DIR": str(project_dir)}
+        env = {**os.environ, "DBT_PROFILES_DIR": str(profiles_dir if profiles_dir is not None else project_dir)}
         completed = subprocess.run(command, cwd=project_dir, env=env, capture_output=True, text=True, check=False)
         if completed.returncode != 0:
             detail = completed.stderr.strip() or completed.stdout.strip()

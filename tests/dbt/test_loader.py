@@ -82,7 +82,7 @@ def test_load_dbt_metrics(tmp_path: Path) -> None:
           metrics: [order_count]
         """,
     )
-    cases = load_dbt_metrics(ARTIFACTS, platform=PLATFORM, cases=cases_file)
+    cases = load_dbt_metrics(ARTIFACTS, platform=PLATFORM, cases=cases_file, profiles_dir="/home/me/.dbt")
     assert not isinstance(cases, DbtError)
     assert [c.id for c in cases] == ["revenue-by-month", "dbt/metrics/1"]
 
@@ -93,6 +93,7 @@ def test_load_dbt_metrics(tmp_path: Path) -> None:
     assert first.gold.order_by == ["-metric_time__month"]
     assert first.gold.limit == 12
     assert first.target_dir == str(ARTIFACTS)
+    assert first.profiles_dir == "/home/me/.dbt"
     assert "revenue" in first.sl_context
 
 
