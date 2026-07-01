@@ -1,10 +1,13 @@
-"""Resolve a `MetricQuery` through MetricFlow into a comparable canonical form.
+"""`canonicalize` and `run`: resolve and execute a `MetricQuery` through MetricFlow.
 
-MetricFlow itself parses and validates the query against the project's semantic manifest, so the
-resolution (default time grains, entity-linked dimension paths) matches what the warehouse would
-run. This is the one module that depends on the optional `dbt-metricflow` toolchain.
+This is the one module that depends on the optional `dbt-metricflow` toolchain.
 """
 
+import csv
+import os
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -93,3 +96,47 @@ def canonicalize(query: MetricQuery, target_dir: str | Path) -> CanonicalMetricQ
         limit=spec.limit,
         where=frozenset(w.where_sql_template for w in spec.filter_intersection.where_filters),
     )
+
+
+def _query_command(mf: str, query: MetricQuery, out_csv: Path) -> list[str]:
+    command = [mf, "query", "--quiet", "--metrics", ",".join(query.metrics)]
+    if query.group_by:
+        command += ["--group-by", ",".join(query.group_by)]
+    for predicate in query.where:
+        command += ["--where", predicate]
+    if query.order_by:
+        command += ["--order", ",".join(query.order_by)]
+    if query.limit is not None:
+        command += ["--limit", str(query.limit)]
+    return [*command, "--csv", str(out_csv)]
+
+
+def run(query: MetricQuery, target_dir: str | Path) -> list[dict[str, str]] | DbtError:
+    """Execute `query` with the `mf` command against the project that owns `target_dir`.
+
+    `mf` runs in the dbt project directory (`target_dir`'s parent), reading its
+    `semantic_manifest.json` and connecting to the warehouse through the project's profile.
+
+    Args:
+        query: The metric query to run.
+        target_dir: A dbt `target/` directory; its parent is the project `mf` runs in.
+
+    Returns:
+        The result rows (each a column-to-value mapping of the CSV export), or a `DbtError` if `mf`
+        is not installed (`metricflow_unavailable`) or the query fails to run (`metric_query_invalid`).
+    """
+    mf = shutil.which("mf")
+    if mf is None:
+        return DbtError(
+            kind="metricflow_unavailable", message="the 'mf' command is not on PATH; install the 'dbt-sl' extra"
+        )
+    project_dir = Path(target_dir).parent
+    with tempfile.TemporaryDirectory() as tmp:
+        out_csv = Path(tmp) / "result.csv"
+        command = _query_command(mf, query, out_csv)
+        env = {**os.environ, "DBT_PROFILES_DIR": str(project_dir)}
+        completed = subprocess.run(command, cwd=project_dir, env=env, capture_output=True, text=True, check=False)
+        if completed.returncode != 0:
+            detail = completed.stderr.strip() or completed.stdout.strip()
+            return DbtError(kind="metric_query_invalid", message=f"mf query failed: {detail[:500]}")
+        return list(csv.DictReader(out_csv.read_text(encoding="utf-8").splitlines()))

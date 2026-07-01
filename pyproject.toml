@@ -112,9 +112,9 @@ docs = [
     "mkdocstrings[python]>=1.0",
     "mike>=2.1",
 ]
-# Regenerates the committed dbt fixture artifacts. Not part of the default dev install;
-# the tests read the committed artifacts and never invoke dbt. `dbt-metricflow` carries the
-# semantic-layer toolchain (and pulls in dbt-core + dbt-duckdb) to emit semantic_manifest.json.
+# The dbt toolchain: regenerates the committed fixture artifacts and backs the Semantic Layer
+# e2e (which runs `mf` against the fixture DuckDB). Pulls in dbt-core + dbt-duckdb. Opt-in via
+# `--group fixtures`; the fast unit path never needs it.
 fixtures = [
     "dbt-metricflow[dbt-duckdb]>=0.13",
 ]

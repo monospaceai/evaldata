@@ -1,15 +1,17 @@
+# The `fixtures` group carries the dbt toolchain (dbt-metricflow[dbt-duckdb]) the Semantic
+# Layer e2e runs against; the other extras cover the rest of the suite.
 test *args:
-    uv run --all-extras pytest {{args}}
+    uv run --all-extras --group fixtures pytest {{args}}
 
 test-cov *args:
     uv run coverage erase
-    uv run --all-extras coverage run -m pytest {{args}}
+    uv run --all-extras --group fixtures coverage run -m pytest {{args}}
     uv run coverage combine
     uv run coverage report
 
 # Run only `cloud` e2e (Databricks, …) in isolation; needs the secrets in the env.
 test-cloud *args:
-    uv run --all-extras pytest -m cloud {{args}}
+    uv run --all-extras --group fixtures pytest -m cloud {{args}}
 
 # Regenerate the checked-in dbt fixture artifacts (needs the `fixtures` group: dbt-duckdb).
 dbt-fixture:
