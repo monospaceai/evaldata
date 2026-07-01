@@ -1,0 +1,7 @@
+cwd_benchmark_data:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: acme.duckdb
+      schema: main
