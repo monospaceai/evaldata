@@ -12,10 +12,12 @@ DbtErrorKind = Literal[
     "cases_invalid",
     "profile_not_found",
     "unsupported_adapter",
+    "metricflow_unavailable",
+    "metric_query_invalid",
 ]
 
 
 class DbtError(Error):
-    """A failure from loading a dbt project."""
+    """A failure from a dbt operation — artifact loading, profile resolution, or metric query resolution."""
 
     kind: DbtErrorKind

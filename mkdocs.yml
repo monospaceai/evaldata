@@ -94,6 +94,7 @@ nav:
       - Evaluate a hosted model: guides/hosted-model.md
       - Evaluate against Databricks: guides/databricks.md
       - Evaluate against a dbt project: guides/dbt.md
+      - Evaluate dbt Semantic Layer queries: guides/dbt-semantic-layer.md
       - Check semantic equivalence: guides/semantic-equivalence.md
       - Score with an LLM judge: guides/llm-judge.md
       - Run a text-to-SQL benchmark: guides/benchmarks.md

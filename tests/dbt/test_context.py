@@ -47,13 +47,13 @@ def test_builds_context_from_fusion_v20_manifest(tmp_path: Path) -> None:
 
 
 def test_models_and_sources_are_normalised(ctx: DbtContext) -> None:
-    assert {m.name for m in ctx._models} == {"stg_customers", "stg_orders", "customers"}
+    assert {m.name for m in ctx._models} == {"stg_customers", "stg_orders", "all_days", "customers"}
     assert {(s.source_name, s.name) for s in ctx.sources()} == {("jaffle", "raw_customers"), ("jaffle", "raw_orders")}
     assert ctx.schema_version() == "v12"
 
 
 def test_models_returns_all_models_in_order(ctx: DbtContext) -> None:
-    assert [m.name for m in ctx.models()] == ["stg_customers", "stg_orders", "customers"]
+    assert [m.name for m in ctx.models()] == ["stg_customers", "stg_orders", "all_days", "customers"]
 
 
 def test_tests_returns_model_tests(ctx: DbtContext) -> None:
@@ -153,18 +153,25 @@ def test_degrades_to_manifest_columns_without_catalog(tmp_path: Path) -> None:
 
 def test_tables_returns_sources_then_models(ctx: DbtContext) -> None:
     tables = ctx.tables()
-    assert [t.name for t in tables] == ["raw_customers", "raw_orders", "stg_customers", "stg_orders", "customers"]
+    assert [t.name for t in tables] == [
+        "raw_customers",
+        "raw_orders",
+        "stg_customers",
+        "stg_orders",
+        "all_days",
+        "customers",
+    ]
     assert all(isinstance(t, TableSchema) for t in tables)
 
 
 def test_schema_context_default_includes_everything(ctx: DbtContext) -> None:
     names = {t.name for t in ctx.schema_context().tables}
-    assert names == {"raw_customers", "raw_orders", "stg_customers", "stg_orders", "customers"}
+    assert names == {"raw_customers", "raw_orders", "stg_customers", "stg_orders", "all_days", "customers"}
 
 
 def test_schema_context_can_exclude_sources(ctx: DbtContext) -> None:
     names = {t.name for t in ctx.schema_context(include_sources=False).tables}
-    assert names == {"stg_customers", "stg_orders", "customers"}
+    assert names == {"stg_customers", "stg_orders", "all_days", "customers"}
 
 
 def test_schema_context_can_exclude_models(ctx: DbtContext) -> None:

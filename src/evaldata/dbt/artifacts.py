@@ -1,4 +1,4 @@
-"""Read and validate a dbt project's artifacts (manifest.json, catalog.json).
+"""Read and validate a dbt project's artifacts (manifest, catalog, semantic manifest).
 
 The manifest schema version is validated before any fields are read.
 """
@@ -19,10 +19,13 @@ class Artifacts:
     """A dbt project's parsed artifacts: the manifest, optional catalog, and schema version.
 
     `catalog` is `None` when the project has no `catalog.json` (no `dbt docs generate` was run).
+    `semantic_manifest` is `None` when the project has no `semantic_manifest.json` (no semantic
+    layer, or `dbt parse` was not run).
     """
 
     manifest: dict[str, Any]
     catalog: dict[str, Any] | None
+    semantic_manifest: dict[str, Any] | None
     schema_version: str
 
 
@@ -54,12 +57,11 @@ def _version_number(token: str) -> int | None:
 def read_artifacts(target_dir: str | Path) -> Artifacts | DbtError:
     """Read and validate the dbt artifacts in a `target/` directory.
 
-    Reads `manifest.json` (required) and `catalog.json` (optional), and checks the manifest
-    schema version is recent enough to read.
+    Reads `manifest.json` (required), `catalog.json`, and `semantic_manifest.json` (both
+    optional), and validates the manifest schema version.
 
     Args:
-        target_dir: Path to a dbt `target/` directory (produced by `dbt compile`/`build`/`docs
-            generate`).
+        target_dir: Path to a dbt `target/` directory.
 
     Returns:
         An `Artifacts` on success, or a `DbtError` if the manifest is absent
@@ -93,4 +95,12 @@ def read_artifacts(target_dir: str | Path) -> Artifacts | DbtError:
             return read
         catalog = read
 
-    return Artifacts(manifest=manifest, catalog=catalog, schema_version=version)
+    semantic_manifest: dict[str, Any] | None = None
+    semantic_path = target / "semantic_manifest.json"
+    if semantic_path.is_file():
+        read = _read_json_object(semantic_path)
+        if isinstance(read, DbtError):
+            return read
+        semantic_manifest = read
+
+    return Artifacts(manifest=manifest, catalog=catalog, semantic_manifest=semantic_manifest, schema_version=version)

@@ -15,10 +15,11 @@ rm -rf target logs dbt_packages
 # threaded `dbt build` can otherwise race the staging views ahead of the seed inserts).
 dbt seed --profiles-dir "$PWD"
 dbt run --profiles-dir "$PWD"
+dbt parse --profiles-dir "$PWD"        # writes target/semantic_manifest.json
 dbt docs generate --profiles-dir "$PWD"
 
 mkdir -p artifacts
-cp target/manifest.json target/catalog.json artifacts/
+cp target/manifest.json target/catalog.json target/semantic_manifest.json artifacts/
 rm -f .user.yml
 
 # Normalise volatile/identifying metadata so the committed artifacts are deterministic.
@@ -41,6 +42,16 @@ for name in ("manifest.json", "catalog.json"):
         if key in metadata:
             metadata[key] = value
     path.write_text(json.dumps(doc))
+
+# The semantic manifest nests its volatile metadata under project_configuration.
+sm_path = pathlib.Path("artifacts") / "semantic_manifest.json"
+sm = json.loads(sm_path.read_text())
+metadata = (sm.get("project_configuration") or {}).get("metadata")
+if isinstance(metadata, dict):
+    for key, value in placeholders.items():
+        if key in metadata:
+            metadata[key] = value
+sm_path.write_text(json.dumps(sm))
 PY
 
-echo "regenerated: artifacts/manifest.json, artifacts/catalog.json, jaffle.duckdb"
+echo "regenerated: artifacts/{manifest,catalog,semantic_manifest}.json, jaffle.duckdb"

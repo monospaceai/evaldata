@@ -445,8 +445,7 @@ class LlmError(Error):
 class SolverOutput(BaseModel):
     """A Solver's output: either a successful `output` artifact or an `error`.
 
-    Exactly one of `output`/`error` is set (enforced by a validator). For SQL solvers,
-    `output` is the SQL to run.
+    Exactly one of `output`/`error` is set. For SQL solvers, `output` is the SQL to run.
     """
 
     model_config = ConfigDict(extra="forbid")

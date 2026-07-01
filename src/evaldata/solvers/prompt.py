@@ -3,6 +3,7 @@
 import re
 
 from evaldata.llm import Llm, resolve_llm
+from evaldata.solvers.errors import to_solver_error
 from evaldata.types import EvalCase, LlmError, SolverError, SolverOutput, Sql
 
 DEFAULT_PROMPT_TEMPLATE = """Generate a {dialect} SQL query that answers the following question.
@@ -85,7 +86,7 @@ class PromptSolver:
         prompt = self._prompt_template.format_map({"dialect": dialect, "input": case.input, "schema": schema})
         completion = self._llm.complete_text(prompt)
         if isinstance(completion, LlmError):
-            return SolverOutput(error=self._to_solver_error(completion))
+            return SolverOutput(error=to_solver_error(completion))
 
         sql = Sql(_extract_sql(completion.text).strip())
         if not sql:
@@ -101,19 +102,3 @@ class PromptSolver:
             cost_usd=usage.cost_usd,
             metadata={"model": self._model},
         )
-
-    @staticmethod
-    def _to_solver_error(error: LlmError) -> SolverError:
-        """Translate an `LlmError` to the solver's `SolverError` vocabulary.
-
-        A `malformed_output` becomes `invalid_structured_output`; every provider kind maps
-        through unchanged.
-
-        Args:
-            error: The error returned by the `Llm` call.
-
-        Returns:
-            The equivalent `SolverError`, preserving message, provider, and cause.
-        """
-        kind = "invalid_structured_output" if error.kind == "malformed_output" else error.kind
-        return SolverError(kind=kind, message=error.message, provider=error.provider, cause=error.cause)

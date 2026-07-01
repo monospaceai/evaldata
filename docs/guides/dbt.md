@@ -7,8 +7,10 @@ answer against a gold query you write — on your own warehouse, with no dbt Clo
 ## Prerequisites
 
 ```bash
-uv add "evaldata[dbt]"
+uv add "evaldata[dbt,litellm]"
 ```
+
+The `litellm` extra backs the solver when you run `dbt-bench` with a model id.
 
 You also need a built dbt project. Compile it and generate its catalog so `target/` holds both
 artifacts:

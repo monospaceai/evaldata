@@ -75,6 +75,97 @@ class DbtTest:
 
 
 @dataclass(frozen=True)
+class Entity:
+    """A semantic model's join key: the column expression that links semantic models together."""
+
+    name: str
+    type: str
+    expr: str | None
+
+
+@dataclass(frozen=True)
+class Dimension:
+    """A semantic model's dimension: a categorical or time attribute queries can group by."""
+
+    name: str
+    type: str
+    expr: str | None
+    granularity: str | None
+    description: str | None
+
+
+@dataclass(frozen=True)
+class Measure:
+    """A semantic model's measure: a column aggregation that metrics are built from."""
+
+    name: str
+    agg: str
+    expr: str | None
+    description: str | None
+
+
+@dataclass(frozen=True)
+class SemanticModel:
+    """A dbt semantic model: the relation it sits on and its entities, dimensions, and measures."""
+
+    name: str
+    description: str | None
+    relation: Relation
+    entities: tuple[Entity, ...]
+    dimensions: tuple[Dimension, ...]
+    measures: tuple[Measure, ...]
+
+
+@dataclass(frozen=True)
+class Metric:
+    """A dbt metric exposed by the semantic layer."""
+
+    name: str
+    type: str
+    label: str | None
+    description: str | None
+
+
+@dataclass(frozen=True)
+class SemanticLayerContext:
+    """A project's metrics and semantic models as prompt context for an SL-query solver."""
+
+    metrics: tuple[Metric, ...]
+    semantic_models: tuple[SemanticModel, ...]
+
+    def as_text(self) -> str:
+        """Render the metrics and each semantic model's entities, dimensions, and measures.
+
+        Sections with no members are omitted; an empty layer renders as the empty string.
+
+        Returns:
+            The rendered semantic-layer context block.
+        """
+        sections: list[str] = []
+        if self.metrics:
+            lines = ["Metrics:"]
+            for metric in self.metrics:
+                described = f" -- {metric.description}" if metric.description else ""
+                lines.append(f"  {metric.name} ({metric.type}){described}")
+            sections.append("\n".join(lines))
+        for model in self.semantic_models:
+            sections.append(_render_semantic_model(model))
+        return "\n\n".join(sections)
+
+
+def _render_semantic_model(model: SemanticModel) -> str:
+    lines = [f"Semantic model: {model.name}"]
+    if model.entities:
+        lines.append("  entities: " + ", ".join(f"{e.name} ({e.type})" for e in model.entities))
+    if model.dimensions:
+        dimensions = [f"{d.name} ({d.type}{f', {d.granularity}' if d.granularity else ''})" for d in model.dimensions]
+        lines.append("  dimensions: " + ", ".join(dimensions))
+    if model.measures:
+        lines.append("  measures: " + ", ".join(f"{m.name} ({m.agg})" for m in model.measures))
+    return "\n".join(lines)
+
+
+@dataclass(frozen=True)
 class SchemaContext:
     """A selection of tables rendered as schema context for a text-to-SQL prompt."""
 
@@ -144,6 +235,59 @@ def _source_table(source: SourceRef) -> TableSchema:
     )
 
 
+def _semantic_relation(node_relation: dict[str, Any]) -> Relation:
+    return Relation(
+        database=node_relation["database"],
+        schema=node_relation["schema_name"],
+        identifier=node_relation["alias"],
+        quoted=node_relation["relation_name"],
+    )
+
+
+def _dimension(node: dict[str, Any]) -> Dimension:
+    type_params = node.get("type_params") or {}
+    return Dimension(
+        name=node["name"],
+        type=node["type"],
+        expr=node.get("expr"),
+        granularity=type_params.get("time_granularity"),
+        description=node.get("description") or None,
+    )
+
+
+def _semantic_model(node: dict[str, Any]) -> SemanticModel:
+    return SemanticModel(
+        name=node["name"],
+        description=node.get("description") or None,
+        relation=_semantic_relation(node["node_relation"]),
+        entities=tuple(Entity(name=e["name"], type=e["type"], expr=e.get("expr")) for e in node.get("entities", [])),
+        dimensions=tuple(_dimension(d) for d in node.get("dimensions", [])),
+        measures=tuple(
+            Measure(name=m["name"], agg=m["agg"], expr=m.get("expr"), description=m.get("description") or None)
+            for m in node.get("measures", [])
+        ),
+    )
+
+
+def _metric(node: dict[str, Any]) -> Metric:
+    return Metric(
+        name=node["name"],
+        type=node["type"],
+        label=node.get("label") or None,
+        description=node.get("description") or None,
+    )
+
+
+def _unique_by_name(items: Iterable[Any]) -> tuple[Any, ...]:
+    seen: set[str] = set()
+    out: list[Any] = []
+    for item in items:
+        if item.name not in seen:
+            seen.add(item.name)
+            out.append(item)
+    return tuple(out)
+
+
 class DbtContext:
     """A dbt project's models, sources, and schema, normalised from its `target/` artifacts.
 
@@ -159,19 +303,25 @@ class DbtContext:
         sources: Iterable[SourceRef],
         tests: Iterable[DbtTest],
         schema_version: str,
+        semantic_models: Iterable[SemanticModel] = (),
+        metrics: Iterable[Metric] = (),
     ) -> None:
-        """Build a context from pre-built models, sources, and tests.
+        """Build a context from pre-built models, sources, tests, and semantic-layer parts.
 
         Args:
             models: The project's models.
             sources: The project's source tables.
             tests: The project's data tests.
             schema_version: The manifest schema version the parts were read from.
+            semantic_models: The project's semantic models.
+            metrics: The project's metrics.
         """
         self._models = tuple(models)
         self._sources = tuple(sources)
         self._tests = tuple(tests)
         self._schema_version = schema_version
+        self._semantic_models = tuple(semantic_models)
+        self._metrics = tuple(metrics)
         self._by_key: dict[str, ModelRef] = {}
         for model in self._models:
             self._by_key[model.unique_id] = model
@@ -183,7 +333,7 @@ class DbtContext:
 
         Args:
             path: Path to a dbt `target/` directory holding `manifest.json` (and optionally
-                `catalog.json`).
+                `catalog.json` and `semantic_manifest.json`).
 
         Returns:
             A `DbtContext` on success, or a `DbtError` if the artifacts are missing, malformed,
@@ -239,7 +389,18 @@ class DbtContext:
                 continue
             tests.append(DbtTest(name=metadata["name"], model=model_name, column=node.get("column_name")))
 
-        return cls(models=models, sources=sources, tests=tests, schema_version=artifacts.schema_version)
+        semantic = artifacts.semantic_manifest or {}
+        semantic_models = [_semantic_model(node) for node in semantic.get("semantic_models", [])]
+        metrics = [_metric(node) for node in semantic.get("metrics", [])]
+
+        return cls(
+            models=models,
+            sources=sources,
+            tests=tests,
+            schema_version=artifacts.schema_version,
+            semantic_models=semantic_models,
+            metrics=metrics,
+        )
 
     def model(self, name_or_uid: str) -> ModelRef | None:
         """Return the model addressed by short name or unique id, or `None` if there is none.
@@ -316,6 +477,39 @@ class DbtContext:
             The schema version token (e.g. `v12`).
         """
         return self._schema_version
+
+    def semantic_models(self) -> list[SemanticModel]:
+        """Return the project's semantic models.
+
+        Returns:
+            The semantic models, in semantic-manifest order (empty when the project has no
+            semantic layer).
+        """
+        return list(self._semantic_models)
+
+    def metrics(self) -> list[Metric]:
+        """Return the project's metrics.
+
+        Returns:
+            The metrics, in semantic-manifest order (empty when the project has no semantic layer).
+        """
+        return list(self._metrics)
+
+    def dimensions(self) -> list[Dimension]:
+        """Return the semantic layer's group-by dimensions, deduplicated by name.
+
+        Returns:
+            The dimensions across all semantic models, first occurrence kept, in order.
+        """
+        return list(_unique_by_name(d for model in self._semantic_models for d in model.dimensions))
+
+    def sl_context(self) -> SemanticLayerContext:
+        """Build a `SemanticLayerContext` from the project's metrics and semantic models.
+
+        Returns:
+            A `SemanticLayerContext` over the project's metrics and semantic models.
+        """
+        return SemanticLayerContext(metrics=self._metrics, semantic_models=self._semantic_models)
 
     def schema_context(
         self,

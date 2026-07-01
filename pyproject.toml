@@ -61,6 +61,9 @@ benchmarks = [
 dbt = [
     "pyyaml>=6",
 ]
+dbt-sl = [
+    "dbt-metricflow>=0.13",
+]
 tracing = [
     "openinference-instrumentation>=0.1.52",
     "opentelemetry-exporter-otlp>=1.42.1",
@@ -70,7 +73,7 @@ all-platforms = [
     "evaldata[postgres,snowflake,bigquery,databricks]",
 ]
 all = [
-    "evaldata[all-platforms,litellm,tracing,benchmarks,dbt]",
+    "evaldata[all-platforms,litellm,tracing,benchmarks,dbt,dbt-sl]",
 ]
 
 [project.urls]
@@ -109,10 +112,11 @@ docs = [
     "mkdocstrings[python]>=1.0",
     "mike>=2.1",
 ]
-# Regenerates the committed dbt fixture artifacts. Not part of the default dev install;
-# the tests read the committed artifacts and never invoke dbt.
+# The dbt toolchain: regenerates the committed fixture artifacts and backs the Semantic Layer
+# e2e (which runs `mf` against the fixture DuckDB). Pulls in dbt-core + dbt-duckdb. Opt-in via
+# `--group fixtures`; the fast unit path never needs it.
 fixtures = [
-    "dbt-duckdb>=1.9",
+    "dbt-metricflow[dbt-duckdb]>=0.13",
 ]
 
 [tool.uv]
