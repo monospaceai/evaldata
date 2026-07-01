@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: all_days
+    description: Time spine, one row per calendar day.
+    time_spine:
+      standard_granularity_column: date_day
+    columns:
+      - name: date_day
+        granularity: day

@@ -1,0 +1,90 @@
+version: 2
+
+semantic_models:
+  - name: orders
+    description: Order fact, one row per placed order.
+    model: ref('stg_orders')
+    defaults:
+      agg_time_dimension: ordered_at
+    entities:
+      - name: order_id
+        type: primary
+      - name: customer
+        type: foreign
+        expr: customer_id
+    dimensions:
+      - name: ordered_at
+        description: The date the order was placed.
+        type: time
+        expr: cast(order_date as date)
+        type_params:
+          time_granularity: day
+      - name: order_status
+        description: Lifecycle status of the order (completed, returned, or pending).
+        type: categorical
+      - name: is_food_order
+        description: Whether the order contained food items.
+        type: categorical
+      - name: is_large_order
+        description: Whether the order total is at least 50.
+        type: categorical
+        expr: amount >= 50
+    measures:
+      - name: order_total
+        description: Total order amount.
+        agg: sum
+        expr: amount
+      - name: order_count
+        description: Number of orders.
+        agg: sum
+        expr: "1"
+
+metrics:
+  - name: revenue
+    description: Sum of order amounts.
+    type: simple
+    label: Revenue
+    type_params:
+      measure: order_total
+  - name: order_count
+    description: Count of orders.
+    type: simple
+    label: Orders
+    type_params:
+      measure: order_count
+  - name: average_order_value
+    description: Revenue per order.
+    type: ratio
+    label: Average order value
+    type_params:
+      numerator: revenue
+      denominator: order_count
+  - name: food_revenue
+    description: Revenue from orders that contained food.
+    type: simple
+    label: Food revenue
+    type_params:
+      measure: order_total
+    filter: "{{ Dimension('order_id__is_food_order') }} = true"
+  - name: completed_revenue
+    description: Revenue from completed orders only.
+    type: simple
+    label: Completed revenue
+    type_params:
+      measure: order_total
+    filter: "{{ Dimension('order_id__order_status') }} = 'completed'"
+  - name: cumulative_revenue
+    description: Running total of revenue across all time.
+    type: cumulative
+    label: Cumulative revenue
+    type_params:
+      measure: order_total
+  - name: food_revenue_pct
+    description: Share of revenue that comes from food orders.
+    type: derived
+    label: Food revenue percent
+    type_params:
+      expr: food_revenue / revenue
+      metrics:
+        - name: food_revenue
+        - name: revenue

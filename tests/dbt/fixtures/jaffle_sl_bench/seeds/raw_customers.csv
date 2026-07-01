@@ -1,0 +1,11 @@
+id,name,region,customer_since
+1,Alice,North,2023-06-01
+2,Bob,South,2023-08-15
+3,Carol,East,2023-11-20
+4,Dan,West,2024-01-05
+5,Erin,North,2024-01-10
+6,Frank,South,2024-02-01
+7,Grace,East,2024-02-14
+8,Heidi,West,2024-03-01
+9,Ivan,North,2024-03-20
+10,Judy,South,2024-04-02
