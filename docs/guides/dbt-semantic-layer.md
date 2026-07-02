@@ -60,6 +60,8 @@ SL accuracy: 84.0% (21/25)
 `--model` is any [litellm](https://docs.litellm.ai/docs/providers) model id. Other options:
 
 - `--grader-model ID` — the model for the judge tier; defaults to `--model`.
+- `--temperature FLOAT` — sampling temperature for the solver and judge (default `0.0`); reasoning
+  models such as the GPT-5 family often accept only `1.0`.
 - `--target-dir DIR` — where the artifacts live, if not `<project>/target`.
 - `--profiles-dir DIR` / `--target NAME` — find and select the dbt profile target.
 - `--limit N` — run only the first `N` questions.

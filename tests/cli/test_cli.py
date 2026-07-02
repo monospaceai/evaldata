@@ -436,6 +436,41 @@ class TestSlBench:
         assert result.exit_code == 0, result.output
         assert "SL accuracy: 100.0% (1/1)" in result.output
 
+    def test_temperature_passed_to_solver(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import litellm
+
+        project = self._project(tmp_path)
+        (project / "cases.yml").write_text(
+            "- question: revenue by month?\n  metrics: [revenue]\n  group_by: [metric_time__month]\n"
+        )
+        seen: dict[str, object] = {}
+        real_completion = litellm.completion
+
+        def capture(**kwargs: object) -> object:
+            seen["temperature"] = kwargs.get("temperature")
+            return real_completion(
+                **kwargs, mock_response='{"metrics": ["revenue"], "group_by": ["metric_time__month"]}'
+            )
+
+        monkeypatch.setattr("litellm.completion", capture)
+
+        result = runner.invoke(
+            app,
+            [
+                "sl-bench",
+                str(project),
+                "--model",
+                "openai/gpt-4o-mini",
+                "--cases",
+                str(project / "cases.yml"),
+                "--temperature",
+                "1.0",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert seen["temperature"] == 1.0
+
     def test_profile_error_exits_1(self, tmp_path: Path) -> None:
         result = runner.invoke(app, ["sl-bench", str(tmp_path), "--model", "m", "--cases", str(tmp_path / "c.yml")])
         assert result.exit_code == 1

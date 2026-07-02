@@ -304,6 +304,9 @@ def sl_bench(
     grader_model: str | None = typer.Option(
         None, "--grader-model", help="litellm model id for the judge tier; defaults to --model."
     ),
+    temperature: float = typer.Option(
+        0.0, "--temperature", help="Sampling temperature for the solver and judge; reasoning models often require 1.0."
+    ),
     target_dir: Path | None = typer.Option(
         None, "--target-dir", help="dbt artifacts directory; defaults to <project_dir>/target."
     ),
@@ -325,6 +328,7 @@ def sl_bench(
         model: A litellm model id for the solver under test.
         cases_file: Path to the metric cases YAML file.
         grader_model: A litellm model id for the judge tier; defaults to `model`.
+        temperature: Sampling temperature for the solver and judge; reasoning models often require `1.0`.
         target_dir: dbt artifacts directory; defaults to `<project_dir>/target`.
         profiles_dir: Directory holding `profiles.yml`; defaults to `project_dir`.
         target: dbt profile target name; defaults to the profile's default target.
@@ -346,8 +350,8 @@ def sl_bench(
         console.print(Text(cases.message, style="red"))
         raise typer.Exit(1)
 
-    solver = MetricLayerSolver(model, temperature=0)
-    scorers = [metric_layer_equivalence(grader_model or model)]
+    solver = MetricLayerSolver(model, temperature=temperature)
+    scorers = [metric_layer_equivalence(grader_model or model, temperature=temperature)]
     summary = run_metric_benchmark(cases, solver, scorers=scorers, limit=limit)
 
     console.print(f"SL accuracy: {summary.accuracy:.1%} ({summary.passed}/{summary.total})")
