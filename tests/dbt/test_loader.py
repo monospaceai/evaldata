@@ -95,6 +95,21 @@ def test_load_dbt_metrics(tmp_path: Path) -> None:
     assert first.target_dir == str(ARTIFACTS)
     assert first.profiles_dir == "/home/me/.dbt"
     assert "revenue" in first.sl_context
+    # The context lists the exact queryable group-by names, so the solver need not guess them.
+    assert "Group-by items" in first.sl_context
+    assert "order_id__is_large_order" in first.sl_context
+
+
+def test_load_dbt_metrics_without_metricflow_omits_group_by(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "evaldata.dbt.loader.group_by_items_by_metric",
+        lambda *args, **kwargs: DbtError(kind="metricflow_unavailable", message="unavailable"),
+    )
+    cases = load_dbt_metrics(
+        ARTIFACTS, platform=PLATFORM, cases=_write_cases(tmp_path, "- question: q?\n  metrics: [revenue]\n")
+    )
+    assert not isinstance(cases, DbtError)
+    assert "Group-by items" not in cases[0].sl_context
 
 
 def test_load_dbt_metrics_bad_target_dir(tmp_path: Path) -> None:

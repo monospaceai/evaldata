@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from evaldata.dbt import DbtError, MetricCase, MetricQuery, MetricSpecEquivalence, canonicalize
-from evaldata.dbt.metricflow import CanonicalMetricQuery, _spec_key
+from evaldata.dbt.metricflow import CanonicalMetricQuery, _spec_key, group_by_items_by_metric
 from evaldata.types import PlatformRef, ScoreResult
 
 pytestmark = pytest.mark.unit
@@ -76,6 +76,37 @@ def test_canonicalize_without_metricflow(monkeypatch: pytest.MonkeyPatch) -> Non
     ):
         monkeypatch.setitem(sys.modules, module, None)
     result = canonicalize(MetricQuery(metrics=["revenue"]), TARGET)
+    assert isinstance(result, DbtError)
+    assert result.kind == "metricflow_unavailable"
+
+
+def test_group_by_items_lists_qualified_dimension_names() -> None:
+    items = group_by_items_by_metric(TARGET, ["revenue"])
+    assert not isinstance(items, DbtError)
+    assert "metric_time" in items["revenue"]
+    assert "order_id__is_large_order" in items["revenue"]
+
+
+def test_group_by_items_missing_manifest(tmp_path: Path) -> None:
+    result = group_by_items_by_metric(tmp_path, ["revenue"])
+    assert isinstance(result, DbtError)
+    assert result.kind == "target_not_found"
+
+
+def test_group_by_items_rejects_unknown_metric() -> None:
+    result = group_by_items_by_metric(TARGET, ["does_not_exist"])
+    assert isinstance(result, DbtError)
+    assert result.kind == "metric_query_invalid"
+
+
+def test_group_by_items_without_metricflow(monkeypatch: pytest.MonkeyPatch) -> None:
+    for module in (
+        "metricflow_semantics.model.dbt_manifest_parser",
+        "metricflow_semantics.model.semantic_manifest_lookup",
+        "metricflow_semantic_interfaces.references",
+    ):
+        monkeypatch.setitem(sys.modules, module, None)
+    result = group_by_items_by_metric(TARGET, ["revenue"])
     assert isinstance(result, DbtError)
     assert result.kind == "metricflow_unavailable"
 

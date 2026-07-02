@@ -80,3 +80,12 @@ def test_run_reports_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(result, DbtError)
     assert result.kind == "metric_query_invalid"
     assert "boom" in result.message
+
+
+def test_run_treats_missing_csv_as_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("evaldata.dbt.metricflow.shutil.which", lambda _: "mf")
+    monkeypatch.setattr(
+        "evaldata.dbt.metricflow.subprocess.run",
+        lambda command, **kwargs: subprocess.CompletedProcess(command, 0, stdout="", stderr=""),
+    )
+    assert run(MetricQuery(metrics=["revenue"]), "/proj/target") == []
