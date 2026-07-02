@@ -1,8 +1,7 @@
 """Hermetic checks on the committed ACME Semantic Layer benchmark corpus.
 
-Builds a `MetricCase` for each of dbt's 11 questions and resolves its gold query against the
-committed semantic manifest with `MetricSpecEquivalence`. Needs the `dbt-metricflow` toolchain but
-runs no warehouse query.
+Resolves each gold query against the committed semantic manifest with `MetricSpecEquivalence`.
+Requires `dbt-metricflow`; runs no warehouse query.
 """
 
 from pathlib import Path

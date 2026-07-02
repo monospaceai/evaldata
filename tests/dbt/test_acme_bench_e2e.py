@@ -1,8 +1,7 @@
-"""End-to-end reproduction of dbt's ACME Semantic Layer benchmark on local DuckDB.
+"""End-to-end reproduction of the ACME Semantic Layer benchmark on local DuckDB.
 
-Builds the project from its seeds in a temp dir, then for each of dbt's 11 questions runs the gold
-MetricFlow query through `mf` and asserts its rows match dbt's gold SQL on the same warehouse,
-comparing metric values within a 1e-5 tolerance. Also scores the whole corpus through the cascade.
+For each of the 11 questions, runs the gold MetricFlow query through `mf` and asserts its rows
+match the gold SQL on the same warehouse, comparing metric values within a 1e-5 tolerance.
 """
 
 import os

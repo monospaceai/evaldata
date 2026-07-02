@@ -1,7 +1,7 @@
 """Hermetic checks on the committed Semantic Layer benchmark corpus.
 
-Loads the corpus and resolves every gold query against the committed semantic manifest with
-`MetricSpecEquivalence`. Needs the `dbt-metricflow` toolchain but runs no warehouse query.
+Resolves every gold query against the committed semantic manifest with `MetricSpecEquivalence`.
+Requires `dbt-metricflow`; runs no warehouse query.
 """
 
 from pathlib import Path

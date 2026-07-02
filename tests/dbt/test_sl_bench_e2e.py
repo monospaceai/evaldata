@@ -1,8 +1,6 @@
 """End-to-end checks on the Semantic Layer benchmark corpus with a real `mf` run.
 
-Runs every gold query through `mf` and scores the corpus through the full cascade, so each gold is
-exercised against the warehouse. The fixture is copied to a temp dir so the committed files are
-never mutated.
+Runs every gold query through `mf` and scores the corpus through the full cascade.
 """
 
 import shutil
