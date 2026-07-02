@@ -87,6 +87,15 @@ def test_group_by_items_lists_qualified_dimension_names() -> None:
     assert "order_id__is_large_order" in items["revenue"]
 
 
+def test_group_by_items_prunes_redundant_join_paths() -> None:
+    acme = Path(__file__).parent / "fixtures" / "acme_insurance" / "artifacts"
+    items = group_by_items_by_metric(acme, ["total_premium"])
+    assert not isinstance(items, DbtError)
+    # The direct path is kept; the longer re-join to the same dimension (a fanout) is dropped.
+    assert "policy__party_identifier_dim" in items["total_premium"]
+    assert "policy__party_identifier__party_identifier_dim" not in items["total_premium"]
+
+
 def test_group_by_items_missing_manifest(tmp_path: Path) -> None:
     result = group_by_items_by_metric(tmp_path, ["revenue"])
     assert isinstance(result, DbtError)

@@ -96,13 +96,36 @@ def canonicalize(query: MetricQuery, target_dir: str | Path) -> CanonicalMetricQ
     )
 
 
-def _dunder_name(spec: Any) -> str:
-    links = [link.element_name for link in getattr(spec, "entity_links", ())]
-    return "__".join([*links, spec.element_name])
-
-
 def _is_dimension(spec: Any) -> bool:
     return type(spec).__name__ in ("DimensionSpec", "TimeDimensionSpec")
+
+
+def _queryable_dimension_names(specs: Any) -> list[str]:
+    """Dimension names in `entity__dimension` grammar, dropping redundant longer join paths.
+
+    When a dimension is reachable both directly and by re-joining through a further entity, the
+    longer path (a fanout that can double-count) is dropped in favour of the shorter one.
+
+    Args:
+        specs: The group-by specs MetricFlow resolves for a metric.
+
+    Returns:
+        The sorted, pruned dimension group-by names.
+    """
+    paths = {
+        (tuple(link.element_name for link in getattr(spec, "entity_links", ())), spec.element_name)
+        for spec in specs
+        if _is_dimension(spec)
+    }
+    kept = [
+        (links, leaf)
+        for links, leaf in paths
+        if not any(
+            leaf == other_leaf and len(other_links) < len(links) and links[: len(other_links)] == other_links
+            for other_links, other_leaf in paths
+        )
+    ]
+    return sorted("__".join([*links, leaf]) for links, leaf in kept)
 
 
 def group_by_items_by_metric(target_dir: str | Path, metric_names: list[str]) -> dict[str, list[str]] | DbtError:
@@ -143,7 +166,7 @@ def group_by_items_by_metric(target_dir: str | Path, metric_names: list[str]) ->
         items: dict[str, list[str]] = {}
         for name in metric_names:
             element_set = lookup.get_common_group_by_items([MetricReference(element_name=name)])
-            items[name] = sorted({_dunder_name(spec) for spec in element_set.specs if _is_dimension(spec)})
+            items[name] = _queryable_dimension_names(element_set.specs)
     except Exception as error:  # MetricFlow raises a variety of parse and lookup errors
         return DbtError(kind="metric_query_invalid", message=f"could not list group-by items: {error}", cause=error)
     return items
