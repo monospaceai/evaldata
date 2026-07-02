@@ -21,7 +21,7 @@
 
 - id: policies-sold-by-agent
   question: How many policies have agents sold by agent id?
-  metrics: [total_policies]
+  metrics: [number_of_policies]
   group_by: [policy__party_identifier_dim]
   where: ["{{ Dimension('policy__party_role_code') }} = 'AG'"]
 
@@ -32,7 +32,7 @@
 
 - id: policies-per-policy-holder
   question: How many policies does each policy holder have by policy holder id?
-  metrics: [total_policies]
+  metrics: [number_of_policies]
   group_by: [policy__party_identifier_dim]
   where: ["{{ Dimension('policy__party_role_code') }} = 'PH'"]
 
@@ -52,7 +52,7 @@
 
 - id: policy-count
   question: How many policies do we have?
-  metrics: [total_policies]
+  metrics: [number_of_policies]
 
 - id: claim-count
   question: How many claims do we have?

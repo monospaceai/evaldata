@@ -69,6 +69,8 @@ def test_corpus_scores_pass_through_the_cascade(corpus: list[MetricCase]) -> Non
     assert summary.total == len(corpus)
     assert summary.passed == summary.total
     assert summary.accuracy == 1.0
+    # Each gold resolves to itself, so the spec tier decides; the stub judge is never reached.
+    assert all(report.scores[0].basis == "proven" for report in summary.cases)
 
 
 def test_run_tier_confirms_an_equivalent_reformulation(corpus: list[MetricCase]) -> None:

@@ -2,6 +2,8 @@
 # Verbatim from dbt-labs/dbt-llm-sl-bench (benchmark_questions.ttl), with one DuckDB adaptation:
 # DATEDIFF's unit is single-quoted ('day') so DuckDB reads it as a string, not an identifier.
 # The e2e asserts each gold MetricQuery returns the same rows as its SQL here.
+# total-loss-by-claim joins each claim's loss payment and reserve without grouping; the seed has
+# one of each per claim, so it returns one total row per claim.
 
 premium-by-policy-holder-policy: |
   select policy_number, sum(policy_amount)

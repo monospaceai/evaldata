@@ -1,15 +1,13 @@
 """End-to-end reproduction of dbt's ACME Semantic Layer benchmark on local DuckDB.
 
 Builds the project from its seeds in a temp dir, then for each of dbt's 11 questions runs the gold
-MetricFlow query through `mf` and asserts its rows match dbt's gold SQL on the same warehouse, so
-the local port reproduces dbt's benchmark row for row. Also scores the whole corpus through the
-cascade.
+MetricFlow query through `mf` and asserts its rows match dbt's gold SQL on the same warehouse,
+comparing metric values within a 1e-5 tolerance. Also scores the whole corpus through the cascade.
 """
 
 import os
 import shutil
 import subprocess
-from collections import Counter
 from pathlib import Path
 
 import duckdb
@@ -42,23 +40,38 @@ class _GoldSolver:
         return MetricSolverOutput(query=case.gold)
 
 
-def _number(value: object) -> float | None:
-    try:
-        return round(float(value), 3)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+def _measure(value: object) -> float | None:
+    """The numeric metric value, or `None` for a SQL NULL or empty cell; raises on non-numeric."""
+    if value is None or value == "":
         return None
+    return float(value)  # type: ignore[arg-type]
 
 
-def _row_key(measure: object, others: list[object]) -> tuple[float | None, tuple[str, ...]]:
-    return _number(measure), tuple(sorted(str(other) for other in others))
+def _close(got: float | None, want: float | None) -> bool:
+    if got is None or want is None:
+        return got is want
+    return abs(got - want) <= 1e-5 + 1e-5 * abs(want)
 
 
-def _mf_rows(rows: list[dict[str, str]], metric: str) -> Counter[tuple[float | None, tuple[str, ...]]]:
-    return Counter(_row_key(row.get(metric), [v for k, v in row.items() if k != metric]) for row in rows)
+def _mf_index(rows: list[dict[str, str]], metric: str) -> dict[tuple[str, ...], float | None]:
+    """Map each row's group-by values to its metric value, keyed by the non-metric columns in order."""
+    index: dict[tuple[str, ...], float | None] = {}
+    for row in rows:
+        assert metric in row, f"metric column {metric!r} missing from {list(row)}"
+        key = tuple(str(value) for column, value in row.items() if column != metric)
+        assert key not in index, f"duplicate group key {key}"
+        index[key] = _measure(row[metric])
+    return index
 
 
-def _sql_rows(rows: list[tuple[object, ...]]) -> Counter[tuple[float | None, tuple[str, ...]]]:
-    return Counter(_row_key(row[-1], list(row[:-1])) for row in rows)
+def _sql_index(rows: list[tuple[object, ...]]) -> dict[tuple[str, ...], float | None]:
+    """Map each SQL row's leading columns to its final column, the measure."""
+    index: dict[tuple[str, ...], float | None] = {}
+    for row in rows:
+        key = tuple(str(value) for value in row[:-1])
+        assert key not in index, f"duplicate group key {key}"
+        index[key] = _measure(row[-1])
+    return index
 
 
 @pytest.fixture(scope="module")
@@ -104,9 +117,12 @@ def test_gold_queries_match_dbt_gold_sql(project: Path, corpus: list[MetricCase]
         connection.close()
 
     for case in corpus:
-        got = _mf_rows(mf_results[case.id], case.gold.metrics[0])
-        want = _sql_rows(sql_results[case.id])
-        assert got == want, f"{case.id}: gold query rows {got} != dbt gold SQL rows {want}"
+        got = _mf_index(mf_results[case.id], case.gold.metrics[0])
+        want = _sql_index(sql_results[case.id])
+        assert got and want, f"{case.id}: empty result (gold query {got}, dbt gold SQL {want})"
+        assert got.keys() == want.keys(), f"{case.id}: group keys differ: {sorted(got)} != {sorted(want)}"
+        for key, value in got.items():
+            assert _close(value, want[key]), f"{case.id} at {key}: gold query {value} != dbt gold SQL {want[key]}"
 
 
 @pytest.mark.timeout(600)
@@ -116,3 +132,5 @@ def test_corpus_scores_pass_through_the_cascade(corpus: list[MetricCase]) -> Non
     assert summary.total == len(corpus)
     assert summary.passed == summary.total
     assert summary.accuracy == 1.0
+    # Each gold resolves to itself, so the spec tier decides; the stub judge is never reached.
+    assert all(report.scores[0].basis == "proven" for report in summary.cases)
