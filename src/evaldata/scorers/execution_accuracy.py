@@ -136,8 +136,6 @@ class ExecutionAccuracy:
     ) -> ResultSetDiff:
         """Build a diagnostic `ResultSetDiff` from the row difference.
 
-        The diff is positional regardless of `column_alignment`; it is diagnostic only.
-
         Args:
             actual_rows: The model result rows (for samples, name-keyed).
             gold_rows: The gold query rows (for samples, name-keyed).

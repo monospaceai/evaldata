@@ -7,7 +7,7 @@ from evaldata.types import LlmError
 
 SL_PROMPT_TEMPLATE = """You are querying a dbt Semantic Layer with MetricFlow. Answer the question with
 metrics and group-by items chosen only from the semantic layer below. Every group-by item must be
-one of the exact names listed for the chosen metric: a dimension is referenced through its entity
+one of the exact names shown below: a dimension is referenced through its entity
 with a double underscore (for example `customer__country`), and a time dimension takes a grain by
 appending it (for example `metric_time__month`).
 

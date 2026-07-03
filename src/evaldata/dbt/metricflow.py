@@ -135,8 +135,8 @@ def group_by_items_by_metric(target_dir: str | Path, metric_names: list[str]) ->
     offer them verbatim rather than leave the model to guess the entity path.
 
     Args:
-        metric_names: The metrics to enumerate group-by items for.
         target_dir: A dbt `target/` directory holding `semantic_manifest.json`.
+        metric_names: The metrics to enumerate group-by items for.
 
     Returns:
         A mapping of metric name to its sorted group-by names, or a `DbtError` if MetricFlow is not

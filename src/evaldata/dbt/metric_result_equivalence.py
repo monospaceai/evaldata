@@ -22,15 +22,15 @@ class MetricResultEquivalence:
     Rows are compared as an order-insensitive multiset. Columns are aligned by value, so the same
     answer under a different metric or dimension label still matches, and numeric cells match within
     a small tolerance. A candidate that groups by extra columns still matches when they are
-    redundant (dropping them keeps every row distinct). A model-query run failure is inconclusive,
-    or failing under `on_error="fail"`; a gold-query run failure is always inconclusive.
+    redundant (dropping them keeps every row distinct). A failed model-query run is inconclusive by
+    default, or incorrect when `on_error="fail"`; a failed gold-query run is always inconclusive.
     """
 
     def __init__(self, *, on_error: Literal["inconclusive", "fail"] = "inconclusive") -> None:
         """Configure how a failed model-query run is scored.
 
         Args:
-            on_error: `"inconclusive"` (default) to defer a failed model query to a later tier, or
+            on_error: `"inconclusive"` (default) to score a failed model query as inconclusive, or
                 `"fail"` to score it as incorrect.
         """
         self._on_error = on_error
@@ -43,8 +43,8 @@ class MetricResultEquivalence:
             query: The candidate metric query.
 
         Returns:
-            A passing or failing, observed `ScoreResult` when both queries run, else an
-            inconclusive result (or a failing one for the model query under `on_error="fail"`).
+            An observed `ScoreResult` when both queries run; inconclusive when a query fails, or
+            failing for the model query when `on_error="fail"`.
         """
         candidate = run(query, case.target_dir, profiles_dir=case.profiles_dir)
         if isinstance(candidate, DbtError):

@@ -7,9 +7,9 @@ cascade.
 
 ## The result
 
-`gpt-5.3-codex` answers each question at the model's default temperature (the GPT-5 family does not
-accept `temperature=0`), so each question is run 10 times and the pass rate reported. `gpt-4o-mini`
-runs once at temperature 0.
+`gpt-5.3-codex` answers each question at the model's default temperature (many reasoning models do
+not accept `temperature=0`), so each question is run 10 times and the pass rate reported.
+`gpt-4o-mini` runs once at temperature 0.
 
 | Corpus | Model | Accuracy |
 |---|---|---|

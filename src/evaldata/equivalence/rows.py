@@ -1,4 +1,4 @@
-"""Pure result-set row comparison: row order, duplicate handling, and by-value column alignment."""
+"""Result-set row comparison: row order, duplicate handling, and by-value column alignment."""
 
 import itertools
 from collections import Counter
@@ -75,9 +75,7 @@ def _column_permutations(actual: list[Row], gold: list[Row], num_cols: int) -> l
         num_cols: The shared column count.
 
     Returns:
-        Candidate permutations mapping each target position to a source gold column. For narrow
-        results every mapping is enumerated; for wider results the per-position candidates are
-        pruned against sampled values first.
+        Candidate permutations mapping each target position to a source gold column.
     """
     if num_cols <= _FULL_PRODUCT_MAX_COLS:
         return list(itertools.product(range(num_cols), repeat=num_cols))
