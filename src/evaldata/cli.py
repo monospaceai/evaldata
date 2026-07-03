@@ -23,6 +23,7 @@ from evaldata.dbt import (
     metric_layer_equivalence,
     platform_from_profile,
     run_metric_benchmark,
+    strict_metric_equivalence,
 )
 from evaldata.loaders import load_bird, load_spider
 from evaldata.loaders.benchmarks import SOURCES, cached_dataset_path, fetch_benchmark
@@ -304,6 +305,12 @@ def sl_bench(
     grader_model: str | None = typer.Option(
         None, "--grader-model", help="litellm model id for the judge tier; defaults to --model."
     ),
+    no_judge: bool = typer.Option(
+        False, "--no-judge", help="Score with the deterministic tiers only (no LLM judge) — reproducible, for CI."
+    ),
+    temperature: float = typer.Option(
+        0.0, "--temperature", help="Sampling temperature for the solver and judge; reasoning models often require 1.0."
+    ),
     target_dir: Path | None = typer.Option(
         None, "--target-dir", help="dbt artifacts directory; defaults to <project_dir>/target."
     ),
@@ -324,7 +331,9 @@ def sl_bench(
         project_dir: The dbt project directory (holding `dbt_project.yml`).
         model: A litellm model id for the solver under test.
         cases_file: Path to the metric cases YAML file.
-        grader_model: A litellm model id for the judge tier; defaults to `model`.
+        grader_model: A litellm model id for the judge tier; defaults to `model`. Ignored with `no_judge`.
+        no_judge: Score with the deterministic tiers only, dropping the LLM judge.
+        temperature: Sampling temperature for the solver and judge; reasoning models often require `1.0`.
         target_dir: dbt artifacts directory; defaults to `<project_dir>/target`.
         profiles_dir: Directory holding `profiles.yml`; defaults to `project_dir`.
         target: dbt profile target name; defaults to the profile's default target.
@@ -346,15 +355,19 @@ def sl_bench(
         console.print(Text(cases.message, style="red"))
         raise typer.Exit(1)
 
-    solver = MetricLayerSolver(model, temperature=0)
-    scorers = [metric_layer_equivalence(grader_model or model)]
-    summary = run_metric_benchmark(cases, solver, scorers=scorers, limit=limit)
+    solver = MetricLayerSolver(model, temperature=temperature)
+    cascade = (
+        strict_metric_equivalence()
+        if no_judge
+        else metric_layer_equivalence(grader_model or model, temperature=temperature)
+    )
+    summary = run_metric_benchmark(cases, solver, scorers=[cascade], limit=limit)
 
     console.print(f"SL accuracy: {summary.accuracy:.1%} ({summary.passed}/{summary.total})")
     if json_path is not None:
         stats = {
             "model": model,
-            "grader_model": grader_model or model,
+            "grader_model": None if no_judge else (grader_model or model),
             "total": summary.total,
             "passed": summary.passed,
             "accuracy": summary.accuracy,

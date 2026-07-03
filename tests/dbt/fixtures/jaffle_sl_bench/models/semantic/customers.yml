@@ -1,0 +1,34 @@
+version: 2
+
+semantic_models:
+  - name: customers
+    description: Customer dimension, one row per registered customer.
+    model: ref('stg_customers')
+    defaults:
+      agg_time_dimension: customer_since
+    entities:
+      - name: customer
+        type: primary
+        expr: customer_id
+    dimensions:
+      - name: region
+        description: Sales region the customer belongs to.
+        type: categorical
+      - name: customer_since
+        description: The date the customer registered.
+        type: time
+        type_params:
+          time_granularity: day
+    measures:
+      - name: customer_count
+        description: Number of customers.
+        agg: count
+        expr: customer_id
+
+metrics:
+  - name: customers
+    description: Count of registered customers.
+    type: simple
+    label: Customers
+    type_params:
+      measure: customer_count

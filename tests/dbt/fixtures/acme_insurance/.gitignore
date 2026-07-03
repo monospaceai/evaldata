@@ -1,0 +1,4 @@
+acme.duckdb
+target/
+logs/
+dbt_packages/

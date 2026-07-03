@@ -1,0 +1,92 @@
+# dbt's gold SQL for the 11-question ACME Semantic Layer benchmark, keyed by corpus id.
+# Verbatim from dbt-labs/dbt-llm-sl-bench (benchmark_questions.ttl), with one DuckDB adaptation:
+# DATEDIFF's unit is single-quoted ('day') so DuckDB reads it as a string, not an identifier.
+# The e2e asserts each gold MetricQuery returns the same rows as its SQL here.
+# total-loss-by-claim joins each claim's loss payment and reserve without grouping; the seed has
+# one of each per claim, so it returns one total row per claim.
+
+premium-by-policy-holder-policy: |
+  select policy_number, sum(policy_amount)
+  from agreement_party_role
+  join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+  inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+  inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+  where agreement_party_role.party_role_code = 'PH'
+  group by policy_number
+
+avg-settle-time-by-policy: |
+  select policy_number, avg(DATEDIFF('day', claim_open_date, claim_close_date))
+  from claim
+  inner join claim_coverage on claim.claim_identifier = claim_coverage.claim_identifier
+  inner join policy_coverage_detail on claim_coverage.policy_coverage_detail_identifier = policy_coverage_detail.policy_coverage_detail_identifier
+  inner join policy on policy.policy_identifier = policy_coverage_detail.policy_identifier
+  where claim_close_date IS NOT NULL
+  group by policy_number
+
+premium-by-policy-holder: |
+  select party_identifier, sum(policy_amount)
+  from agreement_party_role
+  join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+  inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+  inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+  where agreement_party_role.party_role_code = 'PH'
+  group by party_identifier
+
+policies-sold-by-agent: |
+  select  party_identifier as agentid, count(policy.policy_number) as NoOfPolicies
+  from agreement_party_role
+  join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+  where agreement_party_role.party_role_code = 'AG'
+  group by party_identifier
+
+total-loss-by-claim: |
+  SELECT
+      company_claim_number,
+      (ca_lp.claim_amount + ca_lr.claim_amount ) as LossAmount
+  FROM
+      Claim
+      inner join claim_amount ca_lp on claim.claim_identifier = ca_lp.claim_identifier
+      inner JOIN loss_payment ON ca_lp.claim_amount_identifier = loss_payment.claim_amount_identifier
+      inner join claim_amount ca_lr on claim.claim_identifier = ca_lr.claim_identifier
+      inner JOIN loss_reserve ON ca_lr.claim_amount_identifier = loss_reserve.claim_amount_identifier
+
+policies-per-policy-holder: |
+  select party_identifier, count( policy.policy_number)  as NoOfPolicies
+  from agreement_party_role
+  join policy on agreement_party_role.agreement_identifier = policy.policy_identifier
+  where agreement_party_role.party_role_code = 'PH'
+  group by party_identifier
+
+premium-by-policy: |
+  select policy_number, sum(policy_amount) as TotalPremiumAmount
+  from
+      policy
+      inner join policy_amount on policy.policy_identifier = policy_amount.policy_identifier
+      inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+  group by policy_number
+
+claims-by-policy: |
+  select policy_number, count(company_claim_number) as NoOfClaims
+  from
+      policy
+      inner join policy_coverage_detail on policy.policy_identifier = policy_coverage_detail.policy_identifier
+      inner join claim_coverage on claim_coverage.policy_coverage_detail_identifier = policy_coverage_detail.policy_coverage_detail_identifier
+      inner join claim on claim.claim_identifier = claim_coverage.claim_identifier
+  group by policy_number
+
+average-policy-size: |
+  SELECT
+      SUM(policy_amount)/COUNT(DISTINCT policy_number) AS avgPolicySize
+  FROM
+     policy_coverage_detail
+      inner join policy on policy.policy_identifier = policy_coverage_detail.policy_identifier
+      inner join policy_amount on policy_coverage_detail.policy_coverage_detail_identifier = policy_amount.policy_coverage_detail_identifier
+      inner join premium on premium.policy_amount_identifier = policy_amount.policy_amount_identifier
+
+policy-count: |
+  SELECT COUNT(*) AS NoOfPolicy
+  FROM policy
+
+claim-count: |
+  SELECT COUNT(*) AS NoOfClaims
+  FROM claim

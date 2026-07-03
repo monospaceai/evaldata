@@ -96,6 +96,82 @@ def canonicalize(query: MetricQuery, target_dir: str | Path) -> CanonicalMetricQ
     )
 
 
+def _is_dimension(spec: Any) -> bool:
+    return type(spec).__name__ in ("DimensionSpec", "TimeDimensionSpec")
+
+
+def _queryable_dimension_names(specs: Any) -> list[str]:
+    """Dimension names in `entity__dimension` grammar, dropping redundant longer join paths.
+
+    When a dimension is reachable both directly and by re-joining through a further entity, the
+    longer path (a fanout that can double-count) is dropped in favour of the shorter one.
+
+    Args:
+        specs: The group-by specs MetricFlow resolves for a metric.
+
+    Returns:
+        The sorted, pruned dimension group-by names.
+    """
+    paths = {
+        (tuple(link.element_name for link in getattr(spec, "entity_links", ())), spec.element_name)
+        for spec in specs
+        if _is_dimension(spec)
+    }
+    kept = [
+        (links, leaf)
+        for links, leaf in paths
+        if not any(
+            leaf == other_leaf and len(other_links) < len(links) and links[: len(other_links)] == other_links
+            for other_links, other_leaf in paths
+        )
+    ]
+    return sorted("__".join([*links, leaf]) for links, leaf in kept)
+
+
+def group_by_items_by_metric(target_dir: str | Path, metric_names: list[str]) -> dict[str, list[str]] | DbtError:
+    """List the queryable group-by names for each metric, in MetricFlow's `entity__dimension` grammar.
+
+    Each metric maps to the exact dimension names a query may group by, so a solver's prompt can
+    offer them verbatim rather than leave the model to guess the entity path.
+
+    Args:
+        target_dir: A dbt `target/` directory holding `semantic_manifest.json`.
+        metric_names: The metrics to enumerate group-by items for.
+
+    Returns:
+        A mapping of metric name to its sorted group-by names, or a `DbtError` if MetricFlow is not
+        installed (`metricflow_unavailable`), the manifest is missing (`target_not_found`), or a
+        metric does not resolve (`metric_query_invalid`).
+    """
+    try:
+        from metricflow_semantic_interfaces.references import MetricReference
+        from metricflow_semantics.model.dbt_manifest_parser import parse_manifest_from_dbt_generated_manifest
+        from metricflow_semantics.model.semantic_manifest_lookup import SemanticManifestLookup
+    except ImportError as error:
+        return DbtError(
+            kind="metricflow_unavailable",
+            message="dbt-metricflow is not installed; install the 'dbt-sl' extra to list group-by items",
+            cause=error,
+        )
+
+    manifest_path = Path(target_dir) / "semantic_manifest.json"
+    if not manifest_path.is_file():
+        return DbtError(kind="target_not_found", message=f"no semantic_manifest.json in {target_dir}")
+
+    try:
+        manifest = parse_manifest_from_dbt_generated_manifest(
+            manifest_json_string=manifest_path.read_text(encoding="utf-8")
+        )
+        lookup = SemanticManifestLookup(manifest).metric_lookup
+        items: dict[str, list[str]] = {}
+        for name in metric_names:
+            element_set = lookup.get_common_group_by_items([MetricReference(element_name=name)])
+            items[name] = _queryable_dimension_names(element_set.specs)
+    except Exception as error:  # MetricFlow raises a variety of parse and lookup errors
+        return DbtError(kind="metric_query_invalid", message=f"could not list group-by items: {error}", cause=error)
+    return items
+
+
 def _query_command(mf: str, query: MetricQuery, out_csv: Path) -> list[str]:
     command = [mf, "query", "--quiet", "--metrics", ",".join(query.metrics)]
     if query.group_by:
@@ -137,4 +213,6 @@ def run(
         if completed.returncode != 0:
             detail = completed.stderr.strip() or completed.stdout.strip()
             return DbtError(kind="metric_query_invalid", message=f"mf query failed: {detail[:500]}")
+        if not out_csv.is_file():
+            return []  # mf writes no CSV for an empty result set
         return list(csv.DictReader(out_csv.read_text(encoding="utf-8").splitlines()))

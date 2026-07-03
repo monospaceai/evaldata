@@ -7,13 +7,13 @@ defaults compare columns positionally with bag semantics, order-sensitive only w
 query carries a top-level `ORDER BY`.
 """
 
-import itertools
 from collections import Counter
 from typing import Any, Literal
 
 import sqlglot
 from sqlglot.errors import SqlglotError
 
+from evaldata.equivalence.rows import compare_rows
 from evaldata.scorers.context import ScoreContext
 from evaldata.scorers.sql import Dialect
 from evaldata.types import (
@@ -31,12 +31,6 @@ SCORER_NAME = "execution_accuracy"
 
 # Differing rows to carry as concrete samples in the diff; counts give the full magnitude.
 _SAMPLE_CAP = 5
-
-# Above this column count, permutation candidates are pruned against sampled rows rather than
-# enumerating the full cartesian product.
-_FULL_PRODUCT_MAX_COLS = 3
-
-_PRUNE_SAMPLE_ROWS = 20
 
 _Row = dict[str, Any]
 _Tuple = tuple[Any, ...]
@@ -105,7 +99,13 @@ class ExecutionAccuracy:
         order_sensitive = self._order_sensitive(expected.sql, context.queries.dialect)
         actual_tuples = [tuple(row.values()) for row in result.rows]
         gold_tuples = [tuple(row.values()) for row in gold.rows]
-        passed = self._compare(actual_tuples, gold_tuples, order_sensitive)
+        passed = compare_rows(
+            actual_tuples,
+            gold_tuples,
+            order_sensitive=order_sensitive,
+            multiplicity=self._multiplicity,
+            column_alignment=self._column_alignment,
+        )
         # The diff is positional, so it cannot describe a `by_value` permutation match; attach it
         # only on failure, where it diagnoses the mismatch.
         diff = None if passed else self._diff(result.rows, gold.rows, actual_tuples, gold_tuples)
@@ -131,72 +131,10 @@ class ExecutionAccuracy:
             return False
         return parsed is not None and parsed.args.get("order") is not None
 
-    def _compare(self, actual: list[_Tuple], gold: list[_Tuple], order_sensitive: bool) -> bool:
-        """Compare result tuples under the configured column-alignment semantics.
-
-        Args:
-            actual: The model result rows as positional tuples.
-            gold: The gold query rows as positional tuples.
-            order_sensitive: Whether row order must match.
-
-        Returns:
-            Whether the two result sets are considered equal.
-        """
-        if self._column_alignment == "by_value":
-            return self._compare_by_value(actual, gold, order_sensitive)
-        return self._compare_positional(actual, gold, order_sensitive)
-
-    def _compare_positional(self, actual: list[_Tuple], gold: list[_Tuple], order_sensitive: bool) -> bool:
-        """Compare result tuples column-by-column under the order/multiplicity semantics.
-
-        Args:
-            actual: The model result rows as positional tuples.
-            gold: The gold query rows as positional tuples.
-            order_sensitive: Whether row order must match.
-
-        Returns:
-            Whether the two result sets are considered equal.
-        """
-        if order_sensitive:
-            return actual == gold
-        if self._multiplicity == "set":
-            return set(actual) == set(gold)
-        return Counter(actual) == Counter(gold)
-
-    def _compare_by_value(self, actual: list[_Tuple], gold: list[_Tuple], order_sensitive: bool) -> bool:
-        """Compare result tuples allowing any column permutation that makes them match.
-
-        Args:
-            actual: The model result rows as positional tuples.
-            gold: The gold query rows as positional tuples.
-            order_sensitive: Whether row order must match.
-
-        Returns:
-            Whether some permutation of the gold columns makes the result sets equal under the
-            positional comparator. Result sets with differing column counts never match.
-        """
-        if not actual and not gold:
-            return True
-        if not actual or not gold:
-            return False
-        num_cols = len(actual[0])
-        if len(gold[0]) != num_cols:
-            return False
-
-        for perm in _column_permutations(actual, gold, num_cols):
-            if len(set(perm)) != len(perm):
-                continue
-            gold_permuted = [tuple(row[i] for i in perm) for row in gold]
-            if self._compare_positional(actual, gold_permuted, order_sensitive):
-                return True
-        return False
-
     def _diff(
         self, actual_rows: list[_Row], gold_rows: list[_Row], actual: list[_Tuple], gold: list[_Tuple]
     ) -> ResultSetDiff:
         """Build a diagnostic `ResultSetDiff` from the row difference.
-
-        The diff is positional regardless of `column_alignment`; it is diagnostic only.
 
         Args:
             actual_rows: The model result rows (for samples, name-keyed).
@@ -224,32 +162,6 @@ class ExecutionAccuracy:
             sample_missing_rows=_samples(gold_rows, gold, missing),
             sample_extra_rows=_samples(actual_rows, actual, extra),
         )
-
-
-def _column_permutations(actual: list[_Tuple], gold: list[_Tuple], num_cols: int) -> list[tuple[int, ...]]:
-    """Build candidate gold-column permutations to test against the model columns.
-
-    Args:
-        actual: The model result rows as positional tuples.
-        gold: The gold query rows as positional tuples.
-        num_cols: The shared column count.
-
-    Returns:
-        Candidate permutations (some possibly non-bijective) mapping each target position to a
-        source gold column. For small results every mapping is enumerated; for wider results the
-        per-position candidates are pruned against sampled values first.
-    """
-    if num_cols <= _FULL_PRODUCT_MAX_COLS:
-        return list(itertools.product(range(num_cols), repeat=num_cols))
-
-    gold_value_sets = [{row[i] for row in gold} for i in range(num_cols)]
-    candidates: list[set[int]] = [set(range(num_cols)) for _ in range(num_cols)]
-    # Iterate the first rows rather than sampling at random so eval runs stay reproducible; full
-    # equality is still verified per surviving permutation.
-    for row in actual[:_PRUNE_SAMPLE_ROWS]:
-        for target, value in enumerate(row):
-            candidates[target] = {src for src in candidates[target] if value in gold_value_sets[src]}
-    return list(itertools.product(*candidates))
 
 
 def _samples(rows: list[_Row], tuples: list[_Tuple], wanted: Counter[_Tuple]) -> list[_Row]:

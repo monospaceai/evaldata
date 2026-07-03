@@ -26,6 +26,10 @@ MLflow, Ragas, and DeepEval reach for an LLM even when the answer is exact and p
 - **An LLM judge when you need one.** For ambiguous questions, missing reference answers,
   or an explanation to grade: the right tool for the job, fully supported.
 
+evaldata reproduces dbt's own Semantic Layer benchmark locally on DuckDB — same dataset, questions,
+and model — scoring 96.4% with `gpt-5.3-codex`, as pytest and with no dbt Cloud. See
+[Reproduce dbt's Semantic Layer benchmark](docs/guides/dbt-semantic-layer-benchmark.md).
+
 ## Quickstart
 
 ```bash

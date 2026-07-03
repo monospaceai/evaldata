@@ -96,7 +96,8 @@ def test_sl_context_renders_fixture(ctx: DbtContext) -> None:
     assert "  revenue (simple) -- Sum of order amounts." in text
     assert "Semantic model: orders" in text
     assert "  entities: order_id (primary), customer (foreign)" in text
-    assert "  dimensions: ordered_at (time, day), is_large_order (categorical)" in text
+    assert "    ordered_at (time, day) -- The date the order was placed." in text
+    assert "    is_large_order (categorical) -- Whether the order total is at least 50." in text
     assert "  measures: order_total (sum), order_count (sum)" in text
 
 

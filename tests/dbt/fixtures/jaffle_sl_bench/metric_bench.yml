@@ -1,0 +1,167 @@
+# Natural-language business questions paired with the gold MetricFlow query that answers each.
+# Every gold resolves and runs against the semantic layer defined in this project.
+
+- id: total-revenue
+  question: What is our total revenue?
+  metrics: [revenue]
+
+- id: total-orders
+  question: How many orders have been placed?
+  metrics: [order_count]
+
+- id: total-customers
+  question: How many customers do we have?
+  metrics: [customers]
+
+- id: revenue-by-month
+  question: What is our revenue for each month?
+  metrics: [revenue]
+  group_by: [metric_time__month]
+
+- id: revenue-by-quarter
+  question: Show total revenue broken down by quarter.
+  metrics: [revenue]
+  group_by: [metric_time__quarter]
+
+- id: revenue-by-week
+  question: What is revenue by week?
+  metrics: [revenue]
+  group_by: [metric_time__week]
+
+- id: revenue-by-year
+  question: What is our total revenue by year?
+  metrics: [revenue]
+  group_by: [metric_time__year]
+
+- id: orders-by-month
+  question: How many orders were placed each month?
+  metrics: [order_count]
+  group_by: [metric_time__month]
+
+- id: revenue-by-region
+  question: What is revenue broken down by customer region?
+  metrics: [revenue]
+  group_by: [customer__region]
+
+- id: orders-by-status
+  question: How many orders are there in each status?
+  metrics: [order_count]
+  group_by: [order_id__order_status]
+
+- id: revenue-by-food
+  question: Split revenue by whether the order was a food order.
+  metrics: [revenue]
+  group_by: [order_id__is_food_order]
+
+- id: aov
+  question: What is the average order value?
+  metrics: [average_order_value]
+
+- id: aov-by-region
+  question: What is the average order value in each region?
+  metrics: [average_order_value]
+  group_by: [customer__region]
+
+- id: aov-by-month
+  question: How has average order value changed month over month?
+  metrics: [average_order_value]
+  group_by: [metric_time__month]
+
+- id: food-revenue
+  question: How much revenue came from food orders?
+  metrics: [food_revenue]
+
+- id: completed-revenue
+  question: What is the revenue from completed orders?
+  metrics: [completed_revenue]
+
+- id: food-revenue-pct
+  question: What percentage of revenue comes from food orders?
+  metrics: [food_revenue_pct]
+
+- id: revenue-large-orders
+  question: What is the total revenue from large orders of at least $50?
+  metrics: [revenue]
+  where: ["{{ Dimension('order_id__is_large_order') }} = true"]
+
+- id: revenue-non-food
+  question: How much revenue came from orders that were not food?
+  metrics: [revenue]
+  where: ["{{ Dimension('order_id__is_food_order') }} = false"]
+
+- id: orders-completed
+  question: How many completed orders are there?
+  metrics: [order_count]
+  where: ["{{ Dimension('order_id__order_status') }} = 'completed'"]
+
+- id: revenue-north
+  question: What is the revenue from customers in the North region?
+  metrics: [revenue]
+  where: ["{{ Dimension('customer__region') }} = 'North'"]
+
+- id: aov-large
+  question: What is the average order value for large orders of at least $50?
+  metrics: [average_order_value]
+  where: ["{{ Dimension('order_id__is_large_order') }} = true"]
+
+- id: top-region
+  question: Which region brings in the most revenue?
+  metrics: [revenue]
+  group_by: [customer__region]
+  order_by: [-revenue]
+  limit: 1
+
+- id: top3-regions
+  question: What are the top three regions by revenue?
+  metrics: [revenue]
+  group_by: [customer__region]
+  order_by: [-revenue]
+  limit: 3
+
+- id: lowest-region
+  question: Which region has the least revenue?
+  metrics: [revenue]
+  group_by: [customer__region]
+  order_by: [revenue]
+  limit: 1
+
+- id: best-month
+  question: Which month had the highest revenue?
+  metrics: [revenue]
+  group_by: [metric_time__month]
+  order_by: [-revenue]
+  limit: 1
+
+- id: revenue-by-region-and-month
+  question: What is revenue by region and by month?
+  metrics: [revenue]
+  group_by: [customer__region, metric_time__month]
+
+- id: food-revenue-by-region
+  question: What is food revenue in each region?
+  metrics: [food_revenue]
+  group_by: [customer__region]
+
+- id: completed-revenue-by-month
+  question: What is completed-order revenue for each month?
+  metrics: [completed_revenue]
+  group_by: [metric_time__month]
+
+- id: large-orders-by-status
+  question: How many large orders were placed in each status?
+  metrics: [order_count]
+  group_by: [order_id__order_status]
+  where: ["{{ Dimension('order_id__is_large_order') }} = true"]
+
+- id: customers-by-region
+  question: How many customers are in each region?
+  metrics: [customers]
+  group_by: [customer__region]
+
+- id: cumulative-revenue
+  question: What is the running total of revenue by month through the first half of 2024?
+  metrics: [cumulative_revenue]
+  group_by: [metric_time__month]
+  where:
+    - "{{ TimeDimension('metric_time', 'day') }} >= '2024-01-01'"
+    - "{{ TimeDimension('metric_time', 'day') }} <= '2024-06-30'"

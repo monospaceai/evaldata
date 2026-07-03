@@ -158,8 +158,11 @@ def _render_semantic_model(model: SemanticModel) -> str:
     if model.entities:
         lines.append("  entities: " + ", ".join(f"{e.name} ({e.type})" for e in model.entities))
     if model.dimensions:
-        dimensions = [f"{d.name} ({d.type}{f', {d.granularity}' if d.granularity else ''})" for d in model.dimensions]
-        lines.append("  dimensions: " + ", ".join(dimensions))
+        lines.append("  dimensions:")
+        for d in model.dimensions:
+            grain = f", {d.granularity}" if d.granularity else ""
+            described = f" -- {d.description}" if d.description else ""
+            lines.append(f"    {d.name} ({d.type}{grain}){described}")
     if model.measures:
         lines.append("  measures: " + ", ".join(f"{m.name} ({m.agg})" for m in model.measures))
     return "\n".join(lines)

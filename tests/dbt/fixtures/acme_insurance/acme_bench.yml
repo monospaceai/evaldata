@@ -1,0 +1,59 @@
+# dbt's 11-question Semantic Layer benchmark (ACME Insurance), each paired with the gold
+# MetricFlow query that answers it. Every gold's result matches dbt's gold SQL on the built
+# warehouse. Questions are verbatim from dbt-labs/dbt-llm-sl-bench.
+
+- id: premium-by-policy-holder-policy
+  question: What is the total amount of premiums that a policy holder has paid by policy number?
+  metrics: [total_premium]
+  group_by: [policy__policy_number]
+  where: ["{{ Dimension('policy__party_role_code') }} = 'PH'"]
+
+- id: avg-settle-time-by-policy
+  question: What is the average time to settle a claim by policy number?
+  metrics: [avg_time_to_settle_claim]
+  group_by: [claim_identifier__policy_number]
+
+- id: premium-by-policy-holder
+  question: What is the total amount of premiums that a policy holder has paid?
+  metrics: [total_premium]
+  group_by: [policy__party_identifier_dim]
+  where: ["{{ Dimension('policy__party_role_code') }} = 'PH'"]
+
+- id: policies-sold-by-agent
+  question: How many policies have agents sold by agent id?
+  metrics: [number_of_policies]
+  group_by: [policy__party_identifier_dim]
+  where: ["{{ Dimension('policy__party_role_code') }} = 'AG'"]
+
+- id: total-loss-by-claim
+  question: What is the total loss amounts, which is the sum of loss payment, loss reserve amount by claim number?
+  metrics: [total_loss_amount]
+  group_by: [claim_identifier__company_claim_number]
+
+- id: policies-per-policy-holder
+  question: How many policies does each policy holder have by policy holder id?
+  metrics: [number_of_policies]
+  group_by: [policy__party_identifier_dim]
+  where: ["{{ Dimension('policy__party_role_code') }} = 'PH'"]
+
+- id: premium-by-policy
+  question: What is the total amount of premiums paid by policy number?
+  metrics: [total_premium]
+  group_by: [policy__policy_number]
+
+- id: claims-by-policy
+  question: How many claims have been placed by policy number?
+  metrics: [claims]
+  group_by: [claim_identifier__policy_number]
+
+- id: average-policy-size
+  question: What is the average policy size which is the the total amount of premium divided by the number of policies?
+  metrics: [average_policy_size]
+
+- id: policy-count
+  question: How many policies do we have?
+  metrics: [number_of_policies]
+
+- id: claim-count
+  question: How many claims do we have?
+  metrics: [claims]

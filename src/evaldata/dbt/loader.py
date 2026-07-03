@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from evaldata.dbt._yaml import read_yaml
 from evaldata.dbt.context import DbtContext, DbtTest
 from evaldata.dbt.errors import DbtError
+from evaldata.dbt.metricflow import group_by_items_by_metric
 from evaldata.dbt.semantic_layer import MetricCase, MetricQuery
 from evaldata.types import (
     EvalCase,
@@ -119,7 +120,11 @@ def load_dbt_metrics(
     if not isinstance(raw, list):
         return DbtError(kind="cases_invalid", message=f"{cases} must be a list of cases")
 
-    sl_context = context.sl_context().as_text()
+    sl = context.sl_context()
+    sl_context = sl.as_text()
+    group_by = group_by_items_by_metric(target_dir, [metric.name for metric in sl.metrics])
+    if not isinstance(group_by, DbtError):
+        sl_context = f"{sl_context}\n\n{_render_group_by(group_by)}"
     out: list[MetricCase] = []
     for index, entry in enumerate(raw):
         try:
@@ -224,6 +229,12 @@ def _test_cases(context: DbtContext, platform: PlatformRef) -> list[EvalCase]:
             )
         )
     return out
+
+
+def _render_group_by(items: dict[str, list[str]]) -> str:
+    lines = ["Group-by items — use these exact names (append a grain to a time dimension, e.g. metric_time__month):"]
+    lines.extend(f"  {metric}: {', '.join(names)}" for metric, names in items.items())
+    return "\n".join(lines)
 
 
 def _metadata(schema_ddl: str, *, model: str | None = None) -> dict[str, Any]:
