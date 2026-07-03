@@ -8,6 +8,7 @@ from evaldata.dbt import (
     MetricLayerJudge,
     MetricQuery,
     metric_layer_equivalence,
+    strict_metric_equivalence,
 )
 from evaldata.dbt.metric_layer_judge import _render_query
 from evaldata.llm import StubLlm
@@ -105,3 +106,9 @@ def test_metric_layer_equivalence_builds_full_cascade() -> None:
     cascade = metric_layer_equivalence(StubLlm(JudgeReply(reason="x", score=1.0)))
     assert isinstance(cascade, MetricFirstDecisive)
     assert len(cascade._scorers) == 3
+
+
+def test_strict_metric_equivalence_has_no_judge() -> None:
+    cascade = strict_metric_equivalence()
+    assert isinstance(cascade, MetricFirstDecisive)
+    assert len(cascade._scorers) == 2

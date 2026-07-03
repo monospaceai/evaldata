@@ -20,3 +20,15 @@ def metric_layer_equivalence(model: str | Llm, *, temperature: float | None = 0.
     """
     judge = MetricLayerJudge(model, temperature=temperature)
     return MetricFirstDecisive([MetricSpecEquivalence(), MetricResultEquivalence(), judge])
+
+
+def strict_metric_equivalence() -> MetricFirstDecisive:
+    """Return a strict spec -> run cascade with no judge, scoring a failed run as incorrect.
+
+    Mirrors an execution-accuracy contract: a candidate passes only when its resolved form or its
+    result rows match the gold; a query that fails to run counts against it.
+
+    Returns:
+        A `MetricFirstDecisive` over `MetricSpecEquivalence` and `MetricResultEquivalence`.
+    """
+    return MetricFirstDecisive([MetricSpecEquivalence(), MetricResultEquivalence(on_error="fail")])

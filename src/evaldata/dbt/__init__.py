@@ -31,7 +31,7 @@ from evaldata.dbt.metric_layer_solver import SL_PROMPT_TEMPLATE, MetricLayerSolv
 from evaldata.dbt.metric_result_equivalence import MetricResultEquivalence
 from evaldata.dbt.metric_spec_equivalence import MetricSpecEquivalence
 from evaldata.dbt.metricflow import CanonicalMetricQuery, canonicalize, run
-from evaldata.dbt.presets import metric_layer_equivalence
+from evaldata.dbt.presets import metric_layer_equivalence, strict_metric_equivalence
 from evaldata.dbt.profile import platform_from_profile
 from evaldata.dbt.semantic_layer import (
     MetricCase,
@@ -76,6 +76,7 @@ __all__ = [
     "load_dbt",
     "load_dbt_metrics",
     "metric_layer_equivalence",
+    "strict_metric_equivalence",
     "platform_from_profile",
     "run",
     "run_metric_benchmark",

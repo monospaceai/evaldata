@@ -1,18 +1,18 @@
-"""Property/fuzz parity: `ExecutionAccuracy._compare` vs the official Spider/BIRD oracles.
+"""Property/fuzz parity: `compare_rows` vs the official Spider/BIRD oracles.
 
-Feeds random result sets straight to `_compare` and the official comparators, asserting they
+Feeds random result sets straight to `compare_rows` and the official comparators, asserting they
 agree across many seeded cases. Rows are tuples of hashable cells drawn from a tiny domain so
 duplicates, NULLs, and column collisions are common.
 
 - Spider config (`column_alignment="by_value"`) is checked against the vendored `result_eq`.
-- BIRD config (`row_order="ignore", multiplicity="set"`) is checked against `set == set`.
+- BIRD config (`multiplicity="set"`) is checked against `set == set`.
 """
 
 import random
 
 import pytest
 
-from evaldata.scorers import ExecutionAccuracy
+from evaldata.equivalence.rows import compare_rows
 from tests._vendor.spider_exec_eval import result_eq
 
 _SEED = 1234
@@ -72,10 +72,8 @@ def _mutate(rng: random.Random, gold: list[_Tuple]) -> list[_Tuple]:
 
 @pytest.mark.unit
 def test_compare_matches_oracles_over_random_inputs() -> None:
-    """`_compare` agrees with the Spider and BIRD oracles across {_ITERATIONS} seeded cases."""
+    """`compare_rows` agrees with the Spider and BIRD oracles across {_ITERATIONS} seeded cases."""
     rng = random.Random(_SEED)
-    spider = ExecutionAccuracy(column_alignment="by_value")
-    bird = ExecutionAccuracy(row_order="ignore", multiplicity="set")
     for _ in range(_ITERATIONS):
         num_cols = rng.randint(1, 4)
         num_rows = rng.randint(0, 6)
@@ -83,14 +81,16 @@ def test_compare_matches_oracles_over_random_inputs() -> None:
         pred = _mutate(rng, gold)
         order_sensitive = rng.choice((True, False))
 
-        mine = spider._compare(pred, gold, order_sensitive)
+        mine = compare_rows(
+            pred, gold, order_sensitive=order_sensitive, multiplicity="multiset", column_alignment="by_value"
+        )
         official = result_eq(pred, gold, order_matters=order_sensitive)
         assert mine == official, (
             f"Spider mismatch: pred={pred!r} gold={gold!r} order_sensitive={order_sensitive!r} "
             f'config="by_value" mine={mine!r} official={official!r}'
         )
 
-        mine_bird = bird._compare(pred, gold, order_sensitive=False)
+        mine_bird = compare_rows(pred, gold, order_sensitive=False, multiplicity="set", column_alignment="by_position")
         official_bird = set(pred) == set(gold)
         assert mine_bird == official_bird, (
             f"BIRD mismatch: pred={pred!r} gold={gold!r} "
