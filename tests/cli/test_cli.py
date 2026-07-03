@@ -471,6 +471,42 @@ class TestSlBench:
         assert result.exit_code == 0, result.output
         assert seen["temperature"] == 1.0
 
+    def test_no_judge_uses_deterministic_scoring(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import litellm
+
+        project = self._project(tmp_path)
+        (project / "cases.yml").write_text(
+            "- question: revenue by month?\n  metrics: [revenue]\n  group_by: [metric_time__month]\n"
+        )
+        # The solver returns the gold query, so the spec tier confirms without any judge call.
+        real_completion = litellm.completion
+        monkeypatch.setattr(
+            "litellm.completion",
+            lambda **kwargs: real_completion(
+                **kwargs, mock_response='{"metrics": ["revenue"], "group_by": ["metric_time__month"]}'
+            ),
+        )
+        artifact = tmp_path / "stats.json"
+
+        result = runner.invoke(
+            app,
+            [
+                "sl-bench",
+                str(project),
+                "--model",
+                "openai/gpt-4o-mini",
+                "--cases",
+                str(project / "cases.yml"),
+                "--no-judge",
+                "--json",
+                str(artifact),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "SL accuracy: 100.0% (1/1)" in result.output
+        assert json.loads(artifact.read_text())["grader_model"] is None
+
     def test_profile_error_exits_1(self, tmp_path: Path) -> None:
         result = runner.invoke(app, ["sl-bench", str(tmp_path), "--model", "m", "--cases", str(tmp_path / "c.yml")])
         assert result.exit_code == 1

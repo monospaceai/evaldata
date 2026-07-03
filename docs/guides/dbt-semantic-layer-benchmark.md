@@ -19,7 +19,7 @@ not accept `temperature=0`), so each question is run 10 times and the pass rate 
 | jaffle (authored) | `openai/gpt-4o-mini` | 31.2% (10/32) |
 
 Of the 110 ACME runs, 44 were decided by the resolve-and-compare tier and 62 by run-and-compare; the
-judge was never needed.
+judge was never needed — so `--no-judge` yields the same number with no LLM in the scoring loop.
 
 ## How the reproduction is built
 
