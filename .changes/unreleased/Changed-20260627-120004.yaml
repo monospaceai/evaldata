@@ -1,3 +1,0 @@
-kind: Changed
-body: 'Result schemas are now typed or untyped. `Schema` is a union of `TypedSchema` (columns with types) and `UntypedSchema` (column names only, returned by engines like SQLite whose driver reports no result-column types); type comparison abstains rather than refuting when types are absent. Breaking: `evaldata.types.Schema` is now this union alias, not a class — construct `TypedSchema(...)` directly.'
-time: 2026-06-27T12:00:04Z

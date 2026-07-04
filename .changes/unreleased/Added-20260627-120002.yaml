@@ -1,3 +1,0 @@
-kind: Added
-body: 'ExecutionAccuracy: the standard text-to-SQL execution-accuracy scorer — runs the gold query and the model''s SQL and compares the result rows. Its row-order (`when_ordered`/`ignore`), duplicate-handling (`multiset`/`set`), and column-alignment (`by_position`/`by_value`) options reproduce the official Spider and BIRD execution-accuracy comparators, and `evaldata bench` applies the right one per benchmark.'
-time: 2026-06-27T12:00:02Z
