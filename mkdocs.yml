@@ -1,5 +1,5 @@
 site_name: evaldata
-site_description: AI evals framework for data & analytics engineering teams.
+site_description: Test model-generated SQL with deterministic checks and warehouse execution.
 site_url: https://monospaceai.github.io/evaldata/
 repo_url: https://github.com/monospaceai/evaldata
 repo_name: monospaceai/evaldata

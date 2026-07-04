@@ -1,6 +1,6 @@
 # Examples
 
-Runnable, pytest-native `evaldata` examples using the product surface: the `@eval_case`
+Runnable `evaldata` examples using `pytest`: the `@eval_case`
 decorator, the injected `case` fixture, and `assert_eval`. Each seeds its own small dataset
 via an autouse fixture.
 

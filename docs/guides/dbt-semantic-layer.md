@@ -1,10 +1,9 @@
 # Evaluate dbt Semantic Layer queries
 
-Check AI-generated dbt Semantic Layer (MetricFlow) queries against gold answers — on your own
-warehouse, with no dbt Cloud account. `evaldata` reads the metrics and dimensions your project
-defines, asks a model to answer each question with a metric query, and scores it with a cascade
-of three checks: resolve-and-compare, run-and-compare, and an LLM judge. The cascade runs the
-cheapest check first and exits as soon as one reaches a verdict.
+Check AI-generated dbt Semantic Layer (MetricFlow) queries against gold answers. `evaldata` reads
+the metrics and dimensions your project defines, uses the warehouse connection from the project's
+dbt profile, and scores each answer with three checks: resolve-and-compare, run-and-compare, and
+an LLM judge. The cascade exits as soon as one check reaches a verdict.
 
 ## Prerequisites
 
@@ -85,14 +84,15 @@ verdict:
 Later checks run only when the earlier ones don't decide, so the LLM judge is called — and paid
 for — only for the questions the first two checks leave open.
 
-## Run it in pytest
+## Run it in `pytest`
 
-Run Semantic Layer evals as pytest tests by loading the cases yourself:
+Run Semantic Layer evals as `pytest` tests by loading the cases yourself:
 
 ```python
 import pytest
 
 from evaldata.dbt import (
+    DbtError,
     load_dbt_metrics,
     metric_layer_equivalence,
     MetricLayerSolver,
@@ -101,7 +101,12 @@ from evaldata.dbt import (
 )
 
 platform = platform_from_profile("path/to/dbt_project")
+if isinstance(platform, DbtError):
+    raise RuntimeError(platform.message)
+
 cases = load_dbt_metrics("path/to/dbt_project/target", platform=platform, cases="metric_cases.yml")
+if isinstance(cases, DbtError):
+    raise RuntimeError(cases.message)
 
 
 @pytest.mark.parametrize("case", cases, ids=lambda case: case.id)
@@ -110,8 +115,8 @@ def test_sl_question(case):
     assert_metric_eval(case, solver, scorers=[metric_layer_equivalence("openai/gpt-4o-mini")])
 ```
 
-`load_dbt_metrics` and `platform_from_profile` return a `DbtError` when the project can't be read,
-so check for it before iterating. To compose the cascade yourself, use `MetricSpecEquivalence`,
+`load_dbt_metrics` and `platform_from_profile` return a `DbtError` when the project can't be read.
+To compose the cascade yourself, use `MetricSpecEquivalence`,
 `MetricResultEquivalence`, and `MetricLayerJudge` with `MetricFirstDecisive`.
 
 ## How it works

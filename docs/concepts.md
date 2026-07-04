@@ -8,8 +8,8 @@ platform, and asserts the scorers pass.
 
 A case pairs a question with its expected answer. You declare one with the
 [`@eval_case`](reference/eval.md) decorator, which injects a prepared
-[`EvalCase`](reference/types.md) as the pytest `case` fixture — no `conftest.py` required, since
-installing `evaldata` registers its pytest plugin.
+[`EvalCase`](reference/types.md) as the `pytest` `case` fixture — no `conftest.py` required, since
+installing `evaldata` registers its `pytest` plugin.
 
 The `expected` value determines how the result is judged. There are four shapes:
 
