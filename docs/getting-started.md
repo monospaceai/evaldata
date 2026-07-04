@@ -18,7 +18,7 @@ Every eval is the same four pieces:
 - one or more **scorers** — how the result is judged against `expected`
 - a **platform** — the database the SQL runs on
 
-`evaldata` is pytest-native: a case is a test function decorated with `@eval_case`, and
+`evaldata` runs on `pytest`: a case is a test function decorated with `@eval_case`, and
 `assert_eval` runs the solver's SQL on the platform and asserts the scorers pass.
 
 ## Write your first eval
@@ -63,7 +63,7 @@ def test_total_order_amount(case: EvalCase) -> None:
 Here's what each piece does:
 
 - **`@eval_case(...)`** declares the case and injects a prepared `EvalCase` as the `case`
-  fixture. You don't need a `conftest.py` — installing `evaldata` registers its pytest plugin.
+  fixture. You don't need a `conftest.py` — installing `evaldata` registers its `pytest` plugin.
 - **`CallableSolver`** is the simplest solver: a function returning the SQL to run. Here it's
   fixed SQL so the result is deterministic; in a real eval this is where your model goes (see
   the [guides](guides/local-ollama.md)).

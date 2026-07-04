@@ -2,8 +2,8 @@
 
 dbt Labs published a benchmark of LLM-generated Semantic Layer queries on an ACME Insurance dataset,
 run through dbt Cloud. `evaldata` reproduces it locally on DuckDB — the same dataset, the same
-questions, and the same model — as ordinary pytest, scored by the proven → observed → judged
-cascade.
+questions, and the same model — as `pytest` tests, scored by resolve-and-compare,
+run-and-compare, and an optional grader.
 
 ## The result
 
@@ -19,7 +19,7 @@ not accept `temperature=0`), so each question is run 10 times and the pass rate 
 | jaffle (authored) | `openai/gpt-4o-mini` | 31.2% (10/32) |
 
 Of the 110 ACME runs, 44 were decided by the resolve-and-compare tier and 62 by run-and-compare; the
-judge was never needed — so `--no-judge` yields the same number with no LLM in the scoring loop.
+judge was never needed — so `--no-judge` yields the same number with no grader call.
 
 ## How the reproduction is built
 

@@ -1,8 +1,8 @@
 # Evaluate against a dbt project
 
-Run text-to-SQL evals against your dbt project. `evaldata` reads the project's compiled artifacts
-(`manifest.json` and `catalog.json`) for the schema and warehouse connection, then checks each
-answer against a gold query you write — on your own warehouse, with no dbt Cloud account.
+Run text-to-SQL evals against a dbt project. `evaldata` reads the compiled artifacts
+(`manifest.json` and optional `catalog.json`), uses the warehouse connection from the project's
+dbt profile, and checks each answer against a gold query you write.
 
 ## Prerequisites
 
@@ -76,20 +76,25 @@ See whether `evaldata` can reach the project's warehouse:
 evaldata doctor --dbt-project path/to/dbt_project
 ```
 
-## Run it in pytest
+## Run it in `pytest`
 
-Run dbt evals as pytest tests — with your own prompt, a fine-tune, an agent, or a different
+Run dbt evals as `pytest` tests — with your own prompt, a fine-tune, an agent, or a different
 scorer — by loading the cases yourself:
 
 ```python
 import pytest
 
 from evaldata import ExecutionAccuracy, assert_eval
-from evaldata.dbt import load_dbt, platform_from_profile
+from evaldata.dbt import DbtError, load_dbt, platform_from_profile
 from evaldata.solvers import SCHEMA_PROMPT_TEMPLATE, PromptSolver
 
 platform = platform_from_profile("path/to/dbt_project")
+if isinstance(platform, DbtError):
+    raise RuntimeError(platform.message)
+
 cases = load_dbt("path/to/dbt_project/target", platform=platform, cases="cases.yml")
+if isinstance(cases, DbtError):
+    raise RuntimeError(cases.message)
 
 
 @pytest.mark.parametrize("case", cases, ids=lambda case: case.id)
@@ -98,8 +103,8 @@ def test_dbt_question(case):
     assert_eval(case, solver, scorers=[ExecutionAccuracy(row_order="ignore", multiplicity="set")])
 ```
 
-`load_dbt` and `platform_from_profile` return a `DbtError` when the project can't be read, so
-check for it before iterating. The cases are ordinary `EvalCase` objects, so any scorer works.
+`load_dbt` and `platform_from_profile` return a `DbtError` when the project can't be read. The
+cases are ordinary `EvalCase` objects, so any scorer works.
 
 ## How it works
 

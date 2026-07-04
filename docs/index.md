@@ -1,17 +1,15 @@
 # evaldata
 
-**The evaluation framework for AI-generated SQL.**
-`pytest`-native. CI-friendly. Built for data teams.
+**Test AI-generated SQL before it reaches production.**
 
-`evaldata` catches regressions on every prompt and model change, before they reach production.
+`evaldata` runs evals as ordinary `pytest` tests in your existing CI. It can prove SQL
+equivalence without executing queries, fall back to warehouse execution, or use an LLM judge
+for ambiguous cases.
 
 ## Why evaldata
 
-`evaldata` can prove two queries are equivalent without executing them or asking an LLM
-to judge.
-
-MLflow, Ragas, and DeepEval reach for an LLM even when the answer is exact and provable
-— a slow, costly guess at something you can settle for free.
+`evaldata` can often decide SQL equivalence without running the query or calling a grader.
+When structure is inconclusive, it falls back to warehouse execution or an LLM judge.
 
 - **Semantic equivalence.** Confirm two queries have the same meaning by comparing their
   structure. No execution, no guessing — when it can't confirm, it returns `unknown`.
@@ -20,7 +18,7 @@ MLflow, Ragas, and DeepEval reach for an LLM even when the answer is exact and p
 - **It's just `pytest`.** Every eval is a test, run in your suite and your CI on every PR.
   No new runner, notebook, or dashboard.
 - **An LLM judge when you need one.** For ambiguous questions, missing reference answers,
-  or an explanation to grade: the right tool for the job, fully supported.
+  or explanations to grade, use a grader model with explicit criteria.
 
 ## Install
 
