@@ -1,3 +1,0 @@
-kind: Added
-body: '`evaldata fetch <spider|bird>`: download, verify, and cache a benchmark dataset — pinned to a known SHA-256 with a case-count and SQLite integrity check — so `evaldata bench` can run against it. Downloads are explicit (never during a run).'
-time: 2026-06-28T16:39:49.581484+10:00

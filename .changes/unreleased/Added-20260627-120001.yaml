@@ -1,3 +1,0 @@
-kind: Added
-body: 'SqliteAdapter: run evals against a local SQLite database via a new `sqlite` platform (in-process, no extra dependencies). Build one with `sqlite_platform(name, path)`; `evaldata doctor --sqlite` checks it.'
-time: 2026-06-27T12:00:01Z

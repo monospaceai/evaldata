@@ -1,3 +1,0 @@
-kind: Added
-body: 'load_spider() and load_bird(): turn the Spider and BIRD benchmark datasets into runnable eval cases. Run a model over them with run_benchmark(...) or the `evaldata bench <spider|bird>` CLI to get an execution-accuracy number. Use SCHEMA_PROMPT_TEMPLATE to put the database schema in the prompt.'
-time: 2026-06-27T12:00:03Z
