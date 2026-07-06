@@ -64,7 +64,7 @@ class TestResolve:
         # kind" branch: an unsupported kind can never be constructed into a PlatformRef to
         # hand to resolve in the first place. The boundary is PlatformRef validation.
         with pytest.raises(ValidationError):
-            PlatformRef(name="wh", kind="snowflake")  # ty: ignore[invalid-argument-type]
+            PlatformRef(name="wh", kind="mysql")  # ty: ignore[invalid-argument-type]
 
     def test_close_all_is_idempotent_when_empty(self) -> None:
         close_all()

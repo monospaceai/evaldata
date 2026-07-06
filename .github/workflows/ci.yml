@@ -66,9 +66,10 @@ jobs:
       - name: Build docs
         run: just docs-build
 
-  # Full gate: the whole suite (unit + e2e + cloud) at the latest Python, with the coverage
-  # gate and build. Cloud secrets aren't available to fork PRs, so it's skipped there and
-  # `check` treats that as OK. Skipped on docs-only PRs.
+  # Full gate: the suite (unit + e2e + Databricks cloud) at the latest Python, with the coverage
+  # gate and build. Snowflake cloud is excluded here — it authenticates via OIDC bound to the main
+  # branch, so it runs in its own main-only `snowflake` job. Cloud secrets aren't available to fork
+  # PRs, so the gate is skipped there and `check` treats that as OK. Skipped on docs-only PRs.
   gate:
     name: gate (py3.13)
     needs: changes
@@ -112,7 +113,11 @@ jobs:
             sleep 1
           done
           ollama pull qwen2.5-coder:1.5b
-          just ci
+          # Snowflake cloud is excluded (OIDC is main-only); it runs in the `snowflake` job.
+          just lint
+          just typecheck
+          just test-cov '-m "not snowflake"'
+          just build
         env:
           EVALDATA_LOCAL_MODEL: ollama_chat/qwen2.5-coder:1.5b
           DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
@@ -172,12 +177,45 @@ jobs:
         env:
           EVALDATA_LOCAL_MODEL: ollama_chat/qwen2.5-coder:1.5b
 
-  # Single required status check for branch protection. `changes` and `docs` must pass. `gate`
-  # and `compat` may be skipped — a fork-skipped `gate`, or both skipped on a docs-only PR — but
-  # a real failure of either is not OK.
+  # Snowflake cloud e2e, secret-free via GitHub Actions OIDC (workload identity federation). The
+  # service user's trust is bound to the main-branch OIDC subject, so this runs on push to main
+  # only — which also gates Snowflake credit spend to merges rather than every PR.
+  snowflake:
+    name: snowflake (cloud, main only)
+    needs: changes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.13"
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+      - name: Run the Snowflake cloud tests
+        run: |
+          # Mint a GitHub OIDC token for Snowflake; the id-token permission provides these vars.
+          SNOWFLAKE_TOKEN="$(curl -sSf \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=snowflakecomputing.com" | jq -r '.value')"
+          export SNOWFLAKE_TOKEN
+          just test '-m snowflake'
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_WAREHOUSE: COMPUTE_WH
+          SNOWFLAKE_AUTHENTICATOR: WORKLOAD_IDENTITY
+          SNOWFLAKE_WORKLOAD_IDENTITY_PROVIDER: OIDC
+
+  # Single required status check for branch protection. `changes` and `docs` must pass. `gate`,
+  # `compat`, and `snowflake` may be skipped — a fork-skipped `gate`, a docs-only PR, or the
+  # push-to-main-only `snowflake` on a PR — but a real failure of any is not OK.
   check:
     if: always()
-    needs: [changes, docs, gate, compat]
+    needs: [changes, docs, gate, compat, snowflake]
     runs-on: ubuntu-latest
     steps:
       - run: |
@@ -195,5 +233,9 @@ jobs:
           fi
           if [ "${{ needs.compat.result }}" != "success" ] && [ "${{ needs.compat.result }}" != "skipped" ]; then
             echo "compat result: ${{ needs.compat.result }}"
+            exit 1
+          fi
+          if [ "${{ needs.snowflake.result }}" != "success" ] && [ "${{ needs.snowflake.result }}" != "skipped" ]; then
+            echo "snowflake result: ${{ needs.snowflake.result }}"
             exit 1
           fi

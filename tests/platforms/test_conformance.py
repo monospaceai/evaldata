@@ -3,7 +3,7 @@
 from evaldata.platforms.base import PlatformAdapter, execute_within_budget
 from evaldata.types import TypedSchema, UntypedSchema
 
-from .conftest import UnderTest
+from .conftest import UnderTest, conform_name
 
 
 def test_satisfies_platform_adapter_protocol(under_test: UnderTest) -> None:
@@ -11,11 +11,12 @@ def test_satisfies_platform_adapter_protocol(under_test: UnderTest) -> None:
 
 
 def test_execute_returns_rows_and_schema(under_test: UnderTest) -> None:
+    n = conform_name("n", under_test.dialect)
     result = under_test.adapter.execute(under_test.fixtures.one_row_one_column)
     assert result.error is None
-    assert result.rows == [{"n": 1}]
+    assert result.rows == [{n: 1}]
     assert result.schema_ is not None
-    assert result.schema_.names == ["n"]
+    assert result.schema_.names == [n]
     if under_test.fixtures.reports_types:
         assert isinstance(result.schema_, TypedSchema)
         assert result.schema_[0].type.raw  # non-empty native type string
@@ -29,20 +30,22 @@ def test_empty_result_set_keeps_schema(under_test: UnderTest) -> None:
     assert result.error is None
     assert result.rows == []
     assert result.schema_ is not None
-    assert result.schema_.names == ["n"]
+    assert result.schema_.names == [conform_name("n", under_test.dialect)]
 
 
 def test_multiple_rows_returned(under_test: UnderTest) -> None:
+    n = conform_name("n", under_test.dialect)
     result = under_test.adapter.execute(under_test.fixtures.three_rows)
     assert result.error is None
     assert len(result.rows) == 3
-    assert sorted(r["n"] for r in result.rows) == [1, 2, 3]
+    assert sorted(r[n] for r in result.rows) == [1, 2, 3]
 
 
 def test_null_values_round_trip(under_test: UnderTest) -> None:
+    x = conform_name("x", under_test.dialect)
     result = under_test.adapter.execute(under_test.fixtures.null_value)
     assert result.error is None
-    assert result.rows == [{"x": None}]
+    assert result.rows == [{x: None}]
 
 
 def test_duplicate_output_columns_return_error(under_test: UnderTest) -> None:
@@ -85,7 +88,7 @@ def test_latency_is_measured_on_failure(under_test: UnderTest) -> None:
 def test_query_within_budget_returns_result(under_test: UnderTest) -> None:
     result = execute_within_budget(under_test.adapter, under_test.fixtures.one_row_one_column, max_seconds=30)
     assert result.error is None
-    assert result.rows == [{"n": 1}]
+    assert result.rows == [{conform_name("n", under_test.dialect): 1}]
 
 
 def test_query_exceeding_budget_is_cancelled(under_test: UnderTest) -> None:
@@ -103,4 +106,4 @@ def test_cancel_is_safe_when_no_query_running(under_test: UnderTest) -> None:
     under_test.adapter.cancel()
     result = under_test.adapter.execute(under_test.fixtures.one_row_one_column)
     assert result.error is None
-    assert result.rows == [{"n": 1}]
+    assert result.rows == [{conform_name("n", under_test.dialect): 1}]

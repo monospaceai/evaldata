@@ -62,9 +62,8 @@ class TestPlatformRef:
         restored = PlatformRef.model_validate_json(ref.model_dump_json())
         assert restored == ref
 
-    # "snowflake" is included deliberately: it has no shipped adapter, so it is not a
-    # PlatformKind and must be rejected at the boundary just like a never-supported "oracle".
-    @pytest.mark.parametrize("kind", ["oracle", "snowflake"])
+    # "oracle" and "mysql" are not in PlatformKind and must be rejected at the boundary.
+    @pytest.mark.parametrize("kind", ["oracle", "mysql"])
     def test_rejects_unknown_kind(self, kind: str) -> None:
         with pytest.raises(ValidationError):
             PlatformRef.model_validate({"name": "x", "kind": kind})

@@ -6,11 +6,18 @@ from typing import Protocol
 
 import pytest
 import sqlglot
+from sqlglot import exp
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from evaldata.platforms.base import PlatformAdapter
 from evaldata.platforms.duckdb import DuckDBAdapter
 from evaldata.platforms.sqlite import SqliteAdapter
 from evaldata.scorers.sql import Dialect
+
+
+def conform_name(name: str, dialect: Dialect) -> str:
+    """Return `name` as `dialect` folds an unquoted identifier (e.g. UPPERCASE on Snowflake)."""
+    return normalize_identifiers(exp.to_identifier(name), dialect=dialect).name
 
 
 def render_model(base: str, dialect: Dialect) -> str:
@@ -127,19 +134,40 @@ class DatabricksFixtures:
 
 
 @dataclass(frozen=True)
+class SnowflakeFixtures:
+    """Snowflake's concrete `ConformanceFixtures` — Snowflake SQL idiom.
+
+    Unlike Databricks, Snowflake's driver reports precise column types (including
+    `is_nullable`) directly, so `reports_types` is `True` with no probe needed.
+    """
+
+    one_row_one_column: str = "SELECT 1 AS n"
+    empty_result: str = "SELECT 1 AS n WHERE 1=0"
+    three_rows: str = "SELECT n FROM (VALUES (1), (2), (3)) AS t(n)"
+    null_value: str = "SELECT NULL AS x"
+    duplicate_column_names: str = "SELECT 1 AS x, 2 AS x"
+    references_missing_table: str = "SELECT * FROM does_not_exist_xyz"
+    parse_error: str = "SLECT 1"
+    # NOTE: tuned for an XS warehouse; duration needs live confirmation and may need adjustment.
+    slow_query: str = "SELECT MAX(SEQ8()) AS n FROM TABLE(GENERATOR(ROWCOUNT => 1000000000))"
+    reports_types: bool = True
+
+
+@dataclass(frozen=True)
 class UnderTest:
     """One adapter-under-test: its live `PlatformAdapter` + the SQL it uses."""
 
     adapter: PlatformAdapter
     fixtures: ConformanceFixtures
+    dialect: Dialect
 
 
 def _duckdb_under_test() -> UnderTest:
-    return UnderTest(adapter=DuckDBAdapter(), fixtures=DuckDBFixtures())
+    return UnderTest(adapter=DuckDBAdapter(), fixtures=DuckDBFixtures(), dialect="duckdb")
 
 
 def _sqlite_under_test() -> UnderTest:
-    return UnderTest(adapter=SqliteAdapter(), fixtures=SqliteFixtures())
+    return UnderTest(adapter=SqliteAdapter(), fixtures=SqliteFixtures(), dialect="sqlite")
 
 
 def _postgres_dsn() -> str:
@@ -167,7 +195,7 @@ def connect_postgres() -> PlatformAdapter:
 
 
 def _postgres_under_test() -> UnderTest:
-    return UnderTest(adapter=connect_postgres(), fixtures=PostgresFixtures())
+    return UnderTest(adapter=connect_postgres(), fixtures=PostgresFixtures(), dialect="postgres")
 
 
 def connect_databricks() -> PlatformAdapter:
@@ -186,7 +214,38 @@ def connect_databricks() -> PlatformAdapter:
 
 
 def _databricks_under_test() -> UnderTest:
-    return UnderTest(adapter=connect_databricks(), fixtures=DatabricksFixtures())
+    return UnderTest(adapter=connect_databricks(), fixtures=DatabricksFixtures(), dialect="databricks")
+
+
+def connect_snowflake() -> PlatformAdapter:
+    """Connect a `SnowflakeAdapter` to the configured account.
+
+    Reads `SNOWFLAKE_ACCOUNT` (required); `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD`,
+    `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_ROLE`, `SNOWFLAKE_DATABASE`, `SNOWFLAKE_SCHEMA`,
+    `SNOWFLAKE_AUTHENTICATOR`, `SNOWFLAKE_TOKEN`, `SNOWFLAKE_PRIVATE_KEY_FILE`, and
+    `SNOWFLAKE_PRIVATE_KEY_FILE_PWD` are optional. Fail-loud: a missing extra, unset account, or
+    an unreachable account raises rather than skipping.
+    """
+    from evaldata.platforms.snowflake import SnowflakeAdapter
+
+    return SnowflakeAdapter(
+        account=os.environ["SNOWFLAKE_ACCOUNT"],
+        user=os.environ.get("SNOWFLAKE_USER"),
+        password=os.environ.get("SNOWFLAKE_PASSWORD"),
+        warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE"),
+        role=os.environ.get("SNOWFLAKE_ROLE"),
+        database=os.environ.get("SNOWFLAKE_DATABASE"),
+        schema=os.environ.get("SNOWFLAKE_SCHEMA"),
+        authenticator=os.environ.get("SNOWFLAKE_AUTHENTICATOR"),
+        token=os.environ.get("SNOWFLAKE_TOKEN"),
+        private_key_file=os.environ.get("SNOWFLAKE_PRIVATE_KEY_FILE"),
+        private_key_file_pwd=os.environ.get("SNOWFLAKE_PRIVATE_KEY_FILE_PWD"),
+        workload_identity_provider=os.environ.get("SNOWFLAKE_WORKLOAD_IDENTITY_PROVIDER"),
+    )
+
+
+def _snowflake_under_test() -> UnderTest:
+    return UnderTest(adapter=connect_snowflake(), fixtures=SnowflakeFixtures(), dialect="snowflake")
 
 
 # Function-scoped: each test gets a fresh adapter.
@@ -196,6 +255,9 @@ def _databricks_under_test() -> UnderTest:
         pytest.param(_sqlite_under_test, id="sqlite", marks=pytest.mark.unit),
         pytest.param(_postgres_under_test, id="postgres", marks=pytest.mark.e2e),
         pytest.param(_databricks_under_test, id="databricks", marks=[pytest.mark.e2e, pytest.mark.cloud]),
+        pytest.param(
+            _snowflake_under_test, id="snowflake", marks=[pytest.mark.e2e, pytest.mark.cloud, pytest.mark.snowflake]
+        ),
     ],
 )
 def under_test(request: pytest.FixtureRequest) -> UnderTest:

@@ -555,6 +555,10 @@ class TestDoctor:
             "EVALDATA_SQLITE_PATH",
             "DATABRICKS_SERVER_HOSTNAME",
             "DATABRICKS_HTTP_PATH",
+            "SNOWFLAKE_ACCOUNT",
+            "SNOWFLAKE_USER",
+            "SNOWFLAKE_WAREHOUSE",
+            "SNOWFLAKE_ROLE",
         ):
             monkeypatch.delenv(var, raising=False)
 
@@ -603,6 +607,7 @@ class TestDoctor:
             sqlite=":memory:",
             databricks_server_hostname="h",
             databricks_http_path="/sql/1.0/warehouses/abc",
+            snowflake_account="acc",
         )
         assert {ref.kind for ref in refs} == set(get_args(PlatformKind))
 

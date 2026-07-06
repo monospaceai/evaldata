@@ -179,6 +179,7 @@ markers = [
     "unit: pure-Python unit tests (no external services)",
     "e2e: end-to-end tests against a real platform",
     "cloud: e2e against a hosted backend needing secret credentials (Databricks, …); run by default, skipped only by the `not cloud` fast path",
+    "snowflake: cloud e2e reachable only via GitHub Actions OIDC (main branch); excluded from the PR gate, run by the dedicated main-only job",
 ]
 
 # ---------------------------------------------------------------------------
