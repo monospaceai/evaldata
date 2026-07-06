@@ -80,5 +80,5 @@ Supported adapters today: **DuckDB**, **Postgres**, **Databricks**, and **Snowfl
 adapter is planned). On a real warehouse the adapter does more than ship SQL — for example, the
 Databricks adapter resolves precise column types and pushes expectation and equivalence checks
 down into SQL so rows aren't pulled back to compare. Cloud platforms authenticate through their
-own driver or SDK, which reads your credentials from the environment — they aren't passed through
-the platform reference.
+own driver or SDK, configured through environment variables — the platform reference holds only
+the connection settings.

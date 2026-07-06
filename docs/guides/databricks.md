@@ -17,8 +17,8 @@ uv add "evaldata[databricks]"
   reports a scaleless `DECIMAL`.
 - **Warehouse pushdown** — the `ExpectationSuite` (`row_count` / `not_null` / `unique`) and
   result-set equivalence run as SQL server-side, not by pulling rows back to compare.
-- **Secretless platform reference** — the `PlatformRef` holds only `server_hostname` /
-  `http_path`; the Databricks SDK supplies the credentials.
+- **Authentication is handled by the SDK** — the platform reference holds only the workspace host
+  and HTTP path; the Databricks SDK handles authentication (for example, via `databricks auth login`).
 
 The fixture seeds a session-scoped `TEMPORARY VIEW`, so the eval needs only query permissions
 and leaves nothing behind in the catalog.
