@@ -1,0 +1,5293 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Test model-generated SQL with deterministic checks and warehouse execution.">
+      
+      
+      
+        <link rel="canonical" href="https://monospaceai.github.io/evaldata/0.5/reference/scorers/">
+      
+      
+        <link rel="prev" href="../types/">
+      
+      
+        <link rel="next" href="../solvers/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Scorers - evaldata</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#scorers" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="evaldata" class="md-header__button md-logo" aria-label="evaldata" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            evaldata
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Scorers
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/monospaceai/evaldata" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    monospaceai/evaldata
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="evaldata" class="md-nav__button md-logo" aria-label="evaldata" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    evaldata
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/monospaceai/evaldata" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    monospaceai/evaldata
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/local-ollama/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluate a local Ollama model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/hosted-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluate a hosted model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/databricks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluate against Databricks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/snowflake/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluate against Snowflake
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/dbt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluate against a dbt project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/dbt-semantic-layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluate dbt Semantic Layer queries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/dbt-semantic-layer-benchmark/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reproduce dbt's Semantic Layer benchmark
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/semantic-equivalence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Check semantic equivalence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/llm-judge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Score with an LLM judge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run a text-to-SQL benchmark
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evals & cases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scorers
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scorers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#evaldata.scorers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;scorers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" scorers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.Scorer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Scorer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" Scorer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.Scorer.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.FirstDecisive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;FirstDecisive
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" FirstDecisive">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.FirstDecisive.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ScoreContext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ScoreContext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ExecutionAccuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ExecutionAccuracy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" ExecutionAccuracy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ExecutionAccuracy.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ExpectationSuiteScorer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ExpectationSuiteScorer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" ExpectationSuiteScorer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ExpectationSuiteScorer.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.JudgeExample" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;JudgeExample
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.LlmJudge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;LlmJudge
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" LlmJudge">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.LlmJudge.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.RubricBand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RubricBand
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.QueryRunner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;QueryRunner
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" QueryRunner">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.QueryRunner.model_sql" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;model_sql
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.QueryRunner.dialect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;dialect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.QueryRunner.run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.QueryRunner.scalar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;scalar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.QueryRunner.resolved_schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;resolved_schema
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ScalarResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ScalarResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ResultSetEquivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ResultSetEquivalence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" ResultSetEquivalence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ResultSetEquivalence.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.AstEquivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;AstEquivalence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" AstEquivalence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.AstEquivalence.judge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;judge
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.EquivalenceCheck" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;EquivalenceCheck
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" EquivalenceCheck">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.EquivalenceCheck.judge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;judge
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.SemanticEquivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;SemanticEquivalence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" SemanticEquivalence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.SemanticEquivalence.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.judged_equivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;judged_equivalence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.observed_equivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;observed_equivalence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.sql_equivalence_judge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;sql_equivalence_judge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.default_equivalence_checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;default_equivalence_checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../solvers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solvers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../equivalence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equivalence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../platforms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platforms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dbt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    dbt
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#evaldata.scorers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;scorers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" scorers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.Scorer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Scorer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" Scorer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.Scorer.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.FirstDecisive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;FirstDecisive
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" FirstDecisive">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.FirstDecisive.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ScoreContext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ScoreContext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ExecutionAccuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ExecutionAccuracy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" ExecutionAccuracy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ExecutionAccuracy.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ExpectationSuiteScorer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ExpectationSuiteScorer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" ExpectationSuiteScorer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ExpectationSuiteScorer.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.JudgeExample" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;JudgeExample
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.LlmJudge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;LlmJudge
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" LlmJudge">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.LlmJudge.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.RubricBand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RubricBand
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.QueryRunner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;QueryRunner
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" QueryRunner">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.QueryRunner.model_sql" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;model_sql
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.QueryRunner.dialect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;dialect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.QueryRunner.run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.QueryRunner.scalar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;scalar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.QueryRunner.resolved_schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;resolved_schema
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ScalarResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ScalarResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ResultSetEquivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ResultSetEquivalence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" ResultSetEquivalence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.ResultSetEquivalence.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.AstEquivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;AstEquivalence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" AstEquivalence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.AstEquivalence.judge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;judge
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.EquivalenceCheck" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;EquivalenceCheck
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" EquivalenceCheck">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.EquivalenceCheck.judge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;judge
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.SemanticEquivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;SemanticEquivalence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" SemanticEquivalence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.SemanticEquivalence.score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.judged_equivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;judged_equivalence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.observed_equivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;observed_equivalence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.sql_equivalence_judge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;sql_equivalence_judge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evaldata.scorers.default_equivalence_checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;default_equivalence_checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="scorers">Scorers<a class="headerlink" href="#scorers" title="Permanent link">&para;</a></h1>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="evaldata.scorers" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>            <span class="doc doc-object-name doc-module-name">scorers</span>
+
+
+<a href="#evaldata.scorers" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Scorers: pluggable pass/fail checks.</p>
+<p>Ships <code>ResultSetEquivalence</code>, <code>ExpectationSuiteScorer</code>, <code>SemanticEquivalence</code>, and the
+LLM-as-judge <code>LlmJudge</code>, plus the <code>FirstDecisive</code> combinator and the equivalence-preset
+compositions it powers.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.Scorer" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">Scorer</span>
+
+
+<a href="#evaldata.scorers.Scorer" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="typing.Protocol">Protocol</span></code></p>
+
+
+
+        <p>Produces a <code>ScoreResult</code> from a case, its solver output, and the execution result.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="evaldata.scorers.Scorer.score" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">score</span>
+
+
+<a href="#evaldata.scorers.Scorer.score" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">score</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">case</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">output</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">result</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">context</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Decide pass/fail with diagnostics for <code>case</code> given <code>output</code>, <code>result</code>, and <code>context</code>.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.FirstDecisive" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">FirstDecisive</span>
+
+
+<a href="#evaldata.scorers.FirstDecisive" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">FirstDecisive</span><span class="p">(</span><span class="n">scorers</span><span class="p">:</span> <span class="n"><span title="collections.abc.Sequence">Sequence</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" title="            Scorer (evaldata.scorers.base.Scorer)" href="#evaldata.scorers.Scorer">Scorer</a></span><span class="p">])</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Runs member scorers in order; the first that decides wins, else the last result stands.</p>
+<p>The combinator continues only while a member is <code>inconclusive</code>; the first member to return a
+decisive verdict (<code>pass</code> or <code>fail</code>) is returned immediately, so a later member cannot override
+an earlier one's decision. If every member is <code>inconclusive</code>, the last member's result is
+returned, so its diagnostics (e.g. a diff) surface.</p>
+
+        <p>Bind the combinator to an ordered list of member scorers.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>scorers</code>
+            </td>
+            <td>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<a class="autorefs autorefs-internal" title="            Scorer (evaldata.scorers.base.Scorer)" href="#evaldata.scorers.Scorer">Scorer</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The member scorers, in priority order.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>scorers</code> is empty.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="evaldata.scorers.FirstDecisive.score" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">score</span>
+
+
+<a href="#evaldata.scorers.FirstDecisive.score" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">score</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">case</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">output</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">result</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">context</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Run members in order, returning the first decisive result (later members not consulted), else the last.</p>
+<p>The returned result carries a <code>metadata["first_decisive"]</code> trail of
+<code>{"scorer", "passed", "verdict"}</code> for each member that actually ran.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>case</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The eval case, forwarded to each member.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>output</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The solver output, forwarded to each member.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>result</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The executed model result, forwarded to each member.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>context</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The score context, forwarded to each member.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The first decisive member's <code>ScoreResult</code> (verdict <code>pass</code> or <code>fail</code>), or the last</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>member's result when every member is <code>inconclusive</code>, with the <code>"first_decisive"</code> trail</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>merged into its metadata.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.ScoreContext" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">ScoreContext</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#evaldata.scorers.ScoreContext" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">ScoreContext</span><span class="p">(</span><span class="n">queries</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            QueryRunner (evaldata.scorers.query.QueryRunner)" href="#evaldata.scorers.QueryRunner">QueryRunner</a></span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Per-case capabilities injected into <code>Scorer.score</code>.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="evaldata.scorers.ScoreContext.queries">queries</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            QueryRunner (evaldata.scorers.query.QueryRunner)" href="#evaldata.scorers.QueryRunner">QueryRunner</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The budget-aware runner for derived SQL against the case's platform.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.ExecutionAccuracy" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">ExecutionAccuracy</span>
+
+
+<a href="#evaldata.scorers.ExecutionAccuracy" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">ExecutionAccuracy</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">row_order</span><span class="p">:</span> <span class="n"><span title="typing.Literal">Literal</span></span><span class="p">[</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="s2">&quot;when_ordered&quot;</span><span class="p">,</span> <span class="s2">&quot;ignore&quot;</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;when_ordered&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">multiplicity</span><span class="p">:</span> <span class="n"><span title="typing.Literal">Literal</span></span><span class="p">[</span><span class="s2">&quot;multiset&quot;</span><span class="p">,</span> <span class="s2">&quot;set&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;multiset&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">column_alignment</span><span class="p">:</span> <span class="n"><span title="typing.Literal">Literal</span></span><span class="p">[</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        <span class="s2">&quot;by_position&quot;</span><span class="p">,</span> <span class="s2">&quot;by_value&quot;</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;by_position&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Scores a case by execution accuracy: does the model's SQL return the gold query's rows?</p>
+
+        <p>Configure the comparison semantics.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>row_order</code>
+            </td>
+            <td>
+                  <code><span title="typing.Literal">Literal</span>[&#39;when_ordered&#39;, &#39;ignore&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>"when_ordered"</code> (default) makes the comparison order-sensitive iff the
+gold query carries a top-level <code>ORDER BY</code>; <code>"ignore"</code> always compares
+order-insensitively.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;when_ordered&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>multiplicity</code>
+            </td>
+            <td>
+                  <code><span title="typing.Literal">Literal</span>[&#39;multiset&#39;, &#39;set&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>"multiset"</code> (default) requires duplicate rows to match by count (bag
+semantics); <code>"set"</code> compares distinct rows (set equality).</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;multiset&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>column_alignment</code>
+            </td>
+            <td>
+                  <code><span title="typing.Literal">Literal</span>[&#39;by_position&#39;, &#39;by_value&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>"by_position"</code> (default) compares columns positionally;
+<code>"by_value"</code> ignores column order by searching for a column permutation whose
+values make the result sets match. Use <code>"by_value"</code> when the gold and model
+queries label columns differently, so columns can only be aligned by content,
+not by name; it requires both result sets to have the same number of columns.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;by_position&#39;</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="evaldata.scorers.ExecutionAccuracy.score" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">score</span>
+
+
+<a href="#evaldata.scorers.ExecutionAccuracy.score" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">score</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">case</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">output</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">result</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">context</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Compare the model result against the gold query's executed rows.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>case</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The eval case; its <code>expected</code> must be a <code>GoldQuery</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>output</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The solver output (part of the <code>Scorer</code> protocol; unused here).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>result</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The executed model result to score.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>context</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The score context, carrying the budget-aware <code>QueryRunner</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A passing <code>ScoreResult</code> (<code>basis="observed"</code>) when the result sets match under the</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>configured semantics, else a failing one carrying a <code>ResultSetDiff</code>. A failed model</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>query, or a failed gold query (<code>metadata["gold_query_failed"]</code>), yields a failing</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>result with an explanation.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="TypeError">TypeError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>case.expected</code> is not a <code>GoldQuery</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.ExpectationSuiteScorer" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">ExpectationSuiteScorer</span>
+
+
+<a href="#evaldata.scorers.ExpectationSuiteScorer" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Scores a case by checking its executed result against each <code>Expectation</code> in its suite.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="evaldata.scorers.ExpectationSuiteScorer.score" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">score</span>
+
+
+<a href="#evaldata.scorers.ExpectationSuiteScorer.score" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">score</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">case</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">output</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">result</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">context</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Evaluate every expectation in the suite; pass iff all hold.</p>
+<p>Row-level checks (<code>row_count</code>, <code>not_null</code>, <code>unique</code>) are pushed into the platform as
+SQL over the model's query via <code>context.queries</code>; only counts and bounded failing-row
+samples are read back. Schema checks (<code>column_presence</code>, <code>column_type</code>) read the
+result's schema metadata and run no query.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>case</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The eval case, carrying the <code>ExpectationSuite</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>output</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The solver output (part of the <code>Scorer</code> protocol; unused here).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>result</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The executed result; its schema is used by the schema checks.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>context</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The score context, carrying the budget-aware <code>QueryRunner</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>ScoreResult</code> that passes when all expectations hold. <code>outcomes</code> carries one</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>ExpectationOutcome</code> per expectation (passing and failing alike); on failure</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>explanation</code> lists each unmet expectation, derived from those outcomes. A failed</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>model query yields a failing result with an explanation and no outcomes; a failed</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>derived query fails only its own expectation's outcome.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="TypeError">TypeError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>case.expected</code> is not an <code>ExpectationSuite</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.JudgeExample" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">JudgeExample</span>
+
+
+<a href="#evaldata.scorers.JudgeExample" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
+
+
+
+        <p>A few-shot anchor: a graded output and the score it should receive.</p>
+<p><code>input</code> and <code>expected_output</code> are optional context; only the fields that are present are
+rendered into the prompt.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.LlmJudge" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">LlmJudge</span>
+
+
+<a href="#evaldata.scorers.LlmJudge" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">LlmJudge</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">model</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="n"><a class="autorefs autorefs-internal" title="            Llm (evaldata.llm.Llm)" href="../llm/#evaldata.llm.Llm">Llm</a></span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">criteria</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">steps</span><span class="p">:</span> <span class="n"><span title="collections.abc.Sequence">Sequence</span></span><span class="p">[</span><span class="n"><span title="str">str</span></span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">examples</span><span class="p">:</span> <span class="n"><span title="collections.abc.Sequence">Sequence</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" title="            JudgeExample (evaldata.scorers.llm_judge.JudgeExample)" href="#evaldata.scorers.JudgeExample">JudgeExample</a></span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">rubric</span><span class="p">:</span> <span class="n"><span title="collections.abc.Sequence">Sequence</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" title="            RubricBand (evaldata.scorers.llm_judge.RubricBand)" href="#evaldata.scorers.RubricBand">RubricBand</a></span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">threshold</span><span class="p">:</span> <span class="n"><span title="float">float</span></span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">temperature</span><span class="p">:</span> <span class="n"><span title="float">float</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">timeout</span><span class="p">:</span> <span class="n"><span title="float">float</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">show</span><span class="p">:</span> <span class="n"><span title="collections.abc.Sequence">Sequence</span></span><span class="p">[</span><span class="n"><span title="evaldata.scorers.llm_judge.JudgeField">JudgeField</span></span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>LLM-as-judge <code>Scorer</code>: a grader model scores the case against authored criteria.</p>
+<p>The grader's 0-1 score is compared to a threshold for the pass/fail verdict; the score and
+rationale are recorded. A provider failure or a malformed reply yields an inconclusive
+result.</p>
+
+        <p>Configure the judge.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>model</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | <a class="autorefs autorefs-internal" title="            Llm (evaldata.llm.Llm)" href="../llm/#evaldata.llm.Llm">Llm</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A litellm grader-model identifier (separate from any solver model), or an
+<code>Llm</code> to use directly. <code>temperature</code> and <code>timeout</code> apply only to the
+model-string path.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>criteria</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The natural-language standard the grader scores the case against.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>steps</code>
+            </td>
+            <td>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<span title="str">str</span>] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Ordered evaluation steps the grader should work through, rendered as a
+numbered block. Omitted from the prompt when absent.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>examples</code>
+            </td>
+            <td>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<a class="autorefs autorefs-internal" title="            JudgeExample (evaldata.scorers.llm_judge.JudgeExample)" href="#evaldata.scorers.JudgeExample">JudgeExample</a>] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Few-shot anchors mapping graded outputs to scores. Omitted from the
+prompt when absent.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>rubric</code>
+            </td>
+            <td>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<a class="autorefs autorefs-internal" title="            RubricBand (evaldata.scorers.llm_judge.RubricBand)" href="#evaldata.scorers.RubricBand">RubricBand</a>] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Scoring bands that describe what each score range means. Omitted from the
+prompt when absent.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>threshold</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The minimum score (inclusive) for a passing verdict. Defaults to <code>0.5</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.5</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>temperature</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Sampling temperature; <code>None</code> leaves the provider default. Defaults to
+<code>0.0</code> for deterministic grading.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>timeout</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Per-request timeout in seconds.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>show</code>
+            </td>
+            <td>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<span title="evaldata.scorers.llm_judge.JudgeField">JudgeField</span>] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The case fields to offer the grader, each included only when available.
+Defaults to all of <code>input</code>, <code>actual_output</code>, and <code>expected_output</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="evaldata.scorers.LlmJudge.score" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">score</span>
+
+
+<a href="#evaldata.scorers.LlmJudge.score" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">score</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">case</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">output</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">result</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">context</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Grade <code>case</code> with the grader model and return a graded <code>ScoreResult</code>.</p>
+<p>Builds a prompt from the criteria and the selected available fields, calls the grader,
+and maps its score to a verdict against the threshold.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>case</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The eval case, supplying the input and (optionally) the expected output.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>output</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The solver output (part of the <code>Scorer</code> protocol; unused here).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>result</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The executed model result (part of the <code>Scorer</code> protocol; unused here).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>context</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The score context, supplying the model's SQL.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>ScoreResult</code> whose verdict is pass or fail with the graded score and rationale,</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>or inconclusive when no verdict could be reached.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.RubricBand" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">RubricBand</span>
+
+
+<a href="#evaldata.scorers.RubricBand" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
+
+
+
+        <p>A scoring band: a <code>[min_score, max_score]</code> range and what it describes.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.QueryRunner" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">QueryRunner</span>
+
+
+<a href="#evaldata.scorers.QueryRunner" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">QueryRunner</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">adapter</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            PlatformAdapter (evaldata.platforms.base.PlatformAdapter)" href="../platforms/#evaldata.platforms.base.PlatformAdapter">PlatformAdapter</a></span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">model_sql</span><span class="p">:</span> <span class="n"><span title="evaldata.types.Sql">Sql</span></span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">dialect</span><span class="p">:</span> <span class="n"><span title="evaldata.scorers.sql.Dialect">Dialect</span></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">budget</span><span class="p">:</span> <span class="n"><span title="float">float</span></span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Runs derived SQL against a case's platform, drawing on a shared cost budget.</p>
+<p>Holds a live adapter, the model's SQL, the case dialect, and a remaining-time pool
+seeded from the case budget. Each completed query decrements the pool by its
+<code>latency_seconds</code>; once the pool is exhausted, further runs short-circuit to an
+<code>ExecutionResult</code> carrying an error without touching the adapter. A <code>None</code> budget means
+the pool is unbounded.</p>
+
+        <p>Bind the runner to a platform and seed its budget pool.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>adapter</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            PlatformAdapter (evaldata.platforms.base.PlatformAdapter)" href="../platforms/#evaldata.platforms.base.PlatformAdapter">PlatformAdapter</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The platform adapter derived queries execute against.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>model_sql</code>
+            </td>
+            <td>
+                  <code><span title="evaldata.types.Sql">Sql</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The model's SQL.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>dialect</code>
+            </td>
+            <td>
+                  <code><span title="evaldata.scorers.sql.Dialect">Dialect</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The SQLGlot dialect derived queries are built and rendered in.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>budget</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The shared remaining-time pool in seconds, or <code>None</code> for unbounded.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="evaldata.scorers.QueryRunner.model_sql" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">model_sql</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#evaldata.scorers.QueryRunner.model_sql" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">model_sql</span><span class="p">:</span> <span class="n"><span title="evaldata.types.Sql">Sql</span></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The model's SQL.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="evaldata.scorers.QueryRunner.dialect" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">dialect</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#evaldata.scorers.QueryRunner.dialect" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">dialect</span><span class="p">:</span> <span class="n"><span title="evaldata.scorers.sql.Dialect">Dialect</span></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The dialect derived queries are built and rendered in.</p>
+
+    </div>
+
+</div>
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="evaldata.scorers.QueryRunner.run" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">run</span>
+
+
+<a href="#evaldata.scorers.QueryRunner.run" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">run</span><span class="p">(</span><span class="n">sql</span><span class="p">:</span> <span class="n"><span title="evaldata.types.Sql">Sql</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Run <code>sql</code> within the remaining budget, decrementing the pool by its latency.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>sql</code>
+            </td>
+            <td>
+                  <code><span title="evaldata.types.Sql">Sql</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The SQL statement to execute.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The adapter's <code>ExecutionResult</code>, or an <code>ExecutionResult</code> with <code>error</code> set when</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>the budget pool is already exhausted (the adapter is not invoked in that case).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="evaldata.scorers.QueryRunner.scalar" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">scalar</span>
+
+
+<a href="#evaldata.scorers.QueryRunner.scalar" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">scalar</span><span class="p">(</span><span class="n">sql</span><span class="p">:</span> <span class="n"><span title="evaldata.types.Sql">Sql</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScalarResult
+
+
+  
+      dataclass
+   (evaldata.scorers.query.ScalarResult)" href="#evaldata.scorers.ScalarResult">ScalarResult</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Run <code>sql</code> and read back its single cell, or an error.</p>
+<p>Delegates to <code>run</code>, so the budget pool is drawn exactly as for any derived query.
+An underlying <code>error</code> is propagated; a result that is not exactly one row by one
+column is itself an error.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>sql</code>
+            </td>
+            <td>
+                  <code><span title="evaldata.types.Sql">Sql</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The SQL statement to execute; expected to return one row and one column.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScalarResult
+
+
+  
+      dataclass
+   (evaldata.scorers.query.ScalarResult)" href="#evaldata.scorers.ScalarResult">ScalarResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>ScalarResult</code> carrying the single cell on success, else <code>error</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="evaldata.scorers.QueryRunner.resolved_schema" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">resolved_schema</span>
+
+
+<a href="#evaldata.scorers.QueryRunner.resolved_schema" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolved_schema</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">base</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            TypedSchema (evaldata.types.TypedSchema)" href="../types/#evaldata.types.TypedSchema">TypedSchema</a></span><span class="p">,</span> <span class="n">sql</span><span class="p">:</span> <span class="n"><span title="evaldata.types.Sql">Sql</span></span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            TypedSchema (evaldata.types.TypedSchema)" href="../types/#evaldata.types.TypedSchema">TypedSchema</a></span> <span class="o">|</span> <span class="n"><a class="autorefs autorefs-internal" title="            ExecutionError (evaldata.types.ExecutionError)" href="../types/#evaldata.types.ExecutionError">ExecutionError</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return <code>base</code> with its column types resolved to the platform's precise types.</p>
+<p>Backends that already report precise types return <code>base</code> unchanged; otherwise the
+adapter's type probe runs through this runner (drawing on the same budget) and its
+types align to <code>base</code>'s columns by position, preserving names and nullability.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>base</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            TypedSchema (evaldata.types.TypedSchema)" href="../types/#evaldata.types.TypedSchema">TypedSchema</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The schema whose column types to resolve, as <code>execute</code> reported them.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>sql</code>
+            </td>
+            <td>
+                  <code><span title="evaldata.types.Sql">Sql</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The statement that produced <code>base</code>, re-probed for precise types.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            TypedSchema (evaldata.types.TypedSchema)" href="../types/#evaldata.types.TypedSchema">TypedSchema</a> | <a class="autorefs autorefs-internal" title="            ExecutionError (evaldata.types.ExecutionError)" href="../types/#evaldata.types.ExecutionError">ExecutionError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>base</code>, a new <code>TypedSchema</code> with precise types, or an <code>ExecutionError</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.ScalarResult" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">ScalarResult</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#evaldata.scorers.ScalarResult" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">ScalarResult</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">value</span><span class="p">:</span> <span class="n"><span title="typing.Any">Any</span></span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">error</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ExecutionError (evaldata.types.ExecutionError)" href="../types/#evaldata.types.ExecutionError">ExecutionError</a></span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">latency_seconds</span><span class="p">:</span> <span class="n"><span title="float">float</span></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>The single cell returned by a derived query, or an error.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="evaldata.scorers.ScalarResult.value">value</span></code></td>
+            <td>
+                  <code><span title="typing.Any">Any</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The single cell value, or <code>None</code> when <code>error</code> is set.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="evaldata.scorers.ScalarResult.error">error</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ExecutionError (evaldata.types.ExecutionError)" href="../types/#evaldata.types.ExecutionError">ExecutionError</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The failure, or <code>None</code> on success.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="evaldata.scorers.ScalarResult.latency_seconds">latency_seconds</span></code></td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Wall-clock time the underlying query took.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.ResultSetEquivalence" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">ResultSetEquivalence</span>
+
+
+<a href="#evaldata.scorers.ResultSetEquivalence" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Scores a case by diffing its executed result set against its expected result set in SQL.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="evaldata.scorers.ResultSetEquivalence.score" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">score</span>
+
+
+<a href="#evaldata.scorers.ResultSetEquivalence.score" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">score</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">case</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">output</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">result</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">context</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Compare <code>result</code> against <code>case.expected</code>; pass iff the engine finds them equivalent.</p>
+<p>Column reconciliation and type comparison run in Python; row equivalence is pushed
+into the platform. For authored rows the expected side is materialised as typed
+literals; for a <code>GoldQuery</code> it is the reference query embedded as a subquery, whose
+schema is discovered with a zero-row execution and whose rows never reach Python.
+With an empty <code>match_key</code>, two <code>EXCEPT ALL</code> diffs compute the bag difference (and
+<code>null_equality="distinct"</code> is rejected). With a non-empty <code>match_key</code>, a
+<code>FULL OUTER JOIN</code> aligns rows on the key and compares per column — supporting
+<code>null_equality="distinct"</code>, an exact tolerance band, and per-column mismatch counts.
+Only mismatch counts and bounded samples are read back.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>case</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The eval case, carrying the expected result set, comparison config, and platform.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>output</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The solver output (part of the <code>Scorer</code> protocol; unused here).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>result</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The executed result to compare against the expectation.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>context</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The score context, carrying the budget-aware <code>QueryRunner</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>ScoreResult</code> that passes when the result set matches the expectation. A failed</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>model query, a failed gold query, a failed derived query, a non-unique or absent</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>match_key</code>, or (keyless) <code>null_equality="distinct"</code> each yield a failing result</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>with an explanation.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="TypeError">TypeError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>case.expected</code> is not one of <code>UntypedResultSet</code>, <code>TypedResultSet</code>,
+or <code>GoldQuery</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.AstEquivalence" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">AstEquivalence</span>
+
+
+<a href="#evaldata.scorers.AstEquivalence" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Confirms equivalence when both queries normalize to the same SQLGlot syntax tree.</p>
+<p>Matching normalized trees yield <code>"equivalent"</code>; anything else (trees differ, a parse
+failure, or input that is not exactly one statement) yields <code>"unknown"</code>, never a
+refutation. The normalization is schema-free: it fully reassociates commutative
+arithmetic (<code>+</code>/<code>*</code>), boolean/bitwise chains, and <code>IN</code>-list order; other unhandled
+equivalences fall through as <code>"unknown"</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="evaldata.scorers.AstEquivalence.judge" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">judge</span>
+
+
+<a href="#evaldata.scorers.AstEquivalence.judge" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">judge</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">case</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">output</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">result</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">context</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            SemanticVerdict (evaldata.types.SemanticVerdict)" href="../types/#evaldata.types.SemanticVerdict">SemanticVerdict</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Compare the model and gold queries' normalized syntax trees.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>case</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The eval case; <code>expected</code> must be a <code>GoldQuery</code> to compare against.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>output</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The solver output (unused).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>result</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The executed model result (unused; this check touches no data).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>context</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The score context, supplying the model SQL and dialect.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            SemanticVerdict (evaldata.types.SemanticVerdict)" href="../types/#evaldata.types.SemanticVerdict">SemanticVerdict</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>"equivalent"</code> when the normalized trees match, else <code>"unknown"</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.EquivalenceCheck" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">EquivalenceCheck</span>
+
+
+<a href="#evaldata.scorers.EquivalenceCheck" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="typing.Protocol">Protocol</span></code></p>
+
+
+
+        <p>One way of confirming equivalence by comparing the queries, not their results; never raises.</p>
+<p>A check confirms equivalence (<code>"equivalent"</code>) or returns <code>"unknown"</code>; it never refutes, so
+it cannot falsely reject a correct query.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="evaldata.scorers.EquivalenceCheck.judge" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">judge</span>
+
+
+<a href="#evaldata.scorers.EquivalenceCheck.judge" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">judge</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">case</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">output</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">result</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">context</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            SemanticVerdict (evaldata.types.SemanticVerdict)" href="../types/#evaldata.types.SemanticVerdict">SemanticVerdict</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Judge whether the model's query is equivalent to the case's gold query.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>case</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The eval case, whose <code>expected</code> carries the gold query.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>output</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The solver output.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>result</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The already-executed model result (reused by execution-based checks).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>context</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The score context, carrying the model SQL, dialect, and query runner.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            SemanticVerdict (evaldata.types.SemanticVerdict)" href="../types/#evaldata.types.SemanticVerdict">SemanticVerdict</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>SemanticVerdict</code> describing the equivalence decision for this check.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="evaldata.scorers.SemanticEquivalence" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">SemanticEquivalence</span>
+
+
+<a href="#evaldata.scorers.SemanticEquivalence" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">SemanticEquivalence</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">checks</span><span class="p">:</span> <span class="n"><span title="collections.abc.Sequence">Sequence</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" title="            EquivalenceCheck (evaldata.scorers.semantic_equivalence.EquivalenceCheck)" href="#evaldata.scorers.EquivalenceCheck">EquivalenceCheck</a></span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Scores a gold-query case with checks that compare the queries themselves.</p>
+<p>It never runs a query and never refutes, so it confirms equivalence or is undecided. The
+first check that confirms yields a passing result; if none confirm, the result is
+inconclusive.</p>
+
+        <p>Bind the scorer to an ordered list of checks.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>checks</code>
+            </td>
+            <td>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<a class="autorefs autorefs-internal" title="            EquivalenceCheck (evaldata.scorers.semantic_equivalence.EquivalenceCheck)" href="#evaldata.scorers.EquivalenceCheck">EquivalenceCheck</a>] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The checks to run, in priority order; the first that confirms wins.
+Defaults to <code>default_equivalence_checks()</code> when omitted.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="evaldata.scorers.SemanticEquivalence.score" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">score</span>
+
+
+<a href="#evaldata.scorers.SemanticEquivalence.score" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">score</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">case</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">output</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">result</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">context</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Run the checks in order, stopping at the first that confirms equivalence.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>case</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            EvalCase (evaldata.types.EvalCase)" href="../types/#evaldata.types.EvalCase">EvalCase</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The eval case; <code>expected</code> must be a <code>GoldQuery</code> (query-vs-query comparison).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>output</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            SolverOutput (evaldata.types.SolverOutput)" href="../types/#evaldata.types.SolverOutput">SolverOutput</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The solver output, passed through to each check.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>result</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ExecutionResult (evaldata.types.ExecutionResult)" href="../types/#evaldata.types.ExecutionResult">ExecutionResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The executed model result, passed through to each check.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>context</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreContext
+
+
+  
+      dataclass
+   (evaldata.scorers.context.ScoreContext)" href="#evaldata.scorers.ScoreContext">ScoreContext</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The score context, carrying the model SQL, dialect, and query runner.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A passing <code>ScoreResult</code> when a check confirms equivalence, else an inconclusive</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ScoreResult (evaldata.types.ScoreResult)" href="../types/#evaldata.types.ScoreResult">ScoreResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>result (no check could confirm).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="TypeError">TypeError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>case.expected</code> is not a <code>GoldQuery</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="evaldata.scorers.judged_equivalence" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">judged_equivalence</span>
+
+
+<a href="#evaldata.scorers.judged_equivalence" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">judged_equivalence</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="n"><a class="autorefs autorefs-internal" title="            Llm (evaldata.llm.Llm)" href="../llm/#evaldata.llm.Llm">Llm</a></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            FirstDecisive (evaldata.scorers.combinators.FirstDecisive)" href="#evaldata.scorers.FirstDecisive">FirstDecisive</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The query-vs-query check that confirms by structure, else asks an LLM judge.</p>
+<p>The case's <code>expected</code> must be a <code>GoldQuery</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>model</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | <a class="autorefs autorefs-internal" title="            Llm (evaldata.llm.Llm)" href="../llm/#evaldata.llm.Llm">Llm</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A litellm grader-model identifier, or an <code>Llm</code> to use directly.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            FirstDecisive (evaldata.scorers.combinators.FirstDecisive)" href="#evaldata.scorers.FirstDecisive">FirstDecisive</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>FirstDecisive</code> cascade: <code>SemanticEquivalence</code> compares the queries and confirms</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            FirstDecisive (evaldata.scorers.combinators.FirstDecisive)" href="#evaldata.scorers.FirstDecisive">FirstDecisive</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>equivalence first; when it cannot, the SQL-equivalence judge decides without running</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            FirstDecisive (evaldata.scorers.combinators.FirstDecisive)" href="#evaldata.scorers.FirstDecisive">FirstDecisive</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>either query.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="evaldata.scorers.observed_equivalence" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">observed_equivalence</span>
+
+
+<a href="#evaldata.scorers.observed_equivalence" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">observed_equivalence</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            FirstDecisive (evaldata.scorers.combinators.FirstDecisive)" href="#evaldata.scorers.FirstDecisive">FirstDecisive</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The query-vs-query check that confirms by structure, else by running both queries.</p>
+<p>The case's <code>expected</code> must be a <code>GoldQuery</code>.</p>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            FirstDecisive (evaldata.scorers.combinators.FirstDecisive)" href="#evaldata.scorers.FirstDecisive">FirstDecisive</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>FirstDecisive</code> cascade: <code>SemanticEquivalence</code> compares the queries and confirms</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            FirstDecisive (evaldata.scorers.combinators.FirstDecisive)" href="#evaldata.scorers.FirstDecisive">FirstDecisive</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>equivalence first; when it cannot, <code>ResultSetEquivalence</code> runs both queries and decides</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            FirstDecisive (evaldata.scorers.combinators.FirstDecisive)" href="#evaldata.scorers.FirstDecisive">FirstDecisive</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>by diffing their results.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="evaldata.scorers.sql_equivalence_judge" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">sql_equivalence_judge</span>
+
+
+<a href="#evaldata.scorers.sql_equivalence_judge" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">sql_equivalence_judge</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="n"><a class="autorefs autorefs-internal" title="            Llm (evaldata.llm.Llm)" href="../llm/#evaldata.llm.Llm">Llm</a></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="            LlmJudge (evaldata.scorers.llm_judge.LlmJudge)" href="#evaldata.scorers.LlmJudge">LlmJudge</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>An <code>LlmJudge</code> pre-configured to grade whether two SQL queries are equivalent.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>model</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | <a class="autorefs autorefs-internal" title="            Llm (evaldata.llm.Llm)" href="../llm/#evaldata.llm.Llm">Llm</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A litellm grader-model identifier, or an <code>Llm</code> to use directly.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            LlmJudge (evaldata.scorers.llm_judge.LlmJudge)" href="#evaldata.scorers.LlmJudge">LlmJudge</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>An <code>LlmJudge</code> with SQL-equivalence criteria and few-shot examples.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="evaldata.scorers.default_equivalence_checks" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">default_equivalence_checks</span>
+
+
+<a href="#evaldata.scorers.default_equivalence_checks" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">default_equivalence_checks</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n"><span title="list">list</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" title="            EquivalenceCheck (evaldata.scorers.semantic_equivalence.EquivalenceCheck)" href="#evaldata.scorers.EquivalenceCheck">EquivalenceCheck</a></span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The default checks, cheapest and most portable first.</p>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            EquivalenceCheck (evaldata.scorers.semantic_equivalence.EquivalenceCheck)" href="#evaldata.scorers.EquivalenceCheck">EquivalenceCheck</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A fresh list of the default <code>EquivalenceCheck</code>s: just <code>AstEquivalence</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../types/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Types">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Types
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../solvers/" class="md-footer__link md-footer__link--next" aria-label="Next: Solvers">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Solvers
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; monospaceai
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
