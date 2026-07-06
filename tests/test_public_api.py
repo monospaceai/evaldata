@@ -50,6 +50,18 @@ def test_databricks_adapter_not_top_level() -> None:
         _ = evaldata.DatabricksAdapter
 
 
+def test_snowflake_adapter_subpackage() -> None:
+    from evaldata.platforms.snowflake import SnowflakeAdapter
+
+    assert platforms.SnowflakeAdapter is SnowflakeAdapter
+    assert "SnowflakeAdapter" in dir(platforms)
+
+
+def test_snowflake_adapter_not_top_level() -> None:
+    with pytest.raises(AttributeError):
+        _ = evaldata.SnowflakeAdapter
+
+
 def _blocking_import(blocked: str) -> Callable[..., Any]:
     real_import = builtins.__import__
 
@@ -90,6 +102,13 @@ def test_databricks_adapter_missing_databricks(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(builtins, "__import__", _blocking_import("databricks.sql"))
     with pytest.raises(ImportError, match=r"evaldata\[databricks\]"):
         platforms.__getattr__("DatabricksAdapter")
+
+
+def test_snowflake_adapter_missing_snowflake(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delitem(__import__("sys").modules, "evaldata.platforms.snowflake", raising=False)
+    monkeypatch.setattr(builtins, "__import__", _blocking_import("snowflake.connector"))
+    with pytest.raises(ImportError, match=r"evaldata\[snowflake\]"):
+        platforms.__getattr__("SnowflakeAdapter")
 
 
 def test_unknown_attribute_top_level() -> None:

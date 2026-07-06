@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from evaldata.platforms import databricks_platform, duckdb_platform, postgres_platform, resolve
+from evaldata.platforms import (
+    databricks_platform,
+    duckdb_platform,
+    postgres_platform,
+    resolve,
+    snowflake_platform,
+)
 from evaldata.platforms.registry import close_all
 from evaldata.types import PlatformRef
 
@@ -37,6 +43,15 @@ class TestRefBuilders:
     def test_databricks_platform_includes_catalog_and_schema_when_set(self) -> None:
         ref = databricks_platform(name="wh", server_hostname="h", http_path="/p", catalog="main", schema="sales")
         assert ref.config == {"server_hostname": "h", "http_path": "/p", "catalog": "main", "schema": "sales"}
+
+    def test_snowflake_platform_builds_ref(self) -> None:
+        ref = snowflake_platform(name="sf", account="acme-test", warehouse="COMPUTE_WH", role="EVALDATA")
+        assert ref == PlatformRef(
+            name="sf",
+            kind="snowflake",
+            dialect="snowflake",
+            config={"account": "acme-test", "warehouse": "COMPUTE_WH", "role": "EVALDATA"},
+        )
 
 
 @pytest.mark.unit
@@ -94,6 +109,24 @@ class TestResolve:
         )
         try:
             assert isinstance(adapter, DatabricksAdapter)
+        finally:
+            close_all()
+
+    def test_snowflake_extra_missing_raises_runtime_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Simulate the 'snowflake' extra not being installed: importing the adapter fails.
+        monkeypatch.setitem(sys.modules, "evaldata.platforms.snowflake", None)
+        with pytest.raises(RuntimeError, match="requires the 'snowflake' extra"):
+            resolve(snowflake_platform(name="sf-missing-extra", account="acme-test"))
+
+    def test_resolves_snowflake_through_registry(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Mock the connector so the registry's snowflake dispatch builds an adapter without a
+        # live account.
+        from evaldata.platforms.snowflake import SnowflakeAdapter
+
+        monkeypatch.setattr("snowflake.connector.connect", lambda **kwargs: types.SimpleNamespace(close=lambda: None))
+        adapter = resolve(snowflake_platform(name="sf-build", account="acme-test", warehouse="COMPUTE_WH"))
+        try:
+            assert isinstance(adapter, SnowflakeAdapter)
         finally:
             close_all()
 
