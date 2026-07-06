@@ -76,9 +76,9 @@ A [platform](reference/platforms.md) is the database the SQL runs on. A platform
 lightweight value (e.g. from `duckdb_platform(...)` or `databricks_platform(...)`); `resolve`
 turns it into a live adapter when the eval runs.
 
-Supported adapters today: **DuckDB**, **Postgres**, and **Databricks** (Snowflake and BigQuery
-are planned). On a real warehouse the adapter does more than ship SQL — for example, the
+Supported adapters today: **DuckDB**, **Postgres**, **Databricks**, and **Snowflake** (a BigQuery
+adapter is planned). On a real warehouse the adapter does more than ship SQL — for example, the
 Databricks adapter resolves precise column types and pushes expectation and equivalence checks
 down into SQL so rows aren't pulled back to compare. Cloud platforms authenticate through their
-own SDK, which reads your credentials from the environment — they aren't passed through the
-platform reference.
+own driver or SDK, which reads your credentials from the environment — they aren't passed through
+the platform reference.

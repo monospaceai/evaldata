@@ -93,6 +93,7 @@ def snowflake_platform(
     database: str | None = None,
     schema: str | None = None,
     authenticator: str | None = None,
+    workload_identity_provider: str | None = None,
 ) -> PlatformRef:
     """Build a `PlatformRef` for a Snowflake account.
 
@@ -106,8 +107,10 @@ def snowflake_platform(
         role: The default role, or `None` to leave the session default.
         database: The default database, or `None` to leave the session default.
         schema: The default schema, or `None` to leave the session default.
-        authenticator: The authenticator to use (e.g. `"externalbrowser"`, `"oauth"`),
-            or `None` for the connector's default.
+        authenticator: The authenticator to use (e.g. `"externalbrowser"`, `"oauth"`,
+            `"workload_identity"`), or `None` for the connector's default.
+        workload_identity_provider: The workload identity provider (e.g. `"OIDC"`) when
+            `authenticator` is `"workload_identity"`, or `None` otherwise.
 
     Returns:
         A serializable `PlatformRef` for the Snowflake account. Building the ref needs no
@@ -120,6 +123,7 @@ def snowflake_platform(
         "database": database,
         "schema": schema,
         "authenticator": authenticator,
+        "workload_identity_provider": workload_identity_provider,
     }
     config: dict[str, str] = {"account": account}
     config.update({k: v for k, v in fields.items() if v is not None})

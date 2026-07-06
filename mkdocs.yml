@@ -93,6 +93,7 @@ nav:
       - Evaluate a local Ollama model: guides/local-ollama.md
       - Evaluate a hosted model: guides/hosted-model.md
       - Evaluate against Databricks: guides/databricks.md
+      - Evaluate against Snowflake: guides/snowflake.md
       - Evaluate against a dbt project: guides/dbt.md
       - Evaluate dbt Semantic Layer queries: guides/dbt-semantic-layer.md
       - Reproduce dbt's Semantic Layer benchmark: guides/dbt-semantic-layer-benchmark.md
