@@ -33,6 +33,7 @@ from evaldata.platforms.registry import (
     duckdb_platform,
     postgres_platform,
     resolve,
+    snowflake_platform,
     sqlite_platform,
 )
 from evaldata.scorers import ExecutionAccuracy, ExpectationSuiteScorer, Scorer
@@ -420,6 +421,10 @@ def _build_refs(
     sqlite: str | None = None,
     databricks_server_hostname: str | None = None,
     databricks_http_path: str | None = None,
+    snowflake_account: str | None = None,
+    snowflake_user: str | None = None,
+    snowflake_warehouse: str | None = None,
+    snowflake_role: str | None = None,
 ) -> list[PlatformRef]:
     """Build a `PlatformRef` for each platform flag that was provided.
 
@@ -432,6 +437,10 @@ def _build_refs(
         sqlite: A SQLite database path, or `None` if the flag was not given.
         databricks_server_hostname: A Databricks workspace hostname, or `None`.
         databricks_http_path: A Databricks SQL Warehouse HTTP path, or `None`.
+        snowflake_account: A Snowflake account identifier, or `None` if the flag was not given.
+        snowflake_user: A Snowflake user for the ref, or `None`.
+        snowflake_warehouse: A Snowflake warehouse for the ref, or `None`.
+        snowflake_role: A Snowflake role for the ref, or `None`.
 
     Returns:
         One `PlatformRef` per platform whose flag(s) were provided, in flag order.
@@ -449,6 +458,16 @@ def _build_refs(
                 name="databricks",
                 server_hostname=databricks_server_hostname,
                 http_path=databricks_http_path,
+            )
+        )
+    if snowflake_account is not None:
+        refs.append(
+            snowflake_platform(
+                name="snowflake",
+                account=snowflake_account,
+                user=snowflake_user,
+                warehouse=snowflake_warehouse,
+                role=snowflake_role,
             )
         )
     return refs
@@ -507,6 +526,34 @@ def doctor(
         envvar="DATABRICKS_HTTP_PATH",
         help="Databricks SQL Warehouse HTTP path to check (paired with --databricks-server-hostname).",
     ),
+    snowflake_account: str | None = typer.Option(
+        None,
+        "--snowflake-account",
+        metavar="ACCOUNT",
+        envvar="SNOWFLAKE_ACCOUNT",
+        help="Snowflake account identifier to check.",
+    ),
+    snowflake_user: str | None = typer.Option(
+        None,
+        "--snowflake-user",
+        metavar="USER",
+        envvar="SNOWFLAKE_USER",
+        help="Snowflake user for the check (paired with --snowflake-account).",
+    ),
+    snowflake_warehouse: str | None = typer.Option(
+        None,
+        "--snowflake-warehouse",
+        metavar="WAREHOUSE",
+        envvar="SNOWFLAKE_WAREHOUSE",
+        help="Snowflake warehouse for the check.",
+    ),
+    snowflake_role: str | None = typer.Option(
+        None,
+        "--snowflake-role",
+        metavar="ROLE",
+        envvar="SNOWFLAKE_ROLE",
+        help="Snowflake role for the check.",
+    ),
     dbt_project: Path | None = typer.Option(
         None, "--dbt-project", metavar="DIR", help="dbt project directory to resolve via its profile and check."
     ),
@@ -522,6 +569,12 @@ def doctor(
             `DATABRICKS_SERVER_HOSTNAME`); required together with `databricks_http_path`.
         databricks_http_path: A Databricks SQL Warehouse HTTP path to check (also read from
             `DATABRICKS_HTTP_PATH`); required together with `databricks_server_hostname`.
+        snowflake_account: A Snowflake account identifier to check (also read from
+            `SNOWFLAKE_ACCOUNT`).
+        snowflake_user: A Snowflake user for the check (also read from `SNOWFLAKE_USER`).
+        snowflake_warehouse: A Snowflake warehouse for the check (also read from
+            `SNOWFLAKE_WAREHOUSE`).
+        snowflake_role: A Snowflake role for the check (also read from `SNOWFLAKE_ROLE`).
         dbt_project: A dbt project directory whose profile target is resolved to a platform and
             checked.
 
@@ -538,6 +591,10 @@ def doctor(
         sqlite=sqlite,
         databricks_server_hostname=databricks_server_hostname,
         databricks_http_path=databricks_http_path,
+        snowflake_account=snowflake_account,
+        snowflake_user=snowflake_user,
+        snowflake_warehouse=snowflake_warehouse,
+        snowflake_role=snowflake_role,
     )
     dbt_failure: DbtError | None = None
     if dbt_project is not None:

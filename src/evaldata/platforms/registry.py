@@ -1,5 +1,6 @@
 """Platform-reference builders and `PlatformRef` -> live `PlatformAdapter` resolution."""
 
+import os
 from typing import assert_never
 
 from evaldata.platforms.base import PlatformAdapter
@@ -82,6 +83,49 @@ def databricks_platform(
     return PlatformRef(name=name, kind="databricks", dialect="databricks", config=config)
 
 
+def snowflake_platform(
+    name: str,
+    *,
+    account: str,
+    user: str | None = None,
+    warehouse: str | None = None,
+    role: str | None = None,
+    database: str | None = None,
+    schema: str | None = None,
+    authenticator: str | None = None,
+) -> PlatformRef:
+    """Build a `PlatformRef` for a Snowflake account.
+
+    Holds only non-secret connection details; credentials are not included here.
+
+    Args:
+        name: A unique name identifying this platform connection.
+        account: The Snowflake account identifier.
+        user: The Snowflake user name, or `None` to rely on `authenticator`.
+        warehouse: The default warehouse, or `None` to leave the session default.
+        role: The default role, or `None` to leave the session default.
+        database: The default database, or `None` to leave the session default.
+        schema: The default schema, or `None` to leave the session default.
+        authenticator: The authenticator to use (e.g. `"externalbrowser"`, `"oauth"`),
+            or `None` for the connector's default.
+
+    Returns:
+        A serializable `PlatformRef` for the Snowflake account. Building the ref needs no
+        driver.
+    """
+    fields = {
+        "user": user,
+        "warehouse": warehouse,
+        "role": role,
+        "database": database,
+        "schema": schema,
+        "authenticator": authenticator,
+    }
+    config: dict[str, str] = {"account": account}
+    config.update({k: v for k, v in fields.items() if v is not None})
+    return PlatformRef(name=name, kind="snowflake", dialect="snowflake", config=config)
+
+
 def _build_duckdb(ref: PlatformRef) -> PlatformAdapter:
     return DuckDBAdapter(database=str(ref.config.get("path", ":memory:")))
 
@@ -115,6 +159,31 @@ def _build_databricks(ref: PlatformRef) -> PlatformAdapter:
     )
 
 
+def _build_snowflake(ref: PlatformRef) -> PlatformAdapter:
+    try:
+        from evaldata.platforms.snowflake import SnowflakeAdapter
+    except ImportError as e:
+        msg = "SnowflakeAdapter requires the 'snowflake' extra; install it with `uv sync --extra snowflake`"
+        raise RuntimeError(msg) from e
+    config = ref.config
+    return SnowflakeAdapter(
+        account=str(config["account"]),
+        user=str(config["user"]) if "user" in config else None,
+        password=os.environ.get("SNOWFLAKE_PASSWORD"),
+        warehouse=str(config["warehouse"]) if "warehouse" in config else None,
+        role=str(config["role"]) if "role" in config else None,
+        database=str(config["database"]) if "database" in config else None,
+        schema=str(config["schema"]) if "schema" in config else None,
+        authenticator=str(config["authenticator"]) if "authenticator" in config else None,
+        token=os.environ.get("SNOWFLAKE_TOKEN"),
+        private_key_file=os.environ.get("SNOWFLAKE_PRIVATE_KEY_FILE"),
+        private_key_file_pwd=os.environ.get("SNOWFLAKE_PRIVATE_KEY_FILE_PWD"),
+        workload_identity_provider=str(config["workload_identity_provider"])
+        if "workload_identity_provider" in config
+        else None,
+    )
+
+
 def _build(ref: PlatformRef) -> PlatformAdapter:
     """Build a live adapter for `ref` by exhaustive dispatch over its kind.
 
@@ -134,6 +203,8 @@ def _build(ref: PlatformRef) -> PlatformAdapter:
             return _build_postgres(ref)
         case "databricks":
             return _build_databricks(ref)
+        case "snowflake":
+            return _build_snowflake(ref)
         case _ as unreachable:  # pragma: no cover - exhaustiveness guard
             assert_never(unreachable)
 

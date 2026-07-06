@@ -10,6 +10,7 @@ from evaldata.platforms.registry import (
     duckdb_platform,
     postgres_platform,
     resolve,
+    snowflake_platform,
     sqlite_platform,
 )
 from evaldata.platforms.sqlite import SqliteAdapter
@@ -17,23 +18,27 @@ from evaldata.platforms.sqlite import SqliteAdapter
 if TYPE_CHECKING:
     from evaldata.platforms.databricks import DatabricksAdapter
     from evaldata.platforms.postgres import PostgresAdapter
+    from evaldata.platforms.snowflake import SnowflakeAdapter
 
 __all__ = [
     "DatabricksAdapter",
     "DuckDBAdapter",
     "PlatformAdapter",
     "PostgresAdapter",
+    "SnowflakeAdapter",
     "SqliteAdapter",
     "databricks_platform",
     "duckdb_platform",
     "postgres_platform",
     "resolve",
+    "snowflake_platform",
     "sqlite_platform",
 ]
 
 _LAZY_ADAPTERS = {
     "PostgresAdapter": ("evaldata.platforms.postgres", "postgres"),
     "DatabricksAdapter": ("evaldata.platforms.databricks", "databricks"),
+    "SnowflakeAdapter": ("evaldata.platforms.snowflake", "snowflake"),
 }
 
 
