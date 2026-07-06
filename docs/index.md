@@ -26,15 +26,16 @@ When structure is inconclusive, it falls back to warehouse execution or an LLM j
 uv add evaldata                # core (includes the DuckDB adapter)
 uv add "evaldata[postgres]"    # + Postgres adapter
 uv add "evaldata[databricks]"  # + Databricks adapter
+uv add "evaldata[snowflake]"   # + Snowflake adapter
 uv add "evaldata[litellm]"     # + litellm, to call a model as the AI under test
 ```
 
-DuckDB, Postgres, and Databricks are the adapters available today. Snowflake and BigQuery
-adapters are planned.
+DuckDB, Postgres, Databricks, and Snowflake are the adapters available today. A BigQuery adapter
+is planned.
 
 ## Where to go next
 
 - **[Getting started](getting-started.md)** — write and run your first eval in a few minutes.
-- **Guides** — [semantic equivalence](guides/semantic-equivalence.md), [LLM judge](guides/llm-judge.md), [a local Ollama model](guides/local-ollama.md), [a hosted model](guides/hosted-model.md), [Databricks](guides/databricks.md).
+- **Guides** — [semantic equivalence](guides/semantic-equivalence.md), [LLM judge](guides/llm-judge.md), [a local Ollama model](guides/local-ollama.md), [a hosted model](guides/hosted-model.md), [Databricks](guides/databricks.md), [Snowflake](guides/snowflake.md).
 - **[Concepts](concepts.md)** — the building blocks: cases, solvers, scorers, platforms.
 - **[API reference](reference/index.md)** — the public API, generated from docstrings.
