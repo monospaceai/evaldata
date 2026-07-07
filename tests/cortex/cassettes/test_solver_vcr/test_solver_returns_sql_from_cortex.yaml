@@ -1,0 +1,74 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "user", "content": [{"type": "text", "text": "What
+      is the total order amount for each customer region?"}]}], "stream": false, "semantic_view":
+      "JAFFLE_SHOP_DB.PUBLIC.JAFFLE_SHOP_SV"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '205'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.34.2
+    method: POST
+    uri: https://test-account.snowflakecomputing.com/api/v2/cortex/analyst/message
+  response:
+    body:
+      string: "{\n  \"message\" : {\n    \"role\" : \"analyst\",\n    \"content\"
+        : [ {\n      \"type\" : \"text\",\n      \"text\" : \"This is our interpretation
+        of your question:\\n\\nWhat is the total order amount for each customer region
+        over the entire available time period?\"\n    }, {\n      \"type\" : \"sql\",\n
+        \     \"statement\" : \"SELECT *\\nFROM SEMANTIC_VIEW(\\n    JAFFLE_SHOP_DB.PUBLIC.JAFFLE_SHOP_SV\\n
+        \   DIMENSIONS customers.region\\n    METRICS total_amount\\n)\\n -- Generated
+        by Cortex Analyst (request_id: cdfc1466-dbdd-4acc-8a38-98a46802bbd5)\\n;\",\n
+        \     \"confidence\" : {\n        \"verified_query_used\" : null\n      }\n
+        \   } ]\n  },\n  \"request_id\" : \"cdfc1466-dbdd-4acc-8a38-98a46802bbd5\",\n
+        \ \"warnings\" : [ ],\n  \"semantic_model_selection\" : null,\n  \"response_metadata\"
+        : {\n    \"model_names\" : [ \"claude-sonnet-4-6\" ],\n    \"is_semantic_sql\"
+        : true,\n    \"cortex_search_retrieval\" : [ ],\n    \"question_category\"
+        : \"CLEAR_SQL\",\n    \"analyst_orchestration_path\" : \"regular_sqlgen\",\n
+        \   \"internal_chart_errors\" : [ ],\n    \"analyst_latency_ms\" : 2523.0\n
+        \ }\n}"
+    headers:
+      content-encoding:
+      - gzip
+      content-type:
+      - application/json
+      date:
+      - Tue, 07 Jul 2026 10:46:49 GMT
+      expect-ct:
+      - enforce, max-age=3600
+      server:
+      - SF-LB-T1
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding, User-Agent
+      x-content-type-options:
+      - nosniff
+      x-envoy-attempt-count:
+      - '1'
+      x-envoy-upstream-service-time:
+      - '2825'
+      x-frame-options:
+      - deny
+      x-snowflake-fe-config:
+      - v20260629.0.0.1782724554.au.1783421118919
+      x-snowflake-fe-instance:
+      - '-'
+      x-snowflake-request-id:
+      - cdfc1466-dbdd-4acc-8a38-98a46802bbd5
+      x-xss-protection:
+      - 1; mode=block
+    status:
+      code: 200
+      message: OK
+version: 1

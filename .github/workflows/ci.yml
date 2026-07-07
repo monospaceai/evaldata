@@ -114,9 +114,10 @@ jobs:
           done
           ollama pull qwen2.5-coder:1.5b
           # Snowflake cloud is excluded (OIDC is main-only); it runs in the `snowflake` job.
+          # The live Cortex e2e is excluded too (it consumes credits); it runs off the PR path.
           just lint
           just typecheck
-          just test-cov '-m "not snowflake"'
+          just test-cov '-m "not snowflake and not cortex"'
           just build
         env:
           EVALDATA_LOCAL_MODEL: ollama_chat/qwen2.5-coder:1.5b

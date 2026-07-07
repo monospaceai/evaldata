@@ -1,0 +1,134 @@
+# Evaluate Snowflake Cortex Analyst
+
+[Cortex Analyst](https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-analyst) turns a
+natural-language question into SQL against a semantic model. `CortexAnalystSolver` sends the
+question to the Cortex Analyst REST endpoint, returns the SQL it generates, and `evaldata` runs
+that SQL on Snowflake and scores it — so you can regression-test your deployed Cortex Analyst with
+the same cases, scorers, and reports you use for any other solver.
+
+## Prerequisites
+
+```bash
+uv add "evaldata[cortex]"
+```
+
+The account needs the `SNOWFLAKE.CORTEX_USER` database role (granted to `PUBLIC` by default) and a
+semantic model to answer against.
+
+## Provision a semantic view
+
+Cortex Analyst answers against a semantic model. This guide uses a
+[semantic view](https://docs.snowflake.com/en/user-guide/views-semantic/overview) — a native
+object created with DDL. The example is a two-table jaffle shop:
+
+```sql
+CREATE OR REPLACE TABLE JAFFLE_SHOP_DB.PUBLIC.CUSTOMERS (ID NUMBER, NAME VARCHAR, REGION VARCHAR);
+CREATE OR REPLACE TABLE JAFFLE_SHOP_DB.PUBLIC.ORDERS
+  (ID NUMBER, CUSTOMER_ID NUMBER, ORDER_DATE DATE, AMOUNT NUMBER(10,2));
+
+CREATE OR REPLACE SEMANTIC VIEW JAFFLE_SHOP_DB.PUBLIC.JAFFLE_SHOP_SV
+  TABLES (
+    customers AS JAFFLE_SHOP_DB.PUBLIC.CUSTOMERS PRIMARY KEY (ID) COMMENT = 'One row per customer',
+    orders AS JAFFLE_SHOP_DB.PUBLIC.ORDERS PRIMARY KEY (ID) COMMENT = 'One row per order'
+  )
+  RELATIONSHIPS (
+    orders_to_customers AS orders (CUSTOMER_ID) REFERENCES customers
+  )
+  FACTS (
+    orders.amount AS orders.AMOUNT
+  )
+  DIMENSIONS (
+    customers.customer_name AS customers.NAME COMMENT = 'Customer name',
+    customers.region AS customers.REGION COMMENT = 'Customer region',
+    orders.order_date AS orders.ORDER_DATE COMMENT = 'Date the order was placed'
+  )
+  METRICS (
+    orders.order_count AS COUNT(orders.ID) COMMENT = 'Number of orders',
+    orders.total_amount AS SUM(orders.AMOUNT) COMMENT = 'Total order amount'
+  );
+```
+
+Cortex Analyst also accepts a semantic-model YAML file on a stage; pass `semantic_model_file` to
+the solver instead of `semantic_view` to use one.
+
+## Build the solver
+
+The solver sends questions over the REST endpoint using the account host and session token of a
+Snowflake connection, so the same connection you evaluate against also authenticates the Cortex
+Analyst call. Authentication is configured as for any Snowflake connection (see the
+[Snowflake guide](snowflake.md#authentication)).
+
+```python
+from evaldata.cortex import CortexAnalystClient, CortexAnalystSolver
+from evaldata.platforms import resolve, snowflake_platform
+
+platform = snowflake_platform(
+    name="snowflake",
+    account="myorg-myaccount",
+    warehouse="COMPUTE_WH",
+    role="EVALDATA_ROLE",
+    database="JAFFLE_SHOP_DB",
+    schema="PUBLIC",
+)
+adapter = resolve(platform)
+solver = CortexAnalystSolver(
+    CortexAnalystClient.from_connection(adapter.connection),
+    semantic_view="JAFFLE_SHOP_DB.PUBLIC.JAFFLE_SHOP_SV",
+)
+```
+
+When Cortex Analyst returns suggestions instead of SQL (an ambiguous question), the solver reports
+an `empty_response` `SolverError`.
+
+## Write the eval
+
+Score the generated SQL against a gold query with `ExecutionAccuracy`: it runs both queries and
+compares the rows by value.
+
+```python
+import pytest
+
+from evaldata import ExecutionAccuracy, EvalCase, assert_eval
+from evaldata.types import GoldQuery
+
+pytestmark = pytest.mark.cortex
+
+
+def test_total_amount_by_region() -> None:
+    case = EvalCase(
+        id="total-amount-by-region",
+        input="What is the total order amount for each customer region?",
+        expected=GoldQuery(
+            sql=(
+                "SELECT c.REGION, SUM(o.AMOUNT) "
+                "FROM JAFFLE_SHOP_DB.PUBLIC.ORDERS o "
+                "JOIN JAFFLE_SHOP_DB.PUBLIC.CUSTOMERS c ON o.CUSTOMER_ID = c.ID "
+                "GROUP BY c.REGION"
+            )
+        ),
+        platform=platform,
+    )
+    scorer = ExecutionAccuracy(row_order="ignore", column_alignment="by_value")
+    assert_eval(case, solver, scorers=[scorer], adapter=adapter)
+```
+
+## Run it
+
+```bash
+uv run pytest test_cortex.py -q
+```
+
+Each case sends one Cortex Analyst message and runs the SQL on your warehouse, both of which
+consume Snowflake credits. See the [Support & cost policy](../support-policy.md) for how evaldata
+tests Cortex Analyst without spending credits on every change.
+
+## Accuracy
+
+On the five-question jaffle-shop set in evaldata's test suite, Cortex Analyst scores **100% (5/5)**
+execution accuracy as of 2026-07-08. The semantic view and questions above reproduce it.
+
+## Next steps
+
+- [Support & cost policy](../support-policy.md) — how live and replayed tests are structured.
+- [Evaluate against Snowflake](snowflake.md) — the adapter, authentication, and warehouse pushdown.
+- [Cortex reference](../reference/cortex.md) — the solver and client API.

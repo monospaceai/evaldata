@@ -27,6 +27,7 @@ uv add evaldata                # core (includes the DuckDB adapter)
 uv add "evaldata[postgres]"    # + Postgres adapter
 uv add "evaldata[databricks]"  # + Databricks adapter
 uv add "evaldata[snowflake]"   # + Snowflake adapter
+uv add "evaldata[cortex]"      # + Snowflake Cortex Analyst solver
 uv add "evaldata[litellm]"     # + litellm, to call a model as the AI under test
 ```
 
@@ -36,6 +37,6 @@ is planned.
 ## Where to go next
 
 - **[Getting started](getting-started.md)** — write and run your first eval in a few minutes.
-- **Guides** — [semantic equivalence](guides/semantic-equivalence.md), [LLM judge](guides/llm-judge.md), [a local Ollama model](guides/local-ollama.md), [a hosted model](guides/hosted-model.md), [Databricks](guides/databricks.md), [Snowflake](guides/snowflake.md).
+- **Guides** — [semantic equivalence](guides/semantic-equivalence.md), [LLM judge](guides/llm-judge.md), [a local Ollama model](guides/local-ollama.md), [a hosted model](guides/hosted-model.md), [Databricks](guides/databricks.md), [Snowflake](guides/snowflake.md), [Cortex Analyst](guides/cortex.md).
 - **[Concepts](concepts.md)** — the building blocks: cases, solvers, scorers, platforms.
 - **[API reference](reference/index.md)** — the public API, generated from docstrings.
