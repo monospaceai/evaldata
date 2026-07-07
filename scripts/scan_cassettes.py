@@ -1,15 +1,12 @@
 """Refuse to commit a vcr cassette that still contains a credential.
 
-Deny-list header scrubbing fails open when a provider adds a new secret-bearing field, so this
-is the independent second net: it scans recorded cassettes for credential markers and exits
-non-zero if any survive. Run over cassette files by the pre-commit hook of the same name.
+Scans cassette files for credential markers and exits non-zero if any are found.
 """
 
 import re
 import sys
 
-# Credential markers that must never appear in a committed cassette. Kept provider-agnostic and
-# free of any real account identifier so the scanner itself leaks nothing.
+# Provider-agnostic and free of real identifiers, so the scanner itself leaks nothing.
 _FORBIDDEN = [
     re.compile(r"snowflake token", re.IGNORECASE),
     re.compile(r"\bauthorization\b\s*:", re.IGNORECASE),
@@ -25,9 +22,6 @@ _FORBIDDEN = [
 def scan(path: str) -> list[str]:
     """Return the credential markers found in the cassette at `path`.
 
-    Args:
-        path: The cassette file to scan.
-
     Returns:
         A list of human-readable findings, empty when the cassette is clean.
     """
@@ -38,9 +32,6 @@ def scan(path: str) -> list[str]:
 
 def main(paths: list[str]) -> int:
     """Scan `paths` and report any findings.
-
-    Args:
-        paths: The cassette files to scan.
 
     Returns:
         `1` if any credential marker was found, else `0`.

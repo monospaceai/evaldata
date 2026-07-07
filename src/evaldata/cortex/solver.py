@@ -81,9 +81,6 @@ class CortexAnalystSolver:
     def solve(self, case: EvalCase) -> SolverOutput:
         """Produce SQL for `case` by asking Cortex Analyst its `input` question.
 
-        Args:
-            case: The eval case to solve.
-
         Returns:
             A `SolverOutput` carrying the generated SQL and telemetry, or a typed `SolverError`
             on an expected transport, HTTP, or no-SQL failure.

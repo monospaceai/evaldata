@@ -1,8 +1,4 @@
-"""Unit tests for `CortexAnalystSolver` — parsing, error mapping, and reference validation.
-
-The solver talks only to the `CortexTransport` seam, so its unit tests inject a fake transport
-(no HTTP, no network). The real client is covered by its own tests and the vcr replay.
-"""
+"""Unit tests for `CortexAnalystSolver` — parsing, error mapping, and reference validation."""
 
 from typing import Any
 

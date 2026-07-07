@@ -1,11 +1,4 @@
-"""Shared fixtures for the Cortex Analyst tests: vcr scrubbing, replay/record client, live e2e.
-
-The vcr config strips the `Authorization` header and rewrites the account host to a placeholder
-before a cassette is written, so a recording carries no credential and no account identifier.
-Recording (against the live endpoint) is opt-in via the `CORTEX_RECORD` environment variable;
-without it the client points at the placeholder host and replays the committed cassette offline.
-The `live_adapter`/`jaffle_view` fixtures back the `cortex`-marked live e2e.
-"""
+"""Shared fixtures for the Cortex Analyst tests: vcr scrubbing, replay/record client, live e2e."""
 
 import os
 from collections.abc import Iterator

@@ -1,9 +1,4 @@
-"""Integration test for `CortexAnalystSolver` replayed from a recorded cassette.
-
-The cassette was recorded once against the live Cortex Analyst endpoint (with `CORTEX_RECORD`
-set) and replays offline on every run: it exercises the real HTTP request/response path through
-`requests` with no network and no credentials.
-"""
+"""Integration test for `CortexAnalystSolver` replayed from a recorded cassette."""
 
 import pytest
 

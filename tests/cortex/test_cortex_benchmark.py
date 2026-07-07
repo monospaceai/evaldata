@@ -1,8 +1,5 @@
-"""Live Cortex Analyst accuracy benchmark over the jaffle-shop semantic view (costs credits).
-
-Marked `cortex`: excluded from the PR gate and the default check. Asks Cortex Analyst a set of
-natural-language questions, executes the SQL it returns, and scores each against a gold query by
-execution accuracy. Prints the aggregate accuracy and requires every case to pass.
+"""Live Cortex Analyst accuracy benchmark over the jaffle-shop semantic view (costs credits);
+excluded from the default run via the `cortex` marker.
 """
 
 import pytest

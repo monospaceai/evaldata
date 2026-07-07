@@ -1,8 +1,4 @@
-"""Unit tests for `CortexAnalystClient` — request building, status mapping, and token reuse.
-
-The client's HTTP call is exercised offline by injecting a fake `requests.Session`; the live
-Cortex Analyst endpoint is covered by the vcr replay test and the `cortex`-marked e2e.
-"""
+"""Unit tests for `CortexAnalystClient` — request building, status mapping, and token reuse."""
 
 from dataclasses import dataclass
 from typing import Any

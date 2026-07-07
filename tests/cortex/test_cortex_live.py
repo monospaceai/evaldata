@@ -1,8 +1,5 @@
-"""Live end-to-end test against the real Cortex Analyst endpoint (costs Snowflake credits).
-
-Marked `cortex`: excluded from the PR gate and the default local check, run manually or by a
-dedicated off-by-default job. Builds the jaffle-shop fixture, asks Cortex Analyst a question,
-executes the SQL it returns, and asserts the answer matches the known totals.
+"""Live end-to-end test against the real Cortex Analyst endpoint (costs Snowflake credits);
+excluded from the default run via the `cortex` marker.
 """
 
 from decimal import Decimal
