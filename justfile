@@ -13,6 +13,10 @@ test-cov *args:
 test-cloud *args:
     uv run --all-extras --group fixtures pytest -m cloud {{args}}
 
+# Run only the live Cortex Analyst e2e (consumes Snowflake credits); needs the secrets in the env.
+test-cortex *args:
+    uv run --all-extras --group fixtures pytest -m cortex {{args}}
+
 # Regenerate the checked-in dbt fixture artifacts (needs the `fixtures` group: dbt-duckdb).
 dbt-fixture:
     uv run --group fixtures bash tests/dbt/fixtures/jaffle_duckdb/regen.sh
@@ -48,12 +52,13 @@ docs-deploy version:
     uv run --group docs mike set-default --push latest
 
 # Everyday gate: runs everything incl. `cloud` (needs credentials in the env); coverage 100%.
+# The live Cortex e2e (`cortex`) is off by default — it burns credits; run it via `just test-cortex`.
 check: lint typecheck
-    just test-cov
+    just test-cov '-m "not cortex"'
 
-# Fast iteration: like `check` but skips `cloud`; no coverage gate. CI still runs everything.
+# Fast iteration: like `check` but skips `cloud`/`cortex`; no coverage gate. CI still runs everything.
 check-nocloud: lint typecheck
-    just test '-m "not cloud"'
+    just test '-m "not cloud and not cortex"'
 
 ci: check build
 

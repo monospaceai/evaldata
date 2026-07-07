@@ -129,6 +129,11 @@ class SnowflakeAdapter:
         self._conn = snowflake.connector.connect(**{k: v for k, v in connect_kwargs.items() if v is not None})
         self._cursor: SnowflakeCursor | None = None
 
+    @property
+    def connection(self) -> snowflake.connector.SnowflakeConnection:
+        """The live Snowflake connection backing this adapter."""
+        return self._conn
+
     def cancel(self) -> None:
         """Abort the query currently executing on this connection, if any.
 

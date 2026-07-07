@@ -94,6 +94,7 @@ nav:
       - Evaluate a hosted model: guides/hosted-model.md
       - Evaluate against Databricks: guides/databricks.md
       - Evaluate against Snowflake: guides/snowflake.md
+      - Evaluate Snowflake Cortex Analyst: guides/cortex.md
       - Evaluate against a dbt project: guides/dbt.md
       - Evaluate dbt Semantic Layer queries: guides/dbt-semantic-layer.md
       - Reproduce dbt's Semantic Layer benchmark: guides/dbt-semantic-layer-benchmark.md
@@ -101,6 +102,7 @@ nav:
       - Score with an LLM judge: guides/llm-judge.md
       - Run a text-to-SQL benchmark: guides/benchmarks.md
   - Concepts: concepts.md
+  - Support & cost policy: support-policy.md
   - API reference:
       - reference/index.md
       - Evals & cases: reference/eval.md
@@ -110,4 +112,5 @@ nav:
       - LLM: reference/llm.md
       - Equivalence: reference/equivalence.md
       - Platforms: reference/platforms.md
+      - Cortex Analyst: reference/cortex.md
       - dbt: reference/dbt.md

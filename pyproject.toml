@@ -52,6 +52,10 @@ databricks = [
     "databricks-sql-connector>=4.2.6",
     "databricks-sdk>=0.30.0",
 ]
+cortex = [
+    "evaldata[snowflake]",
+    "requests>=2.32.0",
+]
 litellm = [
     "litellm>=1.85.1",
 ]
@@ -73,7 +77,7 @@ all-platforms = [
     "evaldata[postgres,snowflake,bigquery,databricks]",
 ]
 all = [
-    "evaldata[all-platforms,litellm,tracing,benchmarks,dbt,dbt-sl]",
+    "evaldata[all-platforms,litellm,tracing,benchmarks,dbt,dbt-sl,cortex]",
 ]
 
 [project.urls]
@@ -101,9 +105,11 @@ dev = [
     "hypothesis>=6.140.0",
     "pre-commit>=4.6.0",
     "pytest-cov>=7.1.0",
+    "pytest-recording>=0.13.2",
     "pytest-timeout>=2.4.0",
     "pytest-xdist>=3.8.0",
     "python-dotenv>=1.0.1",
+    "vcrpy>=7.0.0",
     "ruff>=0.15.14",
     "ty>=0.0.39",
 ]
@@ -180,6 +186,7 @@ markers = [
     "e2e: end-to-end tests against a real platform",
     "cloud: e2e against a hosted backend needing secret credentials (Databricks, …); run by default, skipped only by the `not cloud` fast path",
     "snowflake: cloud e2e reachable only via GitHub Actions OIDC (main branch); excluded from the PR gate, run by the dedicated main-only job",
+    "cortex: live e2e against Cortex Analyst, consuming Snowflake credits; excluded from the PR gate, run manually or by a dedicated off-by-default job",
 ]
 
 # ---------------------------------------------------------------------------
@@ -191,6 +198,10 @@ source = ["src/evaldata", "examples"]
 parallel = true
 omit = [
     "tests/*",
+    # Live-only examples: they run against a real account off the PR gate, so their lines are
+    # never executed in the coverage run. The Cortex solver's own coverage comes from its unit tests.
+    "examples/07_snowflake/*",
+    "examples/08_cortex/*",
 ]
 
 [tool.coverage.report]

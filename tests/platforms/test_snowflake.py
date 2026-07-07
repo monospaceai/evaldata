@@ -222,6 +222,10 @@ class TestLifecycle:
         assert captured["private_key_file"] == "/k.p8"
         assert captured["private_key_file_pwd"] == "pw"
 
+    def test_connection_exposes_the_underlying_connection(self) -> None:
+        adapter = _adapter(_FakeCursor(None, []))
+        assert adapter.connection is adapter._conn  # noqa: SLF001
+
     def test_cancel_aborts_the_active_cursor(self) -> None:
         cursor = _FakeCursor(None, [])
         _adapter(cursor, active=True).cancel()

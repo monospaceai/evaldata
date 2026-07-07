@@ -26,6 +26,16 @@ repos:
         language: system
         types_or: [python, pyi]
         pass_filenames: false
+      - id: scan-cassettes
+        name: scan vcr cassettes for leaked credentials
+        entry: python scripts/scan_cassettes.py
+        language: system
+        files: cassettes/.*\.(yaml|yml)$
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
 
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.9.7
