@@ -34,8 +34,8 @@ a secret scanner blocks any recording that still contains one.
 
 Cortex Analyst generates SQL with a model, so its output changes over time. Any accuracy number
 evaldata publishes is a measurement on a fixed set of questions at a stated date, not a standing
-guarantee. The [Cortex Analyst guide](guides/cortex.md) ships the semantic view and questions
-behind its number so you can reproduce it on your own account.
+guarantee. The semantic view, seed data, and questions behind the number ship in the repository as
+an off-by-default benchmark, so you can reproduce it on your own account.
 
 ## Best effort
 
