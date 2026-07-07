@@ -1,7 +1,7 @@
 # Evaluate against Snowflake
 
-Run evals on Snowflake. The solver returns fixed SQL, and `evaldata` runs structural checks in the
-warehouse instead of checking rows in Python.
+Run evals on Snowflake. The solver returns fixed SQL, and `evaldata` runs the checks as SQL in the
+warehouse instead of pulling rows back into Python.
 
 ## Prerequisites
 
@@ -13,14 +13,15 @@ uv add "evaldata[snowflake]"
 
 - **Warehouse pushdown** — `row_count`, `not_null`, and `unique` expectations run as SQL in
   Snowflake.
-- **Credentials outside the ref** — the `PlatformRef` stores account, warehouse, role, database, and
-  schema settings; credentials come from the environment.
+- **Authentication is configured separately** — `snowflake_platform(...)` describes the account,
+  warehouse, and role; you set up authentication through environment variables (see
+  [Authentication](#authentication)).
 - **Temporary setup** — the fixture creates a temporary table for the eval and leaves no table
   behind.
 
 ## Configure a connection
 
-Build a `PlatformRef` with `snowflake_platform`:
+Describe your Snowflake connection with `snowflake_platform`:
 
 ```python
 from evaldata.platforms import snowflake_platform
@@ -42,17 +43,17 @@ platform = snowflake_platform(
 `warehouse`, `role`, `database`, and `schema` set the session defaults. Include `database` and
 `schema` when your SQL uses unqualified table names.
 
-The platform ref does not store credentials. `resolve(platform)` reads them from environment
-variables when the eval opens the connection.
+When an eval runs, `resolve(platform)` opens the connection using the authentication configured
+under [Authentication](#authentication).
 
 ## Authentication
 
-- **Password** — set `SNOWFLAKE_PASSWORD`; set `user` on the platform ref.
+- **Password** — set `SNOWFLAKE_PASSWORD`, and pass `user` to `snowflake_platform(...)`.
 - **Key pair** — set `SNOWFLAKE_PRIVATE_KEY_FILE` to a PEM-encoded PKCS#8 private key. If the key is
   encrypted, also set `SNOWFLAKE_PRIVATE_KEY_FILE_PWD`.
-- **Workload identity (OIDC)** — set `authenticator="WORKLOAD_IDENTITY"` and
-  `workload_identity_provider="OIDC"` on the platform ref, then set `SNOWFLAKE_TOKEN` to the token
-  issued by your CI provider.
+- **Workload identity (OIDC)** — pass `authenticator="WORKLOAD_IDENTITY"` and
+  `workload_identity_provider="OIDC"` to `snowflake_platform(...)`, then set `SNOWFLAKE_TOKEN` to the
+  token issued by your CI provider.
 
 ## Write the eval
 
@@ -118,8 +119,8 @@ def test_expectation_suite_pushdown(case: EvalCase) -> None:
     assert_eval(case, solver, scorers=[ExpectationSuiteScorer()])
 ```
 
-`resolve(_PLATFORM)` is cached by platform name, so the eval runs in the same session that created
-the temporary table.
+`resolve` reuses one connection per platform `name`, so the eval runs in the same session that
+created the temporary table.
 
 Snowflake folds unquoted identifiers to uppercase. The query above returns `ID` and `CUSTOMER`, so
 expectations must use `ID`.
