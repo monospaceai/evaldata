@@ -60,70 +60,13 @@ under [Authentication](#authentication).
 Create `test_snowflake.py`:
 
 ```python
-from collections.abc import Iterator
-
-import pytest
-
-from evaldata import (
-    CallableSolver,
-    EvalCase,
-    ExpectationSuiteScorer,
-    assert_eval,
-    eval_case,
-)
-from evaldata.platforms import resolve, snowflake_platform
-
-pytestmark = [pytest.mark.e2e, pytest.mark.cloud]
-
-_TABLE = "evaldata_orders"
-_PLATFORM = snowflake_platform(
-    name="snowflake",
-    account="myorg-myaccount",
-    user="EVALDATA_SVC",
-    warehouse="COMPUTE_WH",
-    role="EVALDATA_ROLE",
-    database="EVALDATA",
-    schema="PUBLIC",
-)
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _seed_warehouse() -> Iterator[None]:
-    adapter = resolve(_PLATFORM)
-
-    for sql in [
-        f"CREATE OR REPLACE TEMPORARY TABLE {_TABLE} (id INT, customer STRING)",
-        f"INSERT INTO {_TABLE} VALUES (1, 'Ada'), (2, 'Bo'), (3, 'Cy')",
-    ]:
-        result = adapter.execute(sql)
-        if result.error is not None:
-            raise RuntimeError(f"failed to seed Snowflake table {_TABLE!r}: {result.error.message}")
-
-    yield
-
-
-@eval_case(
-    input="List every order's id and customer.",
-    expected={
-        "kind": "expectation_suite",
-        "expectations": [
-            {"kind": "row_count", "exact": 3},
-            {"kind": "not_null", "column": "ID"},
-            {"kind": "unique", "column": "ID"},
-        ],
-    },
-    platform=_PLATFORM,
-)
-def test_expectation_suite_pushdown(case: EvalCase) -> None:
-    solver = CallableSolver(lambda c: f"SELECT id, customer FROM {_TABLE}")
-    assert_eval(case, solver, scorers=[ExpectationSuiteScorer()])
+--8<-- "examples/07_snowflake/test_deterministic.py"
 ```
 
-`resolve` reuses one connection per platform `name`, so the eval runs in the same session that
-created the temporary table.
+`resolve` reuses one connection per platform `name`, so the fixture and the evals share a session.
 
-Snowflake folds unquoted identifiers to uppercase. The query above returns `ID` and `CUSTOMER`, so
-expectations must use `ID`.
+Snowflake folds unquoted identifiers to uppercase, so the result columns are `ID`, `CUSTOMER`, and
+`AMOUNT`; the expectations and gold queries name them that way.
 
 ## Run it
 

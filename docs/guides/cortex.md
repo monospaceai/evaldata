@@ -59,66 +59,20 @@ CREATE OR REPLACE SEMANTIC VIEW JAFFLE_SHOP_DB.PUBLIC.JAFFLE_SHOP_SV
 Cortex Analyst also accepts a semantic-model YAML file on a stage; pass `semantic_model_file` to
 the solver instead of `semantic_view` to use one.
 
-## Build the solver
+## Write the eval
 
-The solver sends questions over the REST endpoint using the account host and session token of a
-Snowflake connection, so the same connection you evaluate against also authenticates the Cortex
-Analyst call. Authentication is configured as for any Snowflake connection (see the
-[Snowflake guide](snowflake.md#authentication)).
+`CortexAnalystClient.from_connection` sends questions using the account host and session token of a
+Snowflake connection, so the connection you evaluate against also authenticates the Cortex Analyst
+call. Authentication is configured as for any Snowflake connection (see the
+[Snowflake guide](snowflake.md#authentication)). Score the generated SQL against a gold query with
+`ExecutionAccuracy`, which runs both queries and compares the rows by value:
 
 ```python
-from evaldata.cortex import CortexAnalystClient, CortexAnalystSolver
-from evaldata.platforms import resolve, snowflake_platform
-
-platform = snowflake_platform(
-    name="snowflake",
-    account="myorg-myaccount",
-    warehouse="COMPUTE_WH",
-    role="EVALDATA_ROLE",
-    database="JAFFLE_SHOP_DB",
-    schema="PUBLIC",
-)
-adapter = resolve(platform)
-solver = CortexAnalystSolver(
-    CortexAnalystClient.from_connection(adapter.connection),
-    semantic_view="JAFFLE_SHOP_DB.PUBLIC.JAFFLE_SHOP_SV",
-)
+--8<-- "examples/08_cortex/test_cortex_analyst.py"
 ```
 
 When Cortex Analyst returns suggestions instead of SQL (an ambiguous question), the solver reports
 an `empty_response` `SolverError`.
-
-## Write the eval
-
-Score the generated SQL against a gold query with `ExecutionAccuracy`: it runs both queries and
-compares the rows by value.
-
-```python
-import pytest
-
-from evaldata import ExecutionAccuracy, EvalCase, assert_eval
-from evaldata.types import GoldQuery
-
-pytestmark = pytest.mark.cortex
-
-
-def test_total_amount_by_region() -> None:
-    case = EvalCase(
-        id="total-amount-by-region",
-        input="What is the total order amount for each customer region?",
-        expected=GoldQuery(
-            sql=(
-                "SELECT c.REGION, SUM(o.AMOUNT) "
-                "FROM JAFFLE_SHOP_DB.PUBLIC.ORDERS o "
-                "JOIN JAFFLE_SHOP_DB.PUBLIC.CUSTOMERS c ON o.CUSTOMER_ID = c.ID "
-                "GROUP BY c.REGION"
-            )
-        ),
-        platform=platform,
-    )
-    scorer = ExecutionAccuracy(row_order="ignore", column_alignment="by_value")
-    assert_eval(case, solver, scorers=[scorer], adapter=adapter)
-```
 
 ## Run it
 

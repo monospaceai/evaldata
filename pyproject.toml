@@ -198,6 +198,10 @@ source = ["src/evaldata", "examples"]
 parallel = true
 omit = [
     "tests/*",
+    # Live-only examples: they run against a real account off the PR gate, so their lines are
+    # never executed in the coverage run. The Cortex solver's own coverage comes from its unit tests.
+    "examples/07_snowflake/*",
+    "examples/08_cortex/*",
 ]
 
 [tool.coverage.report]
