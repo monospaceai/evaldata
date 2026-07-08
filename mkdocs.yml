@@ -100,6 +100,7 @@ nav:
       - Reproduce dbt's Semantic Layer benchmark: guides/dbt-semantic-layer-benchmark.md
       - Check semantic equivalence: guides/semantic-equivalence.md
       - Score with an LLM judge: guides/llm-judge.md
+      - Compose and tier scorers: guides/composing-scorers.md
       - Run a text-to-SQL benchmark: guides/benchmarks.md
   - Concepts: concepts.md
   - Support & cost policy: support-policy.md

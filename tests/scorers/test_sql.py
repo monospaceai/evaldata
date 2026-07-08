@@ -210,15 +210,16 @@ class TestGoldExpected:
 
 
 @pytest.mark.unit
-class TestExceptAllWithGold:
+class TestBagDiffWithGold:
     def test_keyless_count_with_gold_subquery(self) -> None:
         left = sql.gold_expected(Sql("SELECT 1 AS n"), ["n"], set(), "duckdb", None)
         right = sql.aligned_actual(Sql("SELECT 2 AS n"), ["n"], set(), "duckdb", None)
-        out = sql.except_all_count(left, right, "duckdb")
-        assert out == (
-            'SELECT COUNT(*) FROM (SELECT * FROM (SELECT "n" AS "n" FROM (SELECT 1 AS n) AS __gold__) AS l '
-            'EXCEPT ALL SELECT * FROM (SELECT "n" AS "n" FROM (SELECT 2 AS n) AS t) AS r) AS d'
-        )
+        out = sql.bag_diff_count(left, right, ["n"], "duckdb")
+        assert "GROUP BY" in out
+        assert "LEFT JOIN" in out
+        assert "IS NULL" in out  # written-out null-safe join
+        assert "__gold__" in out
+        assert "EXCEPT" not in out
 
     def test_keyed_stats_with_gold_subquery(self) -> None:
         left = sql.gold_expected(Sql("SELECT 1 AS id, 10 AS v"), ["id", "v"], set(), "duckdb", None)
@@ -251,15 +252,19 @@ class TestKeyedDiffStats:
     def test_aliases_missing_extra_and_per_column_counts(self) -> None:
         left, right = _keyed_rels()
         out = sql.keyed_diff_stats(left, right, ["id"], ["v"], set(), "equal", 1e-9, ["id", "v"], "duckdb")
-        assert "AS missing" in out
-        assert "AS extra" in out
-        assert "AS m0" in out
+        # Stat aliases are quoted so they read back by the same lowercase key on identifier-folding
+        # engines like Snowflake.
+        assert 'AS "missing"' in out
+        assert 'AS "extra"' in out
+        assert 'AS "m0"' in out
 
     def test_full_outer_join_on_key(self) -> None:
         left, right = _keyed_rels()
         out = sql.keyed_diff_stats(left, right, ["id"], ["v"], set(), "equal", 1e-9, ["id", "v"], "duckdb")
         assert "FULL OUTER JOIN" in out
-        assert '"e"."e__id" = "a"."a__id"' in out
+        # Internal join aliases stay unquoted (so they fold consistently on Snowflake); only the
+        # data columns are quoted.
+        assert 'e."e__id" = a."a__id"' in out
 
     def test_numeric_column_uses_decimal_tolerance_band(self) -> None:
         left, right = _keyed_rels()
@@ -272,8 +277,10 @@ class TestKeyedDiffStats:
         left, right = _keyed_rels()
         equal = sql.keyed_diff_stats(left, right, ["id"], ["v"], set(), "equal", 1e-9, ["id", "v"], "duckdb")
         distinct = sql.keyed_diff_stats(left, right, ["id"], ["v"], set(), "distinct", 1e-9, ["id", "v"], "duckdb")
-        assert "IS NOT DISTINCT FROM" in equal
-        assert "IS NOT DISTINCT FROM" not in distinct
+        # equal-nulls compares values with a written-out null-safe form (`= OR (IS NULL AND IS NULL)`);
+        # distinct uses plain `=` on the value column, so no per-value both-NULL branch appears.
+        assert '"e__v" IS NULL' in equal
+        assert '"e__v" IS NULL' not in distinct
 
 
 @pytest.mark.unit
@@ -312,30 +319,43 @@ class TestKeyedDupesCount:
 
 
 @pytest.mark.unit
-class TestExceptAll:
+class TestBagDiff:
     def test_count_shape(self) -> None:
         left = sql.expected_relation([{"n": 1}], _schema(("n", "INTEGER")), ["n"], "duckdb", None)
         right = sql.aligned_actual(Sql("SELECT 2 AS n"), ["n"], set(), "duckdb", None)
-        out = sql.except_all_count(left, right, "duckdb")
-        assert out == (
-            'SELECT COUNT(*) FROM (SELECT * FROM (SELECT CAST(1 AS INT) AS "n") AS l '
-            'EXCEPT ALL SELECT * FROM (SELECT "n" AS "n" FROM (SELECT 2 AS n) AS t) AS r) AS d'
-        )
+        out = sql.bag_diff_count(left, right, ["n"], "duckdb")
+        assert "GROUP BY" in out
+        assert "LEFT JOIN" in out
+        assert "IS NULL" in out  # written-out null-safe join
+        assert "SUM(GREATEST(" in out
+        assert "EXCEPT" not in out
 
-    def test_count_wraps_union_operand_for_precedence(self) -> None:
-        # A multi-row (UNION ALL) operand must be parenthesised under EXCEPT ALL.
+    def test_count_handles_union_all_operand(self) -> None:
+        # A multi-row (UNION ALL) expected relation must still group correctly.
         left = sql.expected_relation([{"n": 1}, {"n": 2}], _schema(("n", "INTEGER")), ["n"], "duckdb", None)
         right = sql.aligned_actual(Sql("SELECT 1 AS n"), ["n"], set(), "duckdb", None)
-        out = sql.except_all_count(left, right, "duckdb")
-        assert "AS l EXCEPT ALL" in out
-        assert out.index("UNION ALL") < out.index("EXCEPT ALL")
+        out = sql.bag_diff_count(left, right, ["n"], "duckdb")
+        assert "UNION ALL" in out
+        assert "GROUP BY" in out
 
     def test_sample_shape_and_limit(self) -> None:
         left = sql.aligned_actual(Sql("SELECT 2 AS n"), ["n"], set(), "postgres", None)
         right = sql.expected_relation(
             [{"n": 1}], _schema(("n", "INTEGER"), dialect="postgres"), ["n"], "postgres", None
         )
-        out = sql.except_all_sample(left, right, "postgres")
-        assert out.startswith("SELECT * FROM (")
-        assert "EXCEPT ALL" in out
-        assert out.endswith(") AS d LIMIT 20")
+        out = sql.bag_diff_sample(left, right, ["n"], "postgres")
+        assert "ROW_NUMBER() OVER" in out
+        assert "EXCEPT" not in out
+        assert out.endswith("LIMIT 20")
+
+    def test_no_except_or_minus_on_any_dialect(self) -> None:
+        # The keyless diff must stay portable: Snowflake and SQLite both reject EXCEPT/MINUS ALL.
+        left = sql.expected_relation([{"n": 1}, {"n": 1}], _schema(("n", "INTEGER")), ["n"], "duckdb", None)
+        right = sql.aligned_actual(Sql("SELECT 1 AS n"), ["n"], set(), "duckdb", None)
+        for dialect in ("duckdb", "postgres", "sqlite", "snowflake", "databricks"):
+            count_sql = sql.bag_diff_count(left, right, ["n"], dialect).upper()
+            sample_sql = sql.bag_diff_sample(left, right, ["n"], dialect).upper()
+            assert "EXCEPT" not in count_sql
+            assert "MINUS" not in count_sql
+            assert "EXCEPT" not in sample_sql
+            assert "MINUS" not in sample_sql

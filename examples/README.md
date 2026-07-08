@@ -22,6 +22,11 @@ only model call is the SQL-equivalence judge deciding what the syntax check cann
 `06_benchmark` instead varies the **data source**: rather than seeding its own cases, it loads a
 text-to-SQL benchmark (Spider-shaped here) and measures execution accuracy with `run_benchmark`.
 
+`07_snowflake` and `08_cortex` are **live-only**: they run against a real Snowflake account and
+so, unlike `03`/`05`/`06`, cannot run without credentials. `07_snowflake` varies the platform (a
+live Snowflake warehouse); `08_cortex` varies the solver (Snowflake Cortex Analyst as the AI under
+test).
+
 ## Tiers
 
 | Dir | Solver | Purpose | Needs |
@@ -32,6 +37,8 @@ text-to-SQL benchmark (Spider-shaped here) and measures execution accuracy with 
 | `04_databricks` | `CallableSolver` (fixed SQL) | Runs the same cases against a live Databricks SQL Warehouse | `evaldata[databricks]` + a warehouse |
 | `05_llm_judge` | `CallableSolver` (fixed SQL) | Has the SQL-equivalence judge decide what the syntax check can't, with a mocked grader reply (no live call) | `evaldata[litellm]` |
 | `06_benchmark` | `PromptSolver` (mocked) | Loads a text-to-SQL benchmark and measures execution accuracy with `run_benchmark` | `evaldata[litellm]` |
+| `07_snowflake` | `CallableSolver` (fixed SQL) | Runs the same cases against a live Snowflake warehouse (live-only) | `evaldata[snowflake]` + `SNOWFLAKE_*` credentials |
+| `08_cortex` | `CortexAnalystSolver` | Snowflake Cortex Analyst answers each question, scored on your warehouse (live-only) | `evaldata[cortex]` + `SNOWFLAKE_*` credentials |
 
 ### 01_deterministic
 The solver is a `CallableSolver` returning fixed SQL. `test_golden_questions.py` covers the
@@ -86,6 +93,23 @@ run would, without a live call or an API key. To run a real benchmark, `evaldata
 (or `bird`) and `evaldata bench spider --model ...` — see the
 [benchmark guide](../docs/guides/benchmarks.md).
 
+### 07_snowflake
+The same deterministic cases as 01, executed against a live Snowflake warehouse. It seeds a table
+in an `EVALDATA_EXAMPLES` database, then shows expectation checks pushed down into SQL, a precise
+column type resolved from the warehouse (`AMOUNT` as `DECIMAL(10, 2)`), and execution accuracy
+against a gold query. Marked `e2e`, so it is **live-only**: it needs the `snowflake` extra and a
+reachable account. Set `SNOWFLAKE_ACCOUNT` (and `SNOWFLAKE_WAREHOUSE` / `SNOWFLAKE_ROLE`) and
+configure authentication through the environment — see the
+[Snowflake guide](../docs/guides/snowflake.md).
+
+### 08_cortex
+`CortexAnalystSolver` sends each question to the Snowflake Cortex Analyst REST endpoint and returns
+the SQL it generates; evaldata runs that SQL on Snowflake and scores it against a gold query with
+`ExecutionAccuracy`. It seeds a jaffle-shop semantic view to answer against. Marked `e2e`, so it is
+**live-only**: it needs the `cortex` extra, a reachable account with the `SNOWFLAKE.CORTEX_USER`
+database role, and Snowflake credentials in the environment — see the
+[Cortex Analyst guide](../docs/guides/cortex.md). Each run consumes Snowflake credits.
+
 ## Running
 
 ```bash
@@ -109,4 +133,12 @@ uv run pytest examples/05_llm_judge -q
 
 # 06 — runs mocked, no key needed:
 uv run pytest examples/06_benchmark -q
+
+# 07 — live-only: needs the snowflake extra + a reachable account (no mock):
+uv sync --extra snowflake
+SNOWFLAKE_ACCOUNT=... uv run pytest examples/07_snowflake -m e2e -p no:randomly -q
+
+# 08 — live-only: needs the cortex extra + a reachable account with CORTEX_USER (no mock):
+uv sync --extra cortex
+SNOWFLAKE_ACCOUNT=... uv run pytest examples/08_cortex -m e2e -p no:randomly -q
 ```
