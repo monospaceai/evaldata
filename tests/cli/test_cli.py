@@ -100,6 +100,31 @@ class TestBench:
             )
         )
 
+    def test_max_concurrency_flag_reaches_runner(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import litellm
+
+        self._make_spider(tmp_path)
+        real_completion = litellm.completion
+        monkeypatch.setattr(
+            "litellm.completion",
+            lambda **kwargs: real_completion(**kwargs, mock_response="SELECT count(*) FROM items"),
+        )
+        captured: dict[str, int] = {}
+        real_run_benchmark = cli.run_benchmark
+
+        def spy(*args: object, **kwargs: object) -> object:
+            captured["max_concurrency"] = int(kwargs["max_concurrency"])  # type: ignore[call-overload]
+            return real_run_benchmark(*args, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(cli, "run_benchmark", spy)
+
+        result = runner.invoke(
+            app, ["bench", "spider", str(tmp_path), "--model", "openai/gpt-4o-mini", "--max-concurrency", "3"]
+        )
+
+        assert result.exit_code == 0
+        assert captured["max_concurrency"] == 3
+
     def test_prints_execution_accuracy(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         import litellm
 
