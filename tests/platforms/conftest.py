@@ -1,8 +1,12 @@
-"""Conformance plumbing: `ConformanceFixtures` Protocol, per-adapter fixture types, and the parametrised `under_test` fixture."""
+"""Conformance plumbing: `ConformanceFixtures` Protocol, per-adapter fixture types, and the
+parametrised `under_test` fixture, plus the shared `ADAPTER_SPECS` registry that every
+scorer-conformance suite's `engine` fixture derives its adapter list from.
+"""
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 import pytest
 import sqlglot
@@ -13,6 +17,7 @@ from evaldata.platforms.base import PlatformAdapter
 from evaldata.platforms.duckdb import DuckDBAdapter
 from evaldata.platforms.sqlite import SqliteAdapter
 from evaldata.scorers.sql import Dialect
+from evaldata.types import PlatformKind
 
 
 def conform_name(name: str, dialect: Dialect) -> str:
@@ -162,14 +167,6 @@ class UnderTest:
     dialect: Dialect
 
 
-def _duckdb_under_test() -> UnderTest:
-    return UnderTest(adapter=DuckDBAdapter(), fixtures=DuckDBFixtures(), dialect="duckdb")
-
-
-def _sqlite_under_test() -> UnderTest:
-    return UnderTest(adapter=SqliteAdapter(), fixtures=SqliteFixtures(), dialect="sqlite")
-
-
 def _postgres_dsn() -> str:
     """Assemble a libpq connection string from dbt-style `POSTGRES_TEST_*` env vars.
 
@@ -194,10 +191,6 @@ def connect_postgres() -> PlatformAdapter:
     return PostgresAdapter(_postgres_dsn())
 
 
-def _postgres_under_test() -> UnderTest:
-    return UnderTest(adapter=connect_postgres(), fixtures=PostgresFixtures(), dialect="postgres")
-
-
 def connect_databricks() -> PlatformAdapter:
     """Connect a `DatabricksAdapter` to the configured workspace.
 
@@ -211,10 +204,6 @@ def connect_databricks() -> PlatformAdapter:
         server_hostname=os.environ["DATABRICKS_SERVER_HOSTNAME"],
         http_path=os.environ["DATABRICKS_HTTP_PATH"],
     )
-
-
-def _databricks_under_test() -> UnderTest:
-    return UnderTest(adapter=connect_databricks(), fixtures=DatabricksFixtures(), dialect="databricks")
 
 
 def connect_snowflake() -> PlatformAdapter:
@@ -244,23 +233,68 @@ def connect_snowflake() -> PlatformAdapter:
     )
 
 
-def _snowflake_under_test() -> UnderTest:
-    return UnderTest(adapter=connect_snowflake(), fixtures=SnowflakeFixtures(), dialect="snowflake")
+def connect_sqlite() -> PlatformAdapter:
+    """Connect a `SqliteAdapter` to a fresh in-memory database."""
+    return SqliteAdapter()
+
+
+@dataclass(frozen=True)
+class AdapterSpec:
+    """One registered platform adapter: its id, pytest marks, connector, and conformance fixtures.
+
+    The single registry `under_test` and every scorer-conformance suite's `engine` fixture derive
+    their parametrised adapter list from, so adding or removing a supported adapter is a one-line
+    change here rather than an edit repeated (and liable to drift) across several test files.
+    """
+
+    id: PlatformKind
+    marks: pytest.MarkDecorator | list[pytest.MarkDecorator]
+    connect: Callable[[], PlatformAdapter]
+    fixtures: Callable[[], ConformanceFixtures]
+
+
+ADAPTER_SPECS: list[AdapterSpec] = [
+    AdapterSpec(id="duckdb", marks=pytest.mark.unit, connect=DuckDBAdapter, fixtures=DuckDBFixtures),
+    AdapterSpec(id="sqlite", marks=pytest.mark.unit, connect=connect_sqlite, fixtures=SqliteFixtures),
+    AdapterSpec(id="postgres", marks=pytest.mark.e2e, connect=connect_postgres, fixtures=PostgresFixtures),
+    AdapterSpec(
+        id="databricks",
+        marks=[pytest.mark.e2e, pytest.mark.cloud],
+        connect=connect_databricks,
+        fixtures=DatabricksFixtures,
+    ),
+    AdapterSpec(
+        id="snowflake",
+        marks=[pytest.mark.e2e, pytest.mark.cloud, pytest.mark.snowflake],
+        connect=connect_snowflake,
+        fixtures=SnowflakeFixtures,
+    ),
+]
+
+# The id set `ADAPTER_SPECS` covers; a completeness guard asserts this equals every `PlatformKind`.
+ADAPTER_IDS: frozenset[str] = frozenset(spec.id for spec in ADAPTER_SPECS)
+
+
+def engine_params() -> list[Any]:
+    """The `pytest.param` list for an `(adapter, dialect)` `engine` fixture over every registered adapter.
+
+    Every scorer-conformance suite (`test_conformance_equivalence.py`, `test_conformance_pushdown.py`)
+    builds its `engine` fixture from this, so their adapter coverage can never silently drift from
+    `under_test`'s or from each other's.
+    """
+
+    def _factory(spec: AdapterSpec) -> Callable[[], tuple[PlatformAdapter, PlatformKind]]:
+        def make() -> tuple[PlatformAdapter, PlatformKind]:
+            return spec.connect(), spec.id
+
+        return make
+
+    return [pytest.param(_factory(spec), id=spec.id, marks=spec.marks) for spec in ADAPTER_SPECS]
 
 
 # Function-scoped: each test gets a fresh adapter.
-@pytest.fixture(
-    params=[
-        pytest.param(_duckdb_under_test, id="duckdb", marks=pytest.mark.unit),
-        pytest.param(_sqlite_under_test, id="sqlite", marks=pytest.mark.unit),
-        pytest.param(_postgres_under_test, id="postgres", marks=pytest.mark.e2e),
-        pytest.param(_databricks_under_test, id="databricks", marks=[pytest.mark.e2e, pytest.mark.cloud]),
-        pytest.param(
-            _snowflake_under_test, id="snowflake", marks=[pytest.mark.e2e, pytest.mark.cloud, pytest.mark.snowflake]
-        ),
-    ],
-)
+@pytest.fixture(params=[pytest.param(spec, id=spec.id, marks=spec.marks) for spec in ADAPTER_SPECS])
 def under_test(request: pytest.FixtureRequest) -> UnderTest:
     """Return one (adapter, fixtures) pair; parametrised across all registered adapters."""
-    factory = request.param
-    return factory()
+    spec: AdapterSpec = request.param
+    return UnderTest(adapter=spec.connect(), fixtures=spec.fixtures(), dialect=spec.id)

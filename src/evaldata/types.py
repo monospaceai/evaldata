@@ -312,7 +312,7 @@ class ComparisonConfig(BaseModel):
     aligned on the key columns and compared per remaining column, enabling
     `null_equality="distinct"`, an exact `abs(actual - expected) <= float_tolerance`
     band, and per-column mismatch counts. An empty `match_key` uses the keyless bag
-    (`EXCEPT ALL`) comparison.
+    (multiset) comparison.
     """
 
     model_config = ConfigDict(extra="forbid")
