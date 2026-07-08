@@ -450,8 +450,8 @@ def _type_mismatches(
     """
     if actual is None or expected is None:
         return []
-    actual_types = dict(zip(actual.names, actual.types, strict=True))
-    expected_types = dict(zip(expected.names, expected.types, strict=True))
+    actual_types = actual.types_by_name
+    expected_types = expected.types_by_name
     return [
         TypeMismatch(column=col, expected=expected_types[col].raw, actual=actual_types[col].raw)
         for col in in_both
@@ -473,5 +473,5 @@ def _numeric_columns(schema: Schema | None, in_both: list[str], dialect: sql.Dia
     """
     if not isinstance(schema, TypedSchema):
         return set()
-    types = dict(zip(schema.names, schema.types, strict=True))
+    types = schema.types_by_name
     return {col for col in in_both if col in types and sql.is_numeric_type(types[col].raw, dialect)}

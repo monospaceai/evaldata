@@ -136,7 +136,7 @@ def _evaluate_one(expectation: Expectation, result: ExecutionResult, queries: Qu
                     expected=expected_raw,
                     detail=f"column_type: no column type information available for column {expectation.column!r}",
                 )
-            types = dict(zip(result.schema_.names, result.schema_.types, strict=True))
+            types = result.schema_.types_by_name
             if expectation.column not in types:
                 return ExpectationOutcome(
                     kind=expectation.kind,

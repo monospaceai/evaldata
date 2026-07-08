@@ -275,7 +275,7 @@ def expected_relation(
         A SQLGlot query (`SELECT …` or a `UNION ALL` chain) yielding the expected relation.
         An empty `rows` yields a `SELECT … WHERE 1 = 0` typed empty relation.
     """
-    types = dict(zip(schema.names, schema.types, strict=True)) if schema is not None else {}
+    types = schema.types_by_name if schema is not None else {}
 
     def project(row: dict[str, Any]) -> exp.Select:
         selections: list[exp.Expression] = []

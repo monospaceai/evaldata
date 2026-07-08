@@ -2,6 +2,7 @@
 
 import time
 from collections import Counter
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
 from typing import Any, Protocol, runtime_checkable
@@ -189,7 +190,7 @@ def rows_or_error(columns: list[Column], rows_raw: list[tuple[Any, ...]], latenc
         An `ExecutionResult` with name-keyed rows and a `TypedSchema`, or `error` set (and no
         rows or schema) when one or more column names are duplicated.
     """
-    return _result_or_error(TypedSchema(root=columns), [c.name for c in columns], rows_raw, latency_seconds)
+    return _result_or_error(lambda: TypedSchema(root=columns), [c.name for c in columns], rows_raw, latency_seconds)
 
 
 def untyped_rows_or_error(names: list[str], rows_raw: list[tuple[Any, ...]], latency_seconds: float) -> ExecutionResult:
@@ -207,27 +208,29 @@ def untyped_rows_or_error(names: list[str], rows_raw: list[tuple[Any, ...]], lat
         An `ExecutionResult` with name-keyed rows and an `UntypedSchema`, or `error` set (and
         no rows or schema) when one or more column names are duplicated.
     """
-    return _result_or_error(UntypedSchema(root=names), names, rows_raw, latency_seconds)
+    return _result_or_error(lambda: UntypedSchema(root=names), names, rows_raw, latency_seconds)
 
 
 def _result_or_error(
-    schema: Schema, names: list[str], rows_raw: list[tuple[Any, ...]], latency_seconds: float
+    build_schema: Callable[[], Schema], names: list[str], rows_raw: list[tuple[Any, ...]], latency_seconds: float
 ) -> ExecutionResult:
-    """Key `rows_raw` by `names` under `schema`, or return an error if names collide.
+    """Key `rows_raw` by `names`, or return an error if names collide.
 
     Rows are keyed by name (`dict(zip(...))`), which cannot represent two columns sharing a
     name — the later value would silently overwrite the earlier. Rather than lose data,
-    duplicate output column names are surfaced as `ExecutionResult.error`.
+    duplicate output column names are surfaced as `ExecutionResult.error`. The check runs
+    before `build_schema`, which itself rejects duplicate names.
 
     Args:
-        schema: The schema to attach (typed or untyped).
+        build_schema: Builds the schema to attach (typed or untyped); called only once the
+            names are known unique.
         names: The column names, in order, aligned with `rows_raw`.
         rows_raw: The positional row tuples.
         latency_seconds: Wall-clock time spent executing the query.
 
     Returns:
-        An `ExecutionResult` with name-keyed rows and `schema`, or `error` set (and no rows or
-        schema) when one or more column names are duplicated.
+        An `ExecutionResult` with name-keyed rows and the built schema, or `error` set (and no
+        rows or schema) when one or more column names are duplicated.
     """
     duplicates = [name for name, count in Counter(names).items() if count > 1]
     if duplicates:
@@ -239,4 +242,4 @@ def _result_or_error(
             error=ExecutionError(kind="duplicate_columns", message=f"duplicate output column name(s): {listed}"),
         )
     rows = [dict(zip(names, row, strict=True)) for row in rows_raw]
-    return ExecutionResult(rows=rows, schema=schema, latency_seconds=latency_seconds)
+    return ExecutionResult(rows=rows, schema=build_schema(), latency_seconds=latency_seconds)

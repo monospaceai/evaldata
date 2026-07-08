@@ -33,6 +33,7 @@ from evaldata.types import (
     TypeMismatch,
     UniqueExpectation,
     UntypedResultSet,
+    UntypedSchema,
 )
 
 ExpectedAdapter: TypeAdapter[Expected] = TypeAdapter(Expected)
@@ -183,10 +184,17 @@ class TestColumn:
 
 @pytest.mark.unit
 class TestSchema:
-    def test_preserves_duplicate_names(self) -> None:
-        s = TypedSchema([Column(name="a", type="INT"), Column(name="a", type="VARCHAR")])
-        assert s.names == ["a", "a"]
-        assert [t.raw for t in s.types] == ["INT", "VARCHAR"]
+    def test_rejects_duplicate_names(self) -> None:
+        with pytest.raises(ValidationError, match="duplicate column name"):
+            TypedSchema([Column(name="a", type="INT"), Column(name="a", type="VARCHAR")])
+
+    def test_untyped_rejects_duplicate_names(self) -> None:
+        with pytest.raises(ValidationError, match="duplicate column name"):
+            UntypedSchema(["a", "a"])
+
+    def test_types_by_name(self) -> None:
+        s = TypedSchema([Column(name="x", type="INT"), Column(name="y", type="DOUBLE")])
+        assert {k: v.raw for k, v in s.types_by_name.items()} == {"x": "INT", "y": "DOUBLE"}
 
     def test_len_index_iter(self) -> None:
         s = TypedSchema([Column(name="a", type="INT"), Column(name="b", type="VARCHAR")])

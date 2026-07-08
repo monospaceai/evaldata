@@ -132,16 +132,40 @@ class Column(BaseModel):
     nullable: bool | None = None
 
 
-class TypedSchema(RootModel[list[Column]]):
-    """An ordered, duplicate-faithful sequence of typed result-set columns.
+def _reject_duplicate_column_names(names: list[str]) -> None:
+    """Raise if any column name repeats.
 
-    Wraps a `list[Column]` and serialises as a plain JSON array. Name lookup is not
-    offered: result sets may repeat column names, so the convenience accessors are
-    positional and duplicate-safe. Engines that report no result-column types produce an
-    `UntypedSchema` instead.
+    Args:
+        names: The column names to check, in order.
+
+    Raises:
+        ValueError: If a column name appears more than once.
+    """
+    duplicates = [name for name, count in Counter(names).items() if count > 1]
+    if duplicates:
+        listed = ", ".join(repr(name) for name in duplicates)
+        msg = f"duplicate column name(s): {listed}"
+        raise ValueError(msg)
+
+
+class TypedSchema(RootModel[list[Column]]):
+    """An ordered sequence of typed result-set columns with unique names.
+
+    Wraps a `list[Column]` and serialises as a plain JSON array. Engines that report no
+    result-column types produce an `UntypedSchema` instead.
     """
 
     root: list[Column]
+
+    @model_validator(mode="after")
+    def _reject_duplicate_names(self) -> "TypedSchema":
+        """Reject a repeated column name.
+
+        Returns:
+            The validated schema.
+        """
+        _reject_duplicate_column_names([c.name for c in self.root])
+        return self
 
     def __iter__(self) -> Iterator[Column]:  # ty: ignore[invalid-method-override]
         """Return an iterator over the columns in order."""
@@ -157,7 +181,7 @@ class TypedSchema(RootModel[list[Column]]):
 
     @property
     def names(self) -> list[str]:
-        """The column names in order (duplicate-faithful)."""
+        """The column names in order."""
         return [c.name for c in self.root]
 
     @property
@@ -165,19 +189,34 @@ class TypedSchema(RootModel[list[Column]]):
         """The column types in order, positionally aligned with `names`."""
         return [c.type for c in self.root]
 
+    @property
+    def types_by_name(self) -> dict[str, "SqlType"]:
+        """The column types keyed by name."""
+        return {c.name: c.type for c in self.root}
+
 
 class UntypedSchema(RootModel[list[str]]):
-    """An ordered sequence of result-column names with no type information.
+    """An ordered sequence of unique result-column names with no type information.
 
     Produced by engines whose driver reports no result-column types (e.g. SQLite). Carries
-    only names; type comparison against an `UntypedSchema` abstains rather than refuting.
+    only names; type comparison against an `UntypedSchema` is inconclusive rather than refuting.
     """
 
     root: list[str]
 
+    @model_validator(mode="after")
+    def _reject_duplicate_names(self) -> "UntypedSchema":
+        """Reject a repeated column name.
+
+        Returns:
+            The validated schema.
+        """
+        _reject_duplicate_column_names(self.root)
+        return self
+
     @property
     def names(self) -> list[str]:
-        """The column names in order (duplicate-faithful)."""
+        """The column names in order."""
         return list(self.root)
 
 
@@ -350,22 +389,12 @@ class EvalCase(BaseModel):
 
         The schema is authored with native type strings whose dialect is the platform's.
         Re-build each `Column.type` via `SqlType.parse` so `canonical` is populated and
-        comparison is dialect-free downstream. Duplicate column names are rejected: rows
-        are matched by name during comparison, so a repeated name is unresolvable.
+        comparison is dialect-free downstream.
 
         Returns:
             The validated `EvalCase`.
-
-        Raises:
-            ValueError: If the expected schema declares a column name more than once.
         """
         if isinstance(self.expected, TypedResultSet):
-            names = self.expected.schema_.names
-            duplicates = [name for name, count in Counter(names).items() if count > 1]
-            if duplicates:
-                listed = ", ".join(repr(name) for name in duplicates)
-                msg = f"expected schema has duplicate column name(s): {listed}"
-                raise ValueError(msg)
             dialect = self.platform.dialect or self.platform.kind
             self.expected.schema_ = TypedSchema(
                 root=[
