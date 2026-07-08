@@ -200,11 +200,16 @@ class TestResultSetEquivalence:
         assert score.diff is not None
         assert score.diff.missing_columns == ["b"]
 
-    def test_raises_on_non_result_set_expected(self) -> None:
+    def test_inconclusive_on_non_result_set_expected(self) -> None:
         case = _case(ExpectationSuite(expectations=[RowCountExpectation(exact=1)]))
         result = ExecutionResult(rows=[{"n": 1}], latency_seconds=0.0)
-        with pytest.raises(TypeError, match="UntypedResultSet, TypedResultSet, or GoldQuery"):
-            _score(case, result, "SELECT 1")
+        score = _score(case, result, "SELECT 1")
+        assert score.verdict == "inconclusive"
+        assert not score.passed
+        assert score.metadata.get("scorer_misconfigured") is True
+        assert score.explanation is not None
+        assert "UntypedResultSet, TypedResultSet, or GoldQuery" in score.explanation
+        assert "ExpectationSuite" in score.explanation
 
     def test_empty_vs_empty_without_schema_passes(self) -> None:
         # No shared columns and no rows: the diff is empty and no derived query runs.

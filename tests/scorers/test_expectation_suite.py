@@ -416,11 +416,16 @@ class TestSuiteAggregation:
         assert score.explanation is not None
         assert "boom" in score.explanation
 
-    def test_raises_on_non_expectation_suite(self) -> None:
+    def test_inconclusive_on_non_expectation_suite(self) -> None:
         case = _case(GoldQuery(sql="SELECT 1"))
         result = ExecutionResult(rows=[{"n": 1}], latency_seconds=0.0)
-        with pytest.raises(TypeError, match="ExpectationSuite"):
-            ExpectationSuiteScorer().score(case, _OUTPUT, result, context=_ctx())
+        score = ExpectationSuiteScorer().score(case, _OUTPUT, result, context=_ctx())
+        assert score.verdict == "inconclusive"
+        assert not score.passed
+        assert score.metadata.get("scorer_misconfigured") is True
+        assert score.explanation is not None
+        assert "ExpectationSuite" in score.explanation
+        assert "GoldQuery" in score.explanation
 
     def test_aggregates_multiple_failures(self) -> None:
         case = _suite(RowCountExpectation(exact=5), NotNullExpectation(column="email"))

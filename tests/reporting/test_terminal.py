@@ -125,6 +125,19 @@ class TestRenderFailure:
         msg = render_failure(_case(), out, result, [score])
         assert "execution error: table nope does not exist" in msg
 
+    def test_renders_misconfigured_scorer(self) -> None:
+        out = SolverOutput(output="SELECT 1")
+        result = ExecutionResult(rows=[], latency_seconds=0.0)
+        score = ScoreResult(
+            scorer="execution_accuracy",
+            verdict="inconclusive",
+            explanation="execution_accuracy requires a GoldQuery; got UntypedResultSet",
+            metadata={"scorer_misconfigured": True},
+        )
+        msg = render_failure(_case(), out, result, [score])
+        assert "INCONCLUSIVE" in msg
+        assert "execution_accuracy requires a GoldQuery; got UntypedResultSet" in msg
+
 
 @pytest.mark.unit
 class TestRenderSolverError:

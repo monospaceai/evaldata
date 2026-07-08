@@ -3,6 +3,7 @@
 from typing import assert_never
 
 from evaldata.scorers import sql
+from evaldata.scorers.base import misconfigured
 from evaldata.scorers.context import ScoreContext
 from evaldata.scorers.query import QueryRunner
 from evaldata.types import (
@@ -49,15 +50,12 @@ class ExpectationSuiteScorer:
             `ExpectationOutcome` per expectation (passing and failing alike); on failure
             `explanation` lists each unmet expectation, derived from those outcomes. A failed
             model query yields a failing result with an explanation and no outcomes; a failed
-            derived query fails only its own expectation's outcome.
-
-        Raises:
-            TypeError: If `case.expected` is not an `ExpectationSuite`.
+            derived query fails only its own expectation's outcome; an `expected` of the wrong
+            kind yields an inconclusive result.
         """
         expected = case.expected
         if not isinstance(expected, ExpectationSuite):
-            msg = f"ExpectationSuiteScorer requires an ExpectationSuite; got {type(expected).__name__}"
-            raise TypeError(msg)
+            return misconfigured(SCORER_NAME, expected, "an ExpectationSuite")
 
         if result.error is not None:
             return ScoreResult(
@@ -136,7 +134,7 @@ def _evaluate_one(expectation: Expectation, result: ExecutionResult, queries: Qu
                     expected=expected_raw,
                     detail=f"column_type: no column type information available for column {expectation.column!r}",
                 )
-            types = dict(zip(result.schema_.names, result.schema_.types, strict=True))
+            types = result.schema_.types_by_name
             if expectation.column not in types:
                 return ExpectationOutcome(
                     kind=expectation.kind,
