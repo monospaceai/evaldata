@@ -106,7 +106,8 @@ jobs:
           python-version: "3.13"
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
       - name: Install Ollama
-        run: curl -fsSL https://ollama.com/install.sh | sh
+        # Pinned: 0.31.2 introduced a llama-server segfault on part of the runner fleet.
+        run: curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=0.31.1 sh
       - name: Cache the Ollama model
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
@@ -115,6 +116,7 @@ jobs:
       - name: Serve Ollama, pull model, run the full gate
         run: |
           sudo systemctl stop ollama 2>/dev/null || true
+          grep -m1 'model name' /proc/cpuinfo; grep -om1 ' avx512[a-z]*' /proc/cpuinfo || echo 'no avx512'
           nohup ollama serve > /tmp/ollama.log 2>&1 &
           for _ in $(seq 1 30); do
             curl -sf http://localhost:11434/api/tags >/dev/null && break
@@ -128,6 +130,12 @@ jobs:
           just build
         env:
           EVALDATA_LOCAL_MODEL: ollama_chat/qwen2.5-coder:1.5b
+      - name: Upload the Ollama server log
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ollama-log-gate
+          path: /tmp/ollama.log
 
   # Databricks cloud e2e, split from the gate because it needs secrets, which fork PRs can't receive.
   cloud:
@@ -184,7 +192,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
       - name: Install Ollama
-        run: curl -fsSL https://ollama.com/install.sh | sh
+        # Pinned: 0.31.2 introduced a llama-server segfault on part of the runner fleet.
+        run: curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=0.31.1 sh
       - name: Cache the Ollama model
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
@@ -193,6 +202,7 @@ jobs:
       - name: Serve Ollama, pull model, run the non-cloud suite
         run: |
           sudo systemctl stop ollama 2>/dev/null || true
+          grep -m1 'model name' /proc/cpuinfo; grep -om1 ' avx512[a-z]*' /proc/cpuinfo || echo 'no avx512'
           nohup ollama serve > /tmp/ollama.log 2>&1 &
           for _ in $(seq 1 30); do
             curl -sf http://localhost:11434/api/tags >/dev/null && break
@@ -202,6 +212,12 @@ jobs:
           just check-nocloud
         env:
           EVALDATA_LOCAL_MODEL: ollama_chat/qwen2.5-coder:1.5b
+      - name: Upload the Ollama server log
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ollama-log-compat-${{ matrix.python-version }}
+          path: /tmp/ollama.log
 
   # Snowflake cloud e2e via GitHub OIDC: every main push, plus same-repo PRs that touch
   # Snowflake-relevant paths. Fork PRs can't mint the token.
