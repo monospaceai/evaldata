@@ -386,62 +386,168 @@ def gold_expected(
     return _aligned_relation(base, in_both, numeric_columns, round_scale)
 
 
-def _operand(relation: exp.Query, alias: str) -> exp.Select:
-    """Wrap `relation` as `SELECT * FROM (<relation>) AS <alias>` to pin `EXCEPT ALL` precedence.
+# Shared columns are re-projected under this prefix inside the bag diff so no user column can
+# collide with the internal `cnt`/`rn` aggregates — a user column named `cnt` (a common
+# `COUNT(*) AS cnt` alias) would otherwise be an ambiguous reference.
+_BAG_PREFIX = "b__"
+
+
+def _grouped_counts(relation: exp.Query, in_both: list[str], alias: str) -> exp.Subquery:
+    """Group `relation` by every shared column, counting each distinct row's multiplicity.
 
     Args:
-        relation: The relation to wrap (a `SELECT` or a `UNION ALL` chain).
+        relation: The relation to group (a `SELECT` or a `UNION ALL` chain).
+        in_both: The shared columns, grouped on in full (the bag key).
         alias: The subquery alias.
 
     Returns:
-        A `Select` over the aliased subquery.
+        A `Subquery` aliased `alias`, projecting each shared column as `b__<col>` plus `cnt`.
     """
-    sub = exp.Subquery(this=relation.copy(), alias=exp.TableAlias(this=exp.to_identifier(alias)))
-    return exp.select("*").from_(sub)
+    keys = [exp.column(col, quoted=True) for col in in_both]
+    projected = [
+        exp.column(col, quoted=True).as_(exp.to_identifier(f"{_BAG_PREFIX}{col}", quoted=True)) for col in in_both
+    ]
+    base = exp.Subquery(this=relation.copy(), alias=exp.TableAlias(this=exp.to_identifier("t")))
+    grouped = (
+        exp.select(*projected, exp.Count(this=exp.Star()).as_(exp.to_identifier("cnt"))).from_(base).group_by(*keys)
+    )
+    return exp.Subquery(this=grouped, alias=exp.TableAlias(this=exp.to_identifier(alias)))
 
 
-def _except_all(left: exp.Query, right: exp.Query) -> exp.Subquery:
-    """Build the subquery `((left) EXCEPT ALL (right)) AS d`.
+def _qualified(col: str, alias: str) -> exp.Column:
+    """A `alias."col"` reference: the column quoted, the internal table alias left unquoted.
 
     Args:
-        left: The left relation.
-        right: The right relation.
+        col: The data column name, quoted to preserve its casing.
+        alias: The internal table alias, left unquoted so it folds consistently with its
+            definition on identifier-folding engines.
 
     Returns:
-        A `Subquery` over the bag difference, aliased `d`. Each operand is wrapped as a
-        subquery so a `UNION ALL` operand associates correctly under `EXCEPT ALL`.
+        The qualified column reference.
     """
-    diff = exp.except_(_operand(left, "l"), _operand(right, "r"), distinct=False)
-    return exp.Subquery(this=diff, alias=exp.TableAlias(this=exp.to_identifier("d")))
+    return exp.Column(this=exp.to_identifier(col, quoted=True), table=exp.to_identifier(alias))
 
 
-def except_all_count(left: exp.Query, right: exp.Query, dialect: Dialect) -> Sql:
-    """Build `SELECT count(*) FROM ((left) EXCEPT ALL (right)) AS d`.
+def _null_safe_eq(left: exp.Expression, right: exp.Expression) -> exp.Expression:
+    """Null-safe equality `(left = right OR (left IS NULL AND right IS NULL))`.
+
+    Written out rather than `IS NOT DISTINCT FROM` so it runs on every engine and SQLite version
+    (SQLite gained `IS NOT DISTINCT FROM` only in 3.39).
 
     Args:
-        left: The left relation.
-        right: The right relation.
+        left: The left operand.
+        right: The right operand.
+
+    Returns:
+        The null-safe equality expression.
+    """
+    return exp.or_(
+        exp.EQ(this=left.copy(), expression=right.copy()),
+        exp.and_(left.copy().is_(exp.null()), right.copy().is_(exp.null())),
+    )
+
+
+def _null_safe_join_condition(in_both: list[str], left_alias: str, right_alias: str) -> exp.Expression:
+    """Build the ANDed null-safe equality over every shared column.
+
+    Args:
+        in_both: The shared columns to align on.
+        left_alias: The left side's table alias.
+        right_alias: The right side's table alias.
+
+    Returns:
+        The ANDed null-safe equality condition.
+    """
+    return exp.and_(
+        *(
+            _null_safe_eq(_qualified(f"{_BAG_PREFIX}{col}", left_alias), _qualified(f"{_BAG_PREFIX}{col}", right_alias))
+            for col in in_both
+        )
+    )
+
+
+def bag_diff_count(left: exp.Query, right: exp.Query, in_both: list[str], dialect: Dialect) -> Sql:
+    """Build a portable count of `left` rows not covered by `right`, under bag/multiset semantics.
+
+    Groups each side by every shared column (a NULL-safe key, since `GROUP BY` treats NULLs as
+    equal), null-safe-joins the two grouped sides, and sums each left group's uncovered
+    multiplicity (`GREATEST(left.cnt - COALESCE(right.cnt, 0), 0)`).
+
+    Args:
+        left: The left relation over `in_both`.
+        right: The right relation over `in_both`.
+        in_both: The shared columns compared, in expected order.
         dialect: The SQLGlot dialect to render in.
 
     Returns:
         The bag-difference count SQL string.
     """
-    query = exp.select("count(*)").from_(_except_all(left, right))
+    grouped_left = _grouped_counts(left, in_both, "l")
+    grouped_right = _grouped_counts(right, in_both, "r")
+    condition = _null_safe_join_condition(in_both, "l", "r")
+    joined = (
+        exp.select(
+            exp.column("cnt", table="l").as_(exp.to_identifier("l_cnt")),
+            exp.column("cnt", table="r").as_(exp.to_identifier("r_cnt")),
+        )
+        .from_(grouped_left)
+        .join(grouped_right, on=condition, join_type="left")
+    )
+    excess = exp.func(
+        "GREATEST",
+        exp.Sub(
+            this=exp.column("l_cnt"),
+            expression=exp.func("COALESCE", exp.column("r_cnt"), exp.Literal.number(0)),
+        ),
+        exp.Literal.number(0),
+    )
+    query = exp.select(exp.func("SUM", excess)).from_(
+        exp.Subquery(this=joined, alias=exp.TableAlias(this=exp.to_identifier("d")))
+    )
     return Sql(query.sql(dialect=dialect))
 
 
-def except_all_sample(left: exp.Query, right: exp.Query, dialect: Dialect) -> Sql:
-    """Build `SELECT * FROM ((left) EXCEPT ALL (right)) AS d LIMIT 20`.
+def bag_diff_sample(left: exp.Query, right: exp.Query, in_both: list[str], dialect: Dialect) -> Sql:
+    """Build a portable sample (up to `SAMPLE_LIMIT`) of `left` rows not covered by `right`.
+
+    Numbers each raw `left` row within its shared-column group (`ROW_NUMBER() OVER (PARTITION
+    BY <cols> ORDER BY <cols>)`), null-safe-joins to `right`'s grouped counts, and keeps rows
+    whose number exceeds `right`'s count for that group — the uncovered copies.
 
     Args:
-        left: The left relation.
-        right: The right relation.
+        left: The left relation over `in_both`.
+        right: The right relation over `in_both`.
+        in_both: The shared columns compared, in expected order.
         dialect: The SQLGlot dialect to render in.
 
     Returns:
         The bag-difference sample SQL string (up to 20 rows).
     """
-    query = exp.select("*").from_(_except_all(left, right)).limit(SAMPLE_LIMIT)
+    keys = [exp.column(col, quoted=True) for col in in_both]
+    projected = [
+        exp.column(col, quoted=True).as_(exp.to_identifier(f"{_BAG_PREFIX}{col}", quoted=True)) for col in in_both
+    ]
+    row_number = exp.Window(
+        this=exp.RowNumber(),
+        partition_by=keys,
+        order=exp.Order(expressions=[exp.Ordered(this=key) for key in keys]),
+    )
+    numbered = exp.select(*projected, row_number.as_(exp.to_identifier("rn"))).from_(
+        exp.Subquery(this=left.copy(), alias=exp.TableAlias(this=exp.to_identifier("t")))
+    )
+    numbered_left = exp.Subquery(this=numbered, alias=exp.TableAlias(this=exp.to_identifier("l")))
+    grouped_right = _grouped_counts(right, in_both, "r")
+    condition = _null_safe_join_condition(in_both, "l", "r")
+    uncovered = exp.column("rn", table="l") > exp.func("COALESCE", exp.column("cnt", table="r"), exp.Literal.number(0))
+    query = (
+        exp.select(
+            *(_qualified(f"{_BAG_PREFIX}{col}", "l").as_(exp.to_identifier(col, quoted=True)) for col in in_both)
+        )
+        .from_(numbered_left)
+        .join(grouped_right, on=condition, join_type="left")
+        .where(uncovered)
+        .limit(SAMPLE_LIMIT)
+    )
     return Sql(query.sql(dialect=dialect))
 
 
@@ -514,16 +620,16 @@ def _keyed_join(
     condition = exp.and_(
         *(
             exp.EQ(
-                this=exp.column(f"{_EXPECTED_PREFIX}{key}", table="e", quoted=True),
-                expression=exp.column(f"{_ACTUAL_PREFIX}{key}", table="a", quoted=True),
+                this=_qualified(f"{_EXPECTED_PREFIX}{key}", "e"),
+                expression=_qualified(f"{_ACTUAL_PREFIX}{key}", "a"),
             )
             for key in key_columns
         )
     )
     projections: list[exp.Expression] = []
     for col in in_both:
-        projections.append(exp.column(f"{_EXPECTED_PREFIX}{col}", table="e", quoted=True))
-        projections.append(exp.column(f"{_ACTUAL_PREFIX}{col}", table="a", quoted=True))
+        projections.append(_qualified(f"{_EXPECTED_PREFIX}{col}", "e"))
+        projections.append(_qualified(f"{_ACTUAL_PREFIX}{col}", "a"))
     projections.append(exp.column(_EXPECTED_PRESENT, table="e"))
     projections.append(exp.column(_ACTUAL_PRESENT, table="a"))
     joined = exp.select(*projections).from_(expected).join(actual, on=condition, join_type="full outer")
@@ -540,7 +646,7 @@ def _joined_column(prefix: str, col: str) -> exp.Column:
     Returns:
         The `j."<prefix><col>"` column expression.
     """
-    return exp.column(f"{prefix}{col}", table="j", quoted=True)
+    return _qualified(f"{prefix}{col}", "j")
 
 
 def _absent(marker: str) -> exp.Expression:
@@ -629,9 +735,7 @@ def _match_indicator(col: str, numeric: bool, null_equality: str, tol: exp.Expre
     if distinct:
         equal = exp.EQ(this=_joined_column(_EXPECTED_PREFIX, col), expression=_joined_column(_ACTUAL_PREFIX, col))
     else:
-        equal = exp.NullSafeEQ(
-            this=_joined_column(_EXPECTED_PREFIX, col), expression=_joined_column(_ACTUAL_PREFIX, col)
-        )
+        equal = _null_safe_eq(_joined_column(_EXPECTED_PREFIX, col), _joined_column(_ACTUAL_PREFIX, col))
     return exp.Case().when(equal, one).else_(zero)
 
 
@@ -646,7 +750,7 @@ def _sum_case(condition: exp.Expression, alias: str) -> exp.Expression:
         The aliased conditional-sum expression.
     """
     case = exp.Case().when(condition, exp.Literal.number(1)).else_(exp.Literal.number(0))
-    return exp.func("SUM", case).as_(exp.to_identifier(alias))
+    return exp.func("SUM", case).as_(exp.to_identifier(alias, quoted=True))
 
 
 def keyed_mismatch_alias(index: int) -> str:
