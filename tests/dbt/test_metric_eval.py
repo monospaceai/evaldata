@@ -1,5 +1,7 @@
 """Tests for the Semantic Layer eval pipeline and the `MetricFirstDecisive` combinator."""
 
+import time
+
 import pytest
 
 from evaldata.dbt import (
@@ -94,6 +96,33 @@ def test_run_metric_benchmark_empty_is_zero_accuracy() -> None:
     summary = run_metric_benchmark([], _Solver(_ok_output()), scorers=[_Scorer("pass")])
     assert summary.total == 0
     assert summary.accuracy == 0.0
+
+
+def test_run_metric_benchmark_concurrency_preserves_order() -> None:
+    class _SleepSolver:
+        def solve(self, case: MetricCase) -> MetricSolverOutput:
+            time.sleep(0.02 * (3 - int(case.id)))
+            return _ok_output()
+
+    cases = [_case(str(i)) for i in range(3)]
+    summary = run_metric_benchmark(cases, _SleepSolver(), scorers=[_Scorer("pass")], max_concurrency=4)
+    assert [c.id for c in summary.cases] == ["0", "1", "2"]
+    assert summary.passed == 3
+
+
+def test_run_metric_benchmark_concurrency_case_error_does_not_kill_run() -> None:
+    class _MaybeErroring:
+        def solve(self, case: MetricCase) -> MetricSolverOutput:
+            if case.id == "b":
+                return MetricSolverOutput(error=SolverError(kind="auth", message="boom"))
+            return _ok_output()
+
+    cases = [_case("a"), _case("b"), _case("c")]
+    summary = run_metric_benchmark(cases, _MaybeErroring(), scorers=[_Scorer("pass")], max_concurrency=3)
+    assert summary.total == 3
+    assert summary.passed == 2
+    reports = {r.id: r for r in summary.cases}
+    assert reports["b"].error is not None
 
 
 class TestMetricFirstDecisive:
