@@ -51,10 +51,8 @@ jobs:
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
-          # snowflake cloud runs are cost-sensitive (small paid account), so on PRs they're
-          # diff-gated to the paths that can affect the Snowflake adapter or the SQL it generates.
-          # An empty or failed diff falls through to snowflake=true, so detection problems never
-          # skip the cloud check.
+          # Snowflake runs cost credits, so PRs run them only when a path that can affect them
+          # changed. An empty or failed diff falls through to snowflake=true, never to a skip.
           sf_paths='^(src/evaldata/platforms/snowflake\.py|src/evaldata/scorers/|src/evaldata/equivalence/|tests/platforms/|\.github/workflows/|justfile$)'
           if [ -z "$changed" ] || printf '%s\n' "$changed" | grep -qE "$sf_paths"; then
             echo "snowflake=true" >> "$GITHUB_OUTPUT"
@@ -79,9 +77,7 @@ jobs:
         run: just docs-build
 
   # Full gate: the non-cloud suite (unit + local e2e) at the latest Python, with the 100% coverage
-  # gate and build. It needs no cloud secrets, so it runs on every code PR — fork PRs included — and
-  # is the coverage gate for them. The cloud e2e jobs (`cloud`, `snowflake`) run alongside it where
-  # secrets are available. Skipped on docs-only PRs.
+  # gate and build. Needs no secrets, so it runs on fork PRs too. Skipped on docs-only PRs.
   gate:
     name: gate (py3.13)
     needs: changes
@@ -125,9 +121,7 @@ jobs:
             sleep 1
           done
           ollama pull qwen2.5-coder:1.5b
-          # Cloud e2e is excluded here: Databricks runs in the `cloud` job, Snowflake in the
-          # `snowflake` job, and the live Cortex e2e off the PR path. Their code is covered by the
-          # non-cloud unit tests, so this still meets the 100% gate.
+          # Cloud e2e is excluded; the adapters' unit tests keep the coverage gate at 100%.
           just lint
           just typecheck
           just test-cov '-m "not cloud and not snowflake and not cortex"'
@@ -135,9 +129,7 @@ jobs:
         env:
           EVALDATA_LOCAL_MODEL: ollama_chat/qwen2.5-coder:1.5b
 
-  # Databricks cloud e2e, split out of the gate because it needs secret credentials. Runs on pushes
-  # and same-repo PRs; fork PRs can't receive the secrets, so it's skipped there (visibly, not
-  # silently green) and the fork still gets the full non-cloud gate above.
+  # Databricks cloud e2e, split from the gate because it needs secrets, which fork PRs can't receive.
   cloud:
     name: cloud (databricks)
     needs: changes
@@ -211,10 +203,8 @@ jobs:
         env:
           EVALDATA_LOCAL_MODEL: ollama_chat/qwen2.5-coder:1.5b
 
-  # Snowflake cloud e2e, secret-free via GitHub Actions OIDC (workload identity federation). Runs on
-  # push to main, and on same-repo PRs that touch the Snowflake-relevant paths (diff-gated by the
-  # `changes` job to keep credit spend down). Fork PRs can't mint the OIDC token, so it's skipped
-  # there — visibly, not silently green.
+  # Snowflake cloud e2e via GitHub OIDC: every main push, plus same-repo PRs that touch
+  # Snowflake-relevant paths. Fork PRs can't mint the token.
   snowflake:
     name: snowflake (cloud)
     needs: changes
@@ -247,18 +237,14 @@ jobs:
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_WAREHOUSE: COMPUTE_WH
-          # Pre-provisioned CI namespace: the CI role can create tables here but cannot create
-          # databases, so seeding fixtures must target it rather than invent their own.
+          # The CI role can create tables in this namespace but not databases.
           SNOWFLAKE_DATABASE: EVALDATA_CI
           SNOWFLAKE_SCHEMA: PUBLIC
           SNOWFLAKE_AUTHENTICATOR: WORKLOAD_IDENTITY
           SNOWFLAKE_WORKLOAD_IDENTITY_PROVIDER: OIDC
 
-  # Single required status check for branch protection. It recomputes which jobs were expected to
-  # run for this event and requires an exact `success` from each — a job that was skipped when it
-  # should have run fails the check (no silent green). Jobs that legitimately can't run — the cloud
-  # e2e on fork PRs, everything but `docs` on docs-only PRs, `snowflake` on PRs that don't touch its
-  # paths — are allowed to be skipped.
+  # Single required status check: requires success from every job expected to run for this event,
+  # so a should-have-run job that was skipped fails instead of passing silently.
   check:
     if: always()
     needs: [changes, docs, gate, cloud, compat, snowflake]

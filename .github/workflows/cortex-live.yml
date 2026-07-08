@@ -1,9 +1,7 @@
 name: Cortex live e2e
 
-# The live Cortex Analyst e2e consumes Snowflake credits, so it's wired but off: it never runs on
-# the default PR/main path. Trigger it on demand — dispatch it manually (from a ref whose OIDC
-# subject the Snowflake service user trusts, i.e. main), or add the `cortex-live` label to a
-# same-repo PR. Fork PRs get no secrets, so a labelled fork run fails loudly rather than skipping.
+# Live Cortex Analyst e2e consumes Snowflake credits, so it never runs on the default PR/main
+# path: dispatch it manually, or add the `cortex-live` label to a same-repo PR.
 on:
   workflow_dispatch:
   pull_request:
@@ -49,8 +47,7 @@ jobs:
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_WAREHOUSE: COMPUTE_WH
-          # Pre-provisioned CI namespace: the CI role can create tables here but cannot create
-          # databases, so seeding fixtures must target it rather than invent their own.
+          # The CI role can create tables in this namespace but not databases.
           SNOWFLAKE_DATABASE: EVALDATA_CI
           SNOWFLAKE_SCHEMA: PUBLIC
           SNOWFLAKE_AUTHENTICATOR: WORKLOAD_IDENTITY
