@@ -125,8 +125,13 @@ class TestExecutionAccuracy:
         )
         queries = QueryRunner(adapter, Sql("SELECT id FROM items"), "sqlite", None)
         result = queries.run(Sql("SELECT id FROM items"))
-        with pytest.raises(TypeError, match="GoldQuery"):
-            ExecutionAccuracy().score(case, _OUTPUT, result, context=ScoreContext(queries=queries))
+        score = ExecutionAccuracy().score(case, _OUTPUT, result, context=ScoreContext(queries=queries))
+        assert score.verdict == "inconclusive"
+        assert not score.passed
+        assert score.metadata.get("scorer_misconfigured") is True
+        assert score.explanation is not None
+        assert "GoldQuery" in score.explanation
+        assert "UntypedResultSet" in score.explanation
 
     def test_unparseable_gold_falls_back_to_order_insensitive(self) -> None:
         # When the gold query cannot be parsed, order-sensitivity can't be inferred, so the

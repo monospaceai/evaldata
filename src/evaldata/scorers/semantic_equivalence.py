@@ -18,6 +18,7 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.simplify import Simplifier, gen
 
 from evaldata.equivalence.semantic import combine
+from evaldata.scorers.base import misconfigured
 from evaldata.scorers.context import ScoreContext
 from evaldata.scorers.sql import Dialect
 from evaldata.types import (
@@ -304,14 +305,10 @@ class SemanticEquivalence:
 
         Returns:
             A passing `ScoreResult` when a check confirms equivalence, else an inconclusive
-            result (no check could confirm).
-
-        Raises:
-            TypeError: If `case.expected` is not a `GoldQuery`.
+            result (no check could confirm, or `case.expected` is not a `GoldQuery`).
         """
         if not isinstance(case.expected, GoldQuery):
-            msg = f"SemanticEquivalence requires a GoldQuery; got {type(case.expected).__name__}"
-            raise TypeError(msg)
+            return misconfigured(SCORER_NAME, case.expected, "a GoldQuery")
         verdicts: list[SemanticVerdict] = []
         for check in self._checks:
             verdict = check.judge(case, output, result, context=context)

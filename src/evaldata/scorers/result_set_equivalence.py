@@ -14,6 +14,7 @@ from sqlglot import exp
 
 from evaldata.equivalence import ColumnReconciliation, build_result_set_diff, reconcile_columns
 from evaldata.scorers import sql
+from evaldata.scorers.base import misconfigured
 from evaldata.scorers.context import ScoreContext
 from evaldata.scorers.query import QueryRunner
 from evaldata.types import (
@@ -83,19 +84,11 @@ class ResultSetEquivalence:
             A `ScoreResult` that passes when the result set matches the expectation. A failed
             model query, a failed gold query, a failed derived query, a non-unique or absent
             `match_key`, or (keyless) `null_equality="distinct"` each yield a failing result
-            with an explanation.
-
-        Raises:
-            TypeError: If `case.expected` is not one of `UntypedResultSet`, `TypedResultSet`,
-                or `GoldQuery`.
+            with an explanation; an `expected` of the wrong kind yields an inconclusive result.
         """
         expected = case.expected
         if not isinstance(expected, UntypedResultSet | TypedResultSet | GoldQuery):
-            msg = (
-                "ResultSetEquivalence requires an UntypedResultSet, TypedResultSet, or GoldQuery; "
-                f"got {type(expected).__name__}"
-            )
-            raise TypeError(msg)
+            return misconfigured(SCORER_NAME, expected, "an UntypedResultSet, TypedResultSet, or GoldQuery")
 
         if result.error is not None:
             return ScoreResult(

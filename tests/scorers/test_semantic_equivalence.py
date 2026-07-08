@@ -259,10 +259,15 @@ class TestSemanticEquivalence:
         assert score.basis is None
         assert score.explanation == "no semantic check could confirm equivalence"
 
-    def test_non_gold_expected_raises_type_error(self) -> None:
+    def test_non_gold_expected_is_inconclusive(self) -> None:
         case = _other_case(UntypedResultSet(rows=[{"n": 1}]))
-        with pytest.raises(TypeError, match="requires a GoldQuery"):
-            SemanticEquivalence().score(case, _OUTPUT, _RESULT, context=_context("SELECT 1 AS n"))
+        score = SemanticEquivalence().score(case, _OUTPUT, _RESULT, context=_context("SELECT 1 AS n"))
+        assert score.verdict == "inconclusive"
+        assert score.passed is False
+        assert score.metadata.get("scorer_misconfigured") is True
+        assert score.explanation is not None
+        assert "GoldQuery" in score.explanation
+        assert "UntypedResultSet" in score.explanation
 
     def test_stops_at_first_decisive_verdict(self) -> None:
         first = _FixedCheck("equivalent", method="ast")

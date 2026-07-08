@@ -14,6 +14,7 @@ import sqlglot
 from sqlglot.errors import SqlglotError
 
 from evaldata.equivalence.rows import compare_rows
+from evaldata.scorers.base import misconfigured
 from evaldata.scorers.context import ScoreContext
 from evaldata.scorers.sql import Dialect
 from evaldata.types import (
@@ -79,15 +80,12 @@ class ExecutionAccuracy:
             A passing `ScoreResult` (`basis="observed"`) when the result sets match under the
             configured semantics, else a failing one carrying a `ResultSetDiff`. A failed model
             query, or a failed gold query (`metadata["gold_query_failed"]`), yields a failing
-            result with an explanation.
-
-        Raises:
-            TypeError: If `case.expected` is not a `GoldQuery`.
+            result with an explanation; an `expected` of the wrong kind yields an inconclusive
+            result.
         """
         expected = case.expected
         if not isinstance(expected, GoldQuery):
-            msg = f"ExecutionAccuracy requires a GoldQuery expected; got {type(expected).__name__}"
-            raise TypeError(msg)
+            return misconfigured(SCORER_NAME, expected, "a GoldQuery")
 
         if result.error is not None:
             return _failure(f"query execution failed: {result.error.message}")
