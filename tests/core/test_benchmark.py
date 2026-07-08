@@ -78,7 +78,6 @@ class TestRunBenchmark:
         assert summary.passed == 3
 
     def test_concurrency_case_failure_does_not_kill_run(self, db: str) -> None:
-        # One case's solver returns an error value; the run completes and marks only it failed.
         class _Solver:
             def solve(self, case: EvalCase) -> SolverOutput:
                 if case.id == "b":

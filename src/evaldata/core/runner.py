@@ -75,10 +75,6 @@ def _score_output(
 ) -> CaseEvaluation:
     """Execute `output`'s SQL and score it, returning the outcome without raising.
 
-    The half of `evaluate_case` that runs after the solver: it resolves the adapter, executes,
-    and scores. Split out so a batch runner can solve cases concurrently (the network-bound half)
-    and then feed each solved output through this half serially against a single DB connection.
-
     Args:
         case: The eval case the output belongs to.
         output: The solver output to execute and score.

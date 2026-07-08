@@ -28,9 +28,6 @@ def _score_metric_output(
 ) -> CaseReport:
     """Score a solved metric `output`, returning its outcome.
 
-    The half of `evaluate_metric_case` that runs after the solver, so a batch runner can solve
-    cases concurrently and then score each solved output serially.
-
     Args:
         case: The eval case the output belongs to.
         output: The solver output to score.
