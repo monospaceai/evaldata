@@ -1,0 +1,3 @@
+kind: Added
+body: 'Export the extension surface from the top-level `evaldata` namespace: the `Scorer` and `Solver` protocols, `EquivalenceCheck`, `QueryRunner`, `ScoreContext`, the platform-ref builders (`duckdb_platform`, `sqlite_platform`, `postgres_platform`, `databricks_platform`, `snowflake_platform`), and the LLM value types a custom backend returns (`Usage`, `Completion`, `TextCompletion`, `StubLlm`).'
+time: 2026-07-08T10:00:02.000000+10:00

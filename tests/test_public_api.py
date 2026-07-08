@@ -19,6 +19,39 @@ def test_prompt_solver_top_level() -> None:
     assert "PromptSolver" in dir(evaldata)
 
 
+def test_extension_surface_top_level() -> None:
+    from evaldata.llm import Completion, StubLlm, TextCompletion, Usage
+    from evaldata.platforms.registry import (
+        databricks_platform,
+        duckdb_platform,
+        postgres_platform,
+        snowflake_platform,
+        sqlite_platform,
+    )
+    from evaldata.scorers import EquivalenceCheck, QueryRunner, ScoreContext, Scorer
+    from evaldata.solvers import Solver
+
+    exported = {
+        "Scorer": Scorer,
+        "Solver": Solver,
+        "EquivalenceCheck": EquivalenceCheck,
+        "QueryRunner": QueryRunner,
+        "ScoreContext": ScoreContext,
+        "duckdb_platform": duckdb_platform,
+        "sqlite_platform": sqlite_platform,
+        "postgres_platform": postgres_platform,
+        "databricks_platform": databricks_platform,
+        "snowflake_platform": snowflake_platform,
+        "Usage": Usage,
+        "Completion": Completion,
+        "TextCompletion": TextCompletion,
+        "StubLlm": StubLlm,
+    }
+    for name, obj in exported.items():
+        assert getattr(evaldata, name) is obj
+        assert name in evaldata.__all__
+
+
 def test_prompt_solver_subpackage() -> None:
     from evaldata.solvers.prompt import PromptSolver
 
