@@ -1,4 +1,4 @@
-"""Tests for `ResultSetEquivalence` — the in-warehouse `EXCEPT ALL` scorer."""
+"""Tests for `ResultSetEquivalence` — the in-warehouse result-set diff scorer."""
 
 import pytest
 
@@ -127,7 +127,7 @@ class TestResultSetEquivalence:
         assert "relation does not exist" in score.explanation
 
     def test_derived_query_error_fails_without_raise(self) -> None:
-        # The model references a missing table; the derived EXCEPT ALL query errors.
+        # The model references a missing table; the derived bag-diff query errors.
         case = _case(UntypedResultSet(rows=[{"n": 1}]))
         result = ExecutionResult(rows=[{"n": 1}], latency_seconds=0.0)
         score = _score(case, result, "SELECT n FROM does_not_exist_xyz")

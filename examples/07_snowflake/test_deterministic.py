@@ -4,7 +4,8 @@ Expectation checks are pushed down into SQL, precise result-column types are res
 warehouse, and execution accuracy compares against a gold query.
 
 Set `SNOWFLAKE_ACCOUNT` (and `SNOWFLAKE_WAREHOUSE`/`SNOWFLAKE_ROLE`) and configure authentication
-through the environment (see the Snowflake guide).
+through the environment (see the Snowflake guide). Seeding targets `SNOWFLAKE_DATABASE` and
+`SNOWFLAKE_SCHEMA` when set, defaulting to `EVALDATA_EXAMPLES`/`PUBLIC`.
 """
 
 import os
@@ -24,7 +25,9 @@ from evaldata.platforms import resolve, snowflake_platform
 
 pytestmark = [pytest.mark.e2e, pytest.mark.cloud, pytest.mark.snowflake]
 
-_TABLE = "EVALDATA_EXAMPLES.PUBLIC.ORDERS_EX07"
+_DATABASE = os.environ.get("SNOWFLAKE_DATABASE", "EVALDATA_EXAMPLES")
+_SCHEMA = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
+_TABLE = f"{_DATABASE}.{_SCHEMA}.ORDERS_EX07"
 _PLATFORM = snowflake_platform(
     name="examples-snowflake",
     account=os.environ.get("SNOWFLAKE_ACCOUNT", ""),
@@ -39,11 +42,16 @@ _PLATFORM = snowflake_platform(
 @pytest.fixture(scope="module", autouse=True)
 def _seed_warehouse() -> Iterator[None]:
     adapter = resolve(_PLATFORM)
-    for sql in [
-        "CREATE DATABASE IF NOT EXISTS EVALDATA_EXAMPLES",
+    statements = []
+    if "SNOWFLAKE_DATABASE" not in os.environ:
+        statements.append(f"CREATE DATABASE IF NOT EXISTS {_DATABASE}")
+    if "SNOWFLAKE_SCHEMA" not in os.environ:
+        statements.append(f"CREATE SCHEMA IF NOT EXISTS {_DATABASE}.{_SCHEMA}")
+    statements += [
         f"CREATE OR REPLACE TABLE {_TABLE} (ID INT, CUSTOMER STRING, AMOUNT DECIMAL(10, 2))",
         f"INSERT INTO {_TABLE} VALUES (1, 'Ada', 10.00), (2, 'Bo', 5.50), (3, 'Cy', 20.00)",
-    ]:
+    ]
+    for sql in statements:
         result = adapter.execute(sql)
         if result.error is not None:  # pragma: no cover
             msg = f"failed to seed Snowflake table {_TABLE!r}: {result.error.message}"

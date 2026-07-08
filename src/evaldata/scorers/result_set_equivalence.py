@@ -1,7 +1,7 @@
 """`ResultSetEquivalence`: result-set scorer that diffs in-warehouse.
 
 A non-empty `ComparisonConfig.match_key` selects the keyed `FULL OUTER JOIN` path (rows
-aligned on the key, compared per column); otherwise the keyless `EXCEPT ALL` bag path runs.
+aligned on the key, compared per column); otherwise the keyless bag-difference path runs.
 The expected side is either authored rows materialised as typed literals, or a `GoldQuery`
 embedded as a subquery so the reference query never egresses its rows into Python.
 """
@@ -67,7 +67,7 @@ class ResultSetEquivalence:
         into the platform. For authored rows the expected side is materialised as typed
         literals; for a `GoldQuery` it is the reference query embedded as a subquery, whose
         schema is discovered with a zero-row execution and whose rows never reach Python.
-        With an empty `match_key`, two `EXCEPT ALL` diffs compute the bag difference (and
+        With an empty `match_key`, two bag-difference queries compute missing and extra rows (and
         `null_equality="distinct"` is rejected). With a non-empty `match_key`, a
         `FULL OUTER JOIN` aligns rows on the key and compares per column — supporting
         `null_equality="distinct"`, an exact tolerance band, and per-column mismatch counts.
@@ -129,7 +129,7 @@ class ResultSetEquivalence:
             return ScoreResult(
                 scorer=SCORER_NAME,
                 verdict="fail",
-                explanation="null_equality='distinct' requires a match_key (the keyless EXCEPT ALL path treats NULLs as equal)",
+                explanation="null_equality='distinct' requires a match_key (the keyless bag path treats NULLs as equal)",
             )
 
         diff_or_error = _diff_rows(source, columns.in_both, config.float_tolerance, context.queries)
@@ -368,7 +368,7 @@ def _diff_rows(
     float_tolerance: float,
     queries: QueryRunner,
 ) -> _RowDiff | ExecutionError:
-    """Compute the bag diff over `in_both` via two `EXCEPT ALL` runs, or return an `ExecutionError`.
+    """Compute the bag diff over `in_both` via two portable bag-difference queries.
 
     Args:
         source: The resolved expected side (schema, relation builder).
@@ -390,10 +390,10 @@ def _diff_rows(
     expected_rel = source.relation(in_both, numeric, round_scale)
     actual_rel = sql.aligned_actual(queries.model_sql, in_both, numeric, queries.dialect, round_scale)
 
-    missing = queries.scalar(sql.except_all_count(expected_rel, actual_rel, queries.dialect))
+    missing = queries.scalar(sql.bag_diff_count(expected_rel, actual_rel, in_both, queries.dialect))
     if missing.error is not None:
         return missing.error
-    extra = queries.scalar(sql.except_all_count(actual_rel, expected_rel, queries.dialect))
+    extra = queries.scalar(sql.bag_diff_count(actual_rel, expected_rel, in_both, queries.dialect))
     if extra.error is not None:
         return extra.error
 
@@ -401,13 +401,13 @@ def _diff_rows(
     extra_count = int(extra.value or 0)
     sample_missing: list[dict[str, Any]] = []
     if missing_count:
-        run = queries.run(sql.except_all_sample(expected_rel, actual_rel, queries.dialect))
+        run = queries.run(sql.bag_diff_sample(expected_rel, actual_rel, in_both, queries.dialect))
         if run.error is not None:
             return run.error
         sample_missing = run.rows
     sample_extra: list[dict[str, Any]] = []
     if extra_count:
-        run = queries.run(sql.except_all_sample(actual_rel, expected_rel, queries.dialect))
+        run = queries.run(sql.bag_diff_sample(actual_rel, expected_rel, in_both, queries.dialect))
         if run.error is not None:
             return run.error
         sample_extra = run.rows

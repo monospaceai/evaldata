@@ -171,6 +171,7 @@ exclude = ["tests/_vendor/spider_exec_eval.py"]
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests", "examples"]
+xfail_strict = true
 addopts = [
     "-ra",
     "--strict-markers",

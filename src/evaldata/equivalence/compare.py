@@ -22,7 +22,7 @@ def build_result_set_diff(
 
     Warehouse-free: the row counts/samples are computed by the engine and the column/type
     signals in Python, then passed here. `column_mismatches` is populated only by the keyed
-    `FULL OUTER JOIN` path (empty for the keyless `EXCEPT ALL` path).
+    `FULL OUTER JOIN` path (empty for the keyless bag path).
 
     Args:
         expected_row_count: The number of expected rows.
