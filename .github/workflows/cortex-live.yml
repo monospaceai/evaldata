@@ -1,0 +1,57 @@
+name: Cortex live e2e
+
+# The live Cortex Analyst e2e consumes Snowflake credits, so it's wired but off: it never runs on
+# the default PR/main path. Trigger it on demand — dispatch it manually (from a ref whose OIDC
+# subject the Snowflake service user trusts, i.e. main), or add the `cortex-live` label to a
+# same-repo PR. Fork PRs get no secrets, so a labelled fork run fails loudly rather than skipping.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_FROZEN: "1"
+
+jobs:
+  cortex:
+    name: cortex (live)
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.label.name == 'cortex-live'
+          && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.13"
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+      - name: Run the live Cortex Analyst tests
+        run: |
+          # Mint a GitHub OIDC token for Snowflake; the id-token permission provides these vars.
+          SNOWFLAKE_TOKEN="$(curl -sSf \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=snowflakecomputing.com" | jq -r '.value')"
+          export SNOWFLAKE_TOKEN
+          just test-cortex
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_WAREHOUSE: COMPUTE_WH
+          # Pre-provisioned CI namespace: the CI role can create tables here but cannot create
+          # databases, so seeding fixtures must target it rather than invent their own.
+          SNOWFLAKE_DATABASE: EVALDATA_CI
+          SNOWFLAKE_SCHEMA: PUBLIC
+          SNOWFLAKE_AUTHENTICATOR: WORKLOAD_IDENTITY
+          SNOWFLAKE_WORKLOAD_IDENTITY_PROVIDER: OIDC

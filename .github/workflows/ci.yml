@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.detect.outputs.code }}
+      snowflake: ${{ steps.detect.outputs.snowflake }}
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
@@ -37,6 +38,7 @@ jobs:
         run: |
           if [ "$EVENT_NAME" != "pull_request" ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "snowflake=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           changed="$(git diff --name-only "$BASE_SHA...$HEAD_SHA" 2>/dev/null || true)"
@@ -48,6 +50,16 @@ jobs:
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+          # snowflake cloud runs are cost-sensitive (small paid account), so on PRs they're
+          # diff-gated to the paths that can affect the Snowflake adapter or the SQL it generates.
+          # An empty or failed diff falls through to snowflake=true, so detection problems never
+          # skip the cloud check.
+          sf_paths='^(src/evaldata/platforms/snowflake\.py|src/evaldata/scorers/|src/evaldata/equivalence/|tests/platforms/|\.github/workflows/|justfile$)'
+          if [ -z "$changed" ] || printf '%s\n' "$changed" | grep -qE "$sf_paths"; then
+            echo "snowflake=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "snowflake=false" >> "$GITHUB_OUTPUT"
           fi
 
   # Strict docs build: fails on broken references or snippet includes. Cheap (no services, no
@@ -66,14 +78,14 @@ jobs:
       - name: Build docs
         run: just docs-build
 
-  # Full gate: the suite (unit + e2e + Databricks cloud) at the latest Python, with the coverage
-  # gate and build. Snowflake cloud is excluded here — it authenticates via OIDC bound to the main
-  # branch, so it runs in its own main-only `snowflake` job. Cloud secrets aren't available to fork
-  # PRs, so the gate is skipped there and `check` treats that as OK. Skipped on docs-only PRs.
+  # Full gate: the non-cloud suite (unit + local e2e) at the latest Python, with the 100% coverage
+  # gate and build. It needs no cloud secrets, so it runs on every code PR — fork PRs included — and
+  # is the coverage gate for them. The cloud e2e jobs (`cloud`, `snowflake`) run alongside it where
+  # secrets are available. Skipped on docs-only PRs.
   gate:
     name: gate (py3.13)
     needs: changes
-    if: (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -113,14 +125,35 @@ jobs:
             sleep 1
           done
           ollama pull qwen2.5-coder:1.5b
-          # Snowflake cloud is excluded (OIDC is main-only); it runs in the `snowflake` job.
-          # The live Cortex e2e is excluded too (it consumes credits); it runs off the PR path.
+          # Cloud e2e is excluded here: Databricks runs in the `cloud` job, Snowflake in the
+          # `snowflake` job, and the live Cortex e2e off the PR path. Their code is covered by the
+          # non-cloud unit tests, so this still meets the 100% gate.
           just lint
           just typecheck
-          just test-cov '-m "not snowflake and not cortex"'
+          just test-cov '-m "not cloud and not snowflake and not cortex"'
           just build
         env:
           EVALDATA_LOCAL_MODEL: ollama_chat/qwen2.5-coder:1.5b
+
+  # Databricks cloud e2e, split out of the gate because it needs secret credentials. Runs on pushes
+  # and same-repo PRs; fork PRs can't receive the secrets, so it's skipped there (visibly, not
+  # silently green) and the fork still gets the full non-cloud gate above.
+  cloud:
+    name: cloud (databricks)
+    needs: changes
+    if: (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.13"
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+      - name: Run the Databricks cloud tests
+        run: just test '-m "cloud and not snowflake and not cortex"'
+        env:
           DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
           DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
@@ -178,13 +211,19 @@ jobs:
         env:
           EVALDATA_LOCAL_MODEL: ollama_chat/qwen2.5-coder:1.5b
 
-  # Snowflake cloud e2e, secret-free via GitHub Actions OIDC (workload identity federation). The
-  # service user's trust is bound to the main-branch OIDC subject, so this runs on push to main
-  # only — which also gates Snowflake credit spend to merges rather than every PR.
+  # Snowflake cloud e2e, secret-free via GitHub Actions OIDC (workload identity federation). Runs on
+  # push to main, and on same-repo PRs that touch the Snowflake-relevant paths (diff-gated by the
+  # `changes` job to keep credit spend down). Fork PRs can't mint the OIDC token, so it's skipped
+  # there — visibly, not silently green.
   snowflake:
-    name: snowflake (cloud, main only)
+    name: snowflake (cloud)
     needs: changes
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
+    if: >-
+      ((github.event_name == 'push' && github.ref == 'refs/heads/main')
+       || (github.event_name == 'pull_request'
+           && github.event.pull_request.head.repo.full_name == github.repository
+           && needs.changes.outputs.snowflake == 'true'))
+      && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -208,35 +247,71 @@ jobs:
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_WAREHOUSE: COMPUTE_WH
+          # Pre-provisioned CI namespace: the CI role can create tables here but cannot create
+          # databases, so seeding fixtures must target it rather than invent their own.
+          SNOWFLAKE_DATABASE: EVALDATA_CI
+          SNOWFLAKE_SCHEMA: PUBLIC
           SNOWFLAKE_AUTHENTICATOR: WORKLOAD_IDENTITY
           SNOWFLAKE_WORKLOAD_IDENTITY_PROVIDER: OIDC
 
-  # Single required status check for branch protection. `changes` and `docs` must pass. `gate`,
-  # `compat`, and `snowflake` may be skipped — a fork-skipped `gate`, a docs-only PR, or the
-  # push-to-main-only `snowflake` on a PR — but a real failure of any is not OK.
+  # Single required status check for branch protection. It recomputes which jobs were expected to
+  # run for this event and requires an exact `success` from each — a job that was skipped when it
+  # should have run fails the check (no silent green). Jobs that legitimately can't run — the cloud
+  # e2e on fork PRs, everything but `docs` on docs-only PRs, `snowflake` on PRs that don't touch its
+  # paths — are allowed to be skipped.
   check:
     if: always()
-    needs: [changes, docs, gate, compat, snowflake]
+    needs: [changes, docs, gate, cloud, compat, snowflake]
     runs-on: ubuntu-latest
+    env:
+      CODE: ${{ needs.changes.outputs.code }}
+      SNOWFLAKE_CHANGED: ${{ needs.changes.outputs.snowflake }}
+      IS_PUSH: ${{ github.event_name == 'push' }}
+      IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      IS_SAME_REPO_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+      CHANGES_RESULT: ${{ needs.changes.result }}
+      DOCS_RESULT: ${{ needs.docs.result }}
+      GATE_RESULT: ${{ needs.gate.result }}
+      CLOUD_RESULT: ${{ needs.cloud.result }}
+      COMPAT_RESULT: ${{ needs.compat.result }}
+      SNOWFLAKE_RESULT: ${{ needs.snowflake.result }}
     steps:
       - run: |
-          if [ "${{ needs.changes.result }}" != "success" ]; then
-            echo "changes result: ${{ needs.changes.result }}"
-            exit 1
+          fail=0
+          require_success() { # name result — must have run and passed
+            if [ "$2" != "success" ]; then
+              echo "::error::$1 was expected to run but its result was: $2"
+              fail=1
+            fi
+          }
+          allow_skip() { # name result — may be skipped, but never a real failure
+            if [ "$2" != "success" ] && [ "$2" != "skipped" ]; then
+              echo "::error::$1 result was: $2"
+              fail=1
+            fi
+          }
+
+          require_success changes "$CHANGES_RESULT"
+          require_success docs "$DOCS_RESULT"
+
+          if [ "$CODE" = "true" ]; then
+            require_success gate "$GATE_RESULT"
+            require_success compat "$COMPAT_RESULT"
+          else
+            allow_skip gate "$GATE_RESULT"
+            allow_skip compat "$COMPAT_RESULT"
           fi
-          if [ "${{ needs.docs.result }}" != "success" ]; then
-            echo "docs result: ${{ needs.docs.result }}"
-            exit 1
+
+          if [ "$CODE" = "true" ] && { [ "$IS_PUSH" = "true" ] || [ "$IS_SAME_REPO_PR" = "true" ]; }; then
+            require_success cloud "$CLOUD_RESULT"
+          else
+            allow_skip cloud "$CLOUD_RESULT"
           fi
-          if [ "${{ needs.gate.result }}" != "success" ] && [ "${{ needs.gate.result }}" != "skipped" ]; then
-            echo "gate result: ${{ needs.gate.result }}"
-            exit 1
+
+          if [ "$CODE" = "true" ] && { [ "$IS_MAIN_PUSH" = "true" ] || { [ "$IS_SAME_REPO_PR" = "true" ] && [ "$SNOWFLAKE_CHANGED" = "true" ]; }; }; then
+            require_success snowflake "$SNOWFLAKE_RESULT"
+          else
+            allow_skip snowflake "$SNOWFLAKE_RESULT"
           fi
-          if [ "${{ needs.compat.result }}" != "success" ] && [ "${{ needs.compat.result }}" != "skipped" ]; then
-            echo "compat result: ${{ needs.compat.result }}"
-            exit 1
-          fi
-          if [ "${{ needs.snowflake.result }}" != "success" ] && [ "${{ needs.snowflake.result }}" != "skipped" ]; then
-            echo "snowflake result: ${{ needs.snowflake.result }}"
-            exit 1
-          fi
+
+          exit $fail

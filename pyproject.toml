@@ -198,8 +198,9 @@ source = ["src/evaldata", "examples"]
 parallel = true
 omit = [
     "tests/*",
-    # Live-only examples: they run against a real account off the PR gate, so their lines are
-    # never executed in the coverage run. The Cortex solver's own coverage comes from its unit tests.
+    # Live-only examples: they run against a real account off the coverage gate, so their lines are
+    # never executed in the coverage run. The adapters' own coverage comes from their unit tests.
+    "examples/04_databricks/*",
     "examples/07_snowflake/*",
     "examples/08_cortex/*",
 ]
