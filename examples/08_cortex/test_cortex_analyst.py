@@ -5,7 +5,8 @@ generates; `evaldata` runs that SQL on Snowflake and scores it against a gold qu
 
 Set `SNOWFLAKE_ACCOUNT` (and `SNOWFLAKE_WAREHOUSE`/`SNOWFLAKE_ROLE`) and configure authentication
 through the environment (see the Snowflake guide). The account needs the `SNOWFLAKE.CORTEX_USER`
-database role.
+database role. Seeding targets `SNOWFLAKE_DATABASE` and `SNOWFLAKE_SCHEMA` when set, defaulting to
+`JAFFLE_SHOP_DB`/`PUBLIC`.
 """
 
 import os
@@ -21,7 +22,11 @@ from evaldata.platforms.snowflake import SnowflakeAdapter
 
 pytestmark = [pytest.mark.e2e, pytest.mark.cortex]
 
-_SEMANTIC_VIEW = "JAFFLE_SHOP_DB.PUBLIC.JAFFLE_SHOP_SV"
+_DATABASE = os.environ.get("SNOWFLAKE_DATABASE", "JAFFLE_SHOP_DB")
+_SCHEMA = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
+_CUSTOMERS = f"{_DATABASE}.{_SCHEMA}.CUSTOMERS"
+_ORDERS = f"{_DATABASE}.{_SCHEMA}.ORDERS"
+_SEMANTIC_VIEW = f"{_DATABASE}.{_SCHEMA}.JAFFLE_SHOP_SV"
 _PLATFORM = snowflake_platform(
     name="examples-cortex",
     account=os.environ.get("SNOWFLAKE_ACCOUNT", ""),
@@ -33,20 +38,18 @@ _PLATFORM = snowflake_platform(
 )
 
 _SETUP = [
-    "CREATE DATABASE IF NOT EXISTS JAFFLE_SHOP_DB",
-    "CREATE OR REPLACE TABLE JAFFLE_SHOP_DB.PUBLIC.CUSTOMERS (ID NUMBER, NAME VARCHAR, REGION VARCHAR)",
-    "CREATE OR REPLACE TABLE JAFFLE_SHOP_DB.PUBLIC.ORDERS "
-    "(ID NUMBER, CUSTOMER_ID NUMBER, ORDER_DATE DATE, AMOUNT NUMBER(10,2))",
-    "INSERT INTO JAFFLE_SHOP_DB.PUBLIC.CUSTOMERS (ID, NAME, REGION) VALUES "
+    f"CREATE OR REPLACE TABLE {_CUSTOMERS} (ID NUMBER, NAME VARCHAR, REGION VARCHAR)",
+    f"CREATE OR REPLACE TABLE {_ORDERS} (ID NUMBER, CUSTOMER_ID NUMBER, ORDER_DATE DATE, AMOUNT NUMBER(10,2))",
+    f"INSERT INTO {_CUSTOMERS} (ID, NAME, REGION) VALUES "
     "(1,'Alice','East'),(2,'Bob','West'),(3,'Carol','East'),(4,'Dan','West'),(5,'Eve','East')",
-    "INSERT INTO JAFFLE_SHOP_DB.PUBLIC.ORDERS (ID, CUSTOMER_ID, ORDER_DATE, AMOUNT) VALUES "
+    f"INSERT INTO {_ORDERS} (ID, CUSTOMER_ID, ORDER_DATE, AMOUNT) VALUES "
     "(1,1,'2026-01-05',50.00),(2,1,'2026-01-20',30.00),(3,2,'2026-02-01',120.00),"
     "(4,3,'2026-02-15',75.50),(5,3,'2026-03-01',20.00),(6,4,'2026-03-10',200.00),"
     "(7,5,'2026-03-12',10.00),(8,2,'2026-03-15',60.00)",
     f"""CREATE OR REPLACE SEMANTIC VIEW {_SEMANTIC_VIEW}
   TABLES (
-    customers AS JAFFLE_SHOP_DB.PUBLIC.CUSTOMERS PRIMARY KEY (ID) COMMENT = 'One row per customer',
-    orders AS JAFFLE_SHOP_DB.PUBLIC.ORDERS PRIMARY KEY (ID) COMMENT = 'One row per order'
+    customers AS {_CUSTOMERS} PRIMARY KEY (ID) COMMENT = 'One row per customer',
+    orders AS {_ORDERS} PRIMARY KEY (ID) COMMENT = 'One row per order'
   )
   RELATIONSHIPS (
     orders_to_customers AS orders (CUSTOMER_ID) REFERENCES customers
@@ -69,7 +72,12 @@ _SETUP = [
 @pytest.fixture(scope="module", autouse=True)
 def _seed_semantic_view() -> Iterator[None]:
     adapter = resolve(_PLATFORM)
-    for sql in _SETUP:
+    statements = []
+    if "SNOWFLAKE_DATABASE" not in os.environ:
+        statements.append(f"CREATE DATABASE IF NOT EXISTS {_DATABASE}")
+    if "SNOWFLAKE_SCHEMA" not in os.environ:
+        statements.append(f"CREATE SCHEMA IF NOT EXISTS {_DATABASE}.{_SCHEMA}")
+    for sql in [*statements, *_SETUP]:
         result = adapter.execute(sql)
         if result.error is not None:  # pragma: no cover
             msg = f"failed to build the jaffle semantic view: {result.error.message}"
@@ -81,8 +89,8 @@ def _seed_semantic_view() -> Iterator[None]:
     input="What is the total order amount for each customer region?",
     expected={
         "kind": "gold_query",
-        "sql": "SELECT c.REGION, SUM(o.AMOUNT) FROM JAFFLE_SHOP_DB.PUBLIC.ORDERS o "
-        "JOIN JAFFLE_SHOP_DB.PUBLIC.CUSTOMERS c ON o.CUSTOMER_ID = c.ID GROUP BY c.REGION",
+        "sql": f"SELECT c.REGION, SUM(o.AMOUNT) FROM {_ORDERS} o "
+        f"JOIN {_CUSTOMERS} c ON o.CUSTOMER_ID = c.ID GROUP BY c.REGION",
     },
     platform=_PLATFORM,
 )
