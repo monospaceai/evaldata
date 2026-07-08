@@ -1,6 +1,7 @@
 """Tests for `run_benchmark` — the non-raising aggregate over a set of cases."""
 
 import sqlite3
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import pytest
 from evaldata import CallableSolver, EvalCase, ExecutionAccuracy, run_benchmark
 from evaldata.platforms import sqlite_platform
 from evaldata.platforms.registry import close_all
-from evaldata.types import GoldQuery
+from evaldata.types import GoldQuery, SolverError, SolverOutput, Sql
 
 
 @pytest.fixture
@@ -62,3 +63,32 @@ class TestRunBenchmark:
         assert summary.total == 0
         assert summary.passed == 0
         assert summary.accuracy == 0.0
+
+    def test_concurrency_preserves_case_order(self, db: str) -> None:
+        # Earlier cases sleep longest, so the solvers finish in reverse of submission order;
+        # the reports must still come back in case order.
+        def solve(case: EvalCase) -> str:
+            time.sleep(0.02 * (3 - int(case.id)))
+            return "SELECT id FROM items"
+
+        cases = [_case(str(i), db) for i in range(3)]
+        summary = run_benchmark(cases, CallableSolver(solve), scorers=[ExecutionAccuracy()], max_concurrency=4)
+
+        assert [c.id for c in summary.cases] == ["0", "1", "2"]
+        assert summary.passed == 3
+
+    def test_concurrency_case_failure_does_not_kill_run(self, db: str) -> None:
+        class _Solver:
+            def solve(self, case: EvalCase) -> SolverOutput:
+                if case.id == "b":
+                    return SolverOutput(error=SolverError(kind="bad_request", message="boom"))
+                return SolverOutput(output=Sql("SELECT id FROM items"))
+
+        cases = [_case("a", db), _case("b", db), _case("c", db)]
+        summary = run_benchmark(cases, _Solver(), scorers=[ExecutionAccuracy()], max_concurrency=3)
+
+        assert summary.total == 3
+        assert summary.passed == 2
+        reports = {r.id: r for r in summary.cases}
+        assert reports["b"].error is not None
+        assert reports["a"].passed and reports["c"].passed

@@ -13,8 +13,8 @@ When structure is inconclusive, it falls back to warehouse execution or an LLM j
 
 - **Semantic equivalence.** Confirm two queries have the same meaning by comparing their
   structure. No execution, no guessing — when it can't confirm, it returns `unknown`.
-- **Execution in your warehouse.** Run the query on DuckDB, Postgres, or Databricks and
-  compare the results, accounting for row order, NULLs, float tolerance, and types.
+- **Execution in your warehouse.** Run the query on DuckDB, Postgres, Databricks, or Snowflake
+  and compare the results, accounting for row order, NULLs, float tolerance, and types.
 - **It's just `pytest`.** Every eval is a test, run in your suite and your CI on every PR.
   No new runner, notebook, or dashboard.
 - **An LLM judge when you need one.** For ambiguous questions, missing reference answers,

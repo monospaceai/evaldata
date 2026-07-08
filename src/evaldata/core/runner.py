@@ -1,7 +1,9 @@
 """Eval orchestration: the per-case pipeline, the pytest-facing `assert_eval`, and `run_benchmark`."""
 
 from collections.abc import Iterable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from itertools import islice
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict
@@ -59,12 +61,35 @@ def evaluate_case(
     Returns:
         A `CaseEvaluation` carrying the case report, the solver output, the execution result
         (or `None` on solver error), and any failing scorer results.
+    """
+    output = solver.solve(case)
+    return _score_output(case, output, scorers=scorers, adapter=adapter)
+
+
+def _score_output(
+    case: EvalCase,
+    output: SolverOutput,
+    *,
+    scorers: Sequence[Scorer],
+    adapter: PlatformAdapter | None = None,
+) -> CaseEvaluation:
+    """Execute `output`'s SQL and score it, returning the outcome without raising.
+
+    Args:
+        case: The eval case the output belongs to.
+        output: The solver output to execute and score.
+        scorers: Scorers applied to the execution result; all must pass for the case to pass.
+        adapter: A platform adapter to execute against. If omitted, one is resolved and
+            session-cached from `case.platform`.
+
+    Returns:
+        A `CaseEvaluation` carrying the case report, the solver output, the execution result
+        (or `None` on solver error), and any failing scorer results.
 
     Raises:
         AssertionError: If the solver returns neither output nor error (unreachable — the
             `SolverOutput` validator guarantees exactly one is set).
     """
-    output = solver.solve(case)
     if output.error is not None:
         report = CaseReport(id=case.id, input=case.input, passed=False, error=output.error)
         return CaseEvaluation(report=report, output=output, result=None, failures=[])
@@ -133,6 +158,7 @@ def run_benchmark(
     *,
     scorers: Sequence[Scorer],
     limit: int | None = None,
+    max_concurrency: int = 1,
 ) -> BenchmarkSummary:
     """Run `cases` through `solver` + `scorers` and return aggregate accuracy.
 
@@ -141,21 +167,31 @@ def run_benchmark(
     `assert_eval`, this neither raises nor records to the run accumulator — it returns the
     aggregate for the caller to print or persist.
 
+    With `max_concurrency` above 1, the solver calls (the network-bound half) run on a thread
+    pool while execution and scoring stay serial, since a platform adapter holds a single
+    connection that is not safe to share across threads. Reports come back in case order
+    regardless of which solver finished first.
+
     Args:
         cases: The eval cases to run, in order.
         solver: The solver under test.
         scorers: Scorers applied to each case; all must pass for the case to count as passed.
         limit: Run at most this many cases, or `None` for all of them.
+        max_concurrency: How many solver calls may run at once. `1` runs everything serially.
 
     Returns:
         A `BenchmarkSummary` with the total, the passed count, the accuracy
         (`passed / total`, or `0.0` when no cases ran), and every case report.
     """
-    reports: list[CaseReport] = []
-    for index, case in enumerate(cases):
-        if limit is not None and index >= limit:
-            break
-        reports.append(evaluate_case(case, solver, scorers=scorers).report)
+    selected = list(islice(cases, limit))
+    if max_concurrency > 1:
+        with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
+            outputs = list(pool.map(solver.solve, selected))
+        reports = [
+            _score_output(case, output, scorers=scorers).report for case, output in zip(selected, outputs, strict=True)
+        ]
+    else:
+        reports = [evaluate_case(case, solver, scorers=scorers).report for case in selected]
     total = len(reports)
     passed = sum(1 for report in reports if report.passed)
     accuracy = passed / total if total else 0.0

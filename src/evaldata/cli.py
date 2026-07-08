@@ -146,6 +146,9 @@ def bench(
     model: str = typer.Option(..., "--model", help="litellm model id for the solver under test."),
     split: str = typer.Option("dev", "--split", help="Dataset split to load."),
     limit: int | None = typer.Option(None, "--limit", help="Run at most this many cases."),
+    max_concurrency: int = typer.Option(
+        1, "--max-concurrency", help="Number of solver calls to run at once (1 runs serially)."
+    ),
     json_path: Path | None = typer.Option(
         None,
         "--json",
@@ -166,6 +169,7 @@ def bench(
         model: A litellm model id for the solver under test.
         split: The dataset split to load (e.g. `dev`).
         limit: Run at most this many cases, or all of them when omitted.
+        max_concurrency: Number of solver calls to run at once; `1` runs serially.
         json_path: If given, also write a JSON stats artifact to this path.
 
     Raises:
@@ -180,7 +184,9 @@ def bench(
     difficulty_by_id = {c.id: c.metadata.get("difficulty") for c in cases}
     solver = PromptSolver(model, prompt_template=SCHEMA_PROMPT_TEMPLATE, temperature=0)
     try:
-        summary = run_benchmark(cases, solver, scorers=[_SCORERS[dataset]()], limit=limit)
+        summary = run_benchmark(
+            cases, solver, scorers=[_SCORERS[dataset]()], limit=limit, max_concurrency=max_concurrency
+        )
     finally:
         close_all()  # this CLI invocation owns the per-db adapters it resolved
 
@@ -236,6 +242,9 @@ def dbt_bench(
         None, "--target", help="dbt profile target name; defaults to the profile's target."
     ),
     limit: int | None = typer.Option(None, "--limit", help="Run at most this many cases."),
+    max_concurrency: int = typer.Option(
+        1, "--max-concurrency", help="Number of solver calls to run at once (1 runs serially)."
+    ),
     json_path: Path | None = typer.Option(
         None, "--json", metavar="PATH", help="Also write a JSON stats artifact to PATH."
     ),
@@ -257,6 +266,7 @@ def dbt_bench(
         profiles_dir: Directory holding `profiles.yml`; defaults to `project_dir`.
         target: The dbt profile target name; defaults to the profile's `target`.
         limit: Run at most this many cases, or all of them when omitted.
+        max_concurrency: Number of solver calls to run at once; `1` runs serially.
         json_path: If given, also write a JSON stats artifact to this path.
 
     Raises:
@@ -281,7 +291,7 @@ def dbt_bench(
         else ExecutionAccuracy(row_order="ignore", multiplicity="set")
     )
     try:
-        summary = run_benchmark(cases, solver, scorers=[scorer], limit=limit)
+        summary = run_benchmark(cases, solver, scorers=[scorer], limit=limit, max_concurrency=max_concurrency)
     finally:
         close_all()  # this CLI invocation owns the adapter it resolved
 
@@ -322,6 +332,9 @@ def sl_bench(
         None, "--target", help="dbt profile target name; defaults to the profile's target."
     ),
     limit: int | None = typer.Option(None, "--limit", help="Run at most this many cases."),
+    max_concurrency: int = typer.Option(
+        1, "--max-concurrency", help="Number of solver calls to run at once (1 runs serially)."
+    ),
     json_path: Path | None = typer.Option(
         None, "--json", metavar="PATH", help="Also write a JSON stats artifact to PATH."
     ),
@@ -339,6 +352,7 @@ def sl_bench(
         profiles_dir: Directory holding `profiles.yml`; defaults to `project_dir`.
         target: dbt profile target name; defaults to the profile's default target.
         limit: Run at most this many cases, or all of them when omitted.
+        max_concurrency: Number of solver calls to run at once; `1` runs serially.
         json_path: If given, also write a JSON stats artifact to this path.
 
     Raises:
@@ -362,7 +376,7 @@ def sl_bench(
         if no_judge
         else metric_layer_equivalence(grader_model or model, temperature=temperature)
     )
-    summary = run_metric_benchmark(cases, solver, scorers=[cascade], limit=limit)
+    summary = run_metric_benchmark(cases, solver, scorers=[cascade], limit=limit, max_concurrency=max_concurrency)
 
     console.print(f"SL accuracy: {summary.accuracy:.1%} ({summary.passed}/{summary.total})")
     if json_path is not None:
