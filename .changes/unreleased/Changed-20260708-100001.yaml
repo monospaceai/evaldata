@@ -1,3 +1,0 @@
-kind: Changed
-body: 'A scorer paired with the wrong `expected` kind (e.g. `ExecutionAccuracy` without a `GoldQuery`) now returns an inconclusive `ScoreResult` flagged `metadata["scorer_misconfigured"]` instead of raising `TypeError`, so the misconfiguration fails the case visibly rather than aborting the whole run.'
-time: 2026-07-08T10:00:01.000000+10:00

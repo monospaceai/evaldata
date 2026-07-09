@@ -1,3 +1,0 @@
-kind: Changed
-body: '`TypedSchema` and `UntypedSchema` now reject duplicate column names at construction with a validation error, instead of carrying them positionally. A query whose result set has duplicate output column names is still surfaced as a typed `duplicate_columns` execution error, not a crash.'
-time: 2026-07-08T10:00:00.000000+10:00
