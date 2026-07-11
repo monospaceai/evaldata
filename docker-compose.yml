@@ -7,6 +7,8 @@
 # Connection defaults match conftest.py's POSTGRES_TEST_* fallbacks, so no env vars
 # are needed for a local run. Override POSTGRES_TEST_{HOST,PORT,USER,PASS,DBNAME} to
 # point the tests at a different instance.
+name: evaldata
+
 services:
   postgres:
     image: postgres:17-alpine
