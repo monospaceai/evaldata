@@ -16,16 +16,14 @@ env:
   UV_FROZEN: "1"
 
 jobs:
-  # Does anything outside the docs need the test suite? Docs-only PRs (Markdown + the mkdocs
-  # config) skip the heavy gate/compat jobs; the cheap docs build still runs. Pushes always run
-  # the suite, so `main` stays fully gated regardless of what changed.
+  # Does anything outside the docs need the test suite? Docs-only changes (Markdown + the mkdocs
+  # config) skip the heavy gate/compat jobs; the cheap docs build still runs.
   changes:
     name: detect changes
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       code: ${{ steps.detect.outputs.code }}
-      snowflake: ${{ steps.detect.outputs.snowflake }}
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
@@ -35,29 +33,25 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
         run: |
-          if [ "$EVENT_NAME" != "pull_request" ]; then
-            echo "code=true" >> "$GITHUB_OUTPUT"
-            echo "snowflake=true" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            changed="$(git diff --name-only "$BASE_SHA...$HEAD_SHA" 2>/dev/null || true)"
+          elif [ -z "$BEFORE_SHA" ] || echo "$BEFORE_SHA" | grep -qE '^0+$'; then
+            changed=""
+          else
+            changed="$(git diff --name-only "$BEFORE_SHA..$CURRENT_SHA" 2>/dev/null || true)"
           fi
-          changed="$(git diff --name-only "$BASE_SHA...$HEAD_SHA" 2>/dev/null || true)"
           echo "changed files:"
           echo "$changed"
-          # code unless every changed file is a doc (Markdown anywhere, or mkdocs.yml). An empty
+          # code unless every changed file is a doc (Markdown anywhere, or mkdocs.yml). Example
+          # code is executable and should run the suite when it changes. An empty
           # or failed diff falls through to code=true, so detection problems never skip the suite.
           if [ -z "$changed" ] || printf '%s\n' "$changed" | grep -qvE '^(docs/|mkdocs\.yml$)|\.md$'; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
-          fi
-          # Snowflake runs cost credits, so PRs run them only when a path that can affect them
-          # changed. An empty or failed diff falls through to snowflake=true, never to a skip.
-          sf_paths='^(src/evaldata/platforms/snowflake\.py|src/evaldata/scorers/|src/evaldata/equivalence/|tests/platforms/|\.github/workflows/|justfile$)'
-          if [ -z "$changed" ] || printf '%s\n' "$changed" | grep -qE "$sf_paths"; then
-            echo "snowflake=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "snowflake=false" >> "$GITHUB_OUTPUT"
           fi
 
   # Strict docs build: fails on broken references or snippet includes. Cheap (no services, no
@@ -143,7 +137,11 @@ jobs:
   cloud:
     name: cloud (databricks)
     needs: changes
-    if: (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.code == 'true'
+    if: >-
+      (github.event_name == 'push'
+       || (github.event_name == 'pull_request'
+           && github.event.pull_request.head.repo.full_name == github.repository))
+      && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -223,16 +221,15 @@ jobs:
           name: ollama-log-compat-${{ matrix.python-version }}
           path: /tmp/ollama.log
 
-  # Snowflake cloud e2e via GitHub OIDC: every main push, plus same-repo PRs that touch
-  # Snowflake-relevant paths. Fork PRs can't mint the token.
+  # Snowflake cloud e2e via GitHub OIDC. Fork PRs can't mint the token.
   snowflake:
     name: snowflake (cloud)
     needs: changes
     if: >-
-      ((github.event_name == 'push' && github.ref == 'refs/heads/main')
+      ((github.event_name == 'push'
+           && github.ref == 'refs/heads/main')
        || (github.event_name == 'pull_request'
-           && github.event.pull_request.head.repo.full_name == github.repository
-           && needs.changes.outputs.snowflake == 'true'))
+           && github.event.pull_request.head.repo.full_name == github.repository))
       && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -271,7 +268,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CODE: ${{ needs.changes.outputs.code }}
-      SNOWFLAKE_CHANGED: ${{ needs.changes.outputs.snowflake }}
       IS_PUSH: ${{ github.event_name == 'push' }}
       IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       IS_SAME_REPO_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
@@ -314,7 +310,7 @@ jobs:
             allow_skip cloud "$CLOUD_RESULT"
           fi
 
-          if [ "$CODE" = "true" ] && { [ "$IS_MAIN_PUSH" = "true" ] || { [ "$IS_SAME_REPO_PR" = "true" ] && [ "$SNOWFLAKE_CHANGED" = "true" ]; }; }; then
+          if [ "$CODE" = "true" ] && { [ "$IS_MAIN_PUSH" = "true" ] || [ "$IS_SAME_REPO_PR" = "true" ]; }; then
             require_success snowflake "$SNOWFLAKE_RESULT"
           else
             allow_skip snowflake "$SNOWFLAKE_RESULT"
