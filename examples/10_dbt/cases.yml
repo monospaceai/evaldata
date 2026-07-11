@@ -1,0 +1,14 @@
+# Business questions paired with the SQL whose result is the correct answer. Each gold is an
+# answer key: evaldata runs the model's SQL and the gold SQL and compares their result rows, so a
+# differently written query that returns the same rows is correct.
+- id: customers-count
+  question: How many customers are there?
+  gold_sql: select count(*) as n from stg_customers
+
+- id: revenue-by-region
+  question: What is total revenue by customer region?
+  gold_sql: |
+    select c.region, sum(o.amount) as revenue
+    from stg_orders o
+    join stg_customers c on o.customer_id = c.customer_id
+    group by c.region

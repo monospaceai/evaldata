@@ -107,6 +107,15 @@ def test_dbt_question(case):
 `load_dbt` and `platform_from_profile` return a `DbtError` when the project can't be read. The
 cases are ordinary `EvalCase` objects, so any scorer works.
 
+## Runnable example
+
+A self-contained version that runs offline: a small jaffle-shop dbt project ships with it and
+`StubLlm` stands in for the model, so no external warehouse service or API key is needed.
+
+```python
+--8<-- "examples/10_dbt/test_text_to_sql.py"
+```
+
 ## How it works
 
 - The warehouse comes from the project's dbt profile. `duckdb` and `postgres` targets are
