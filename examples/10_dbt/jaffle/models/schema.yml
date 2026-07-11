@@ -1,0 +1,39 @@
+version: 2
+
+sources:
+  - name: jaffle
+    schema: main
+    description: Raw operational tables loaded into the warehouse.
+    tables:
+      - name: raw_customers
+        description: One row per registered customer.
+      - name: raw_orders
+        description: One row per placed order.
+
+models:
+  - name: stg_customers
+    description: Cleaned customer records, one row per customer.
+    columns:
+      - name: customer_id
+        description: Surrogate key for the customer.
+      - name: customer_name
+        description: The customer's display name.
+      - name: region
+        description: Sales region the customer belongs to.
+      - name: customer_since
+        description: The date the customer registered.
+  - name: stg_orders
+    description: Cleaned order records, one row per order.
+    columns:
+      - name: order_id
+        description: Surrogate key for the order.
+      - name: customer_id
+        description: The customer who placed the order.
+      - name: amount
+        description: Order total in dollars.
+      - name: order_status
+        description: Lifecycle status of the order.
+      - name: is_food_order
+        description: Whether the order contained food items.
+      - name: order_date
+        description: The date the order was placed.

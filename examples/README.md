@@ -27,6 +27,10 @@ so, unlike `03`/`05`/`06`, cannot run without credentials. `07_snowflake` varies
 live Snowflake warehouse); `08_cortex` varies the solver (Snowflake Cortex Analyst as the AI under
 test).
 
+`10_dbt` evaluates against a **dbt project**: it loads cases from the project's compiled artifacts
+and its Semantic Layer, then scores stubbed answers offline against the project's bundled DuckDB —
+text-to-SQL with `ExecutionAccuracy`, and MetricFlow queries with the Semantic Layer cascade.
+
 ## Tiers
 
 | Dir | Solver | Purpose | Needs |
@@ -39,6 +43,7 @@ test).
 | `06_benchmark` | `PromptSolver` (mocked) | Loads a text-to-SQL benchmark and measures execution accuracy with `run_benchmark` | `evaldata[litellm]` |
 | `07_snowflake` | `CallableSolver` (fixed SQL) | Runs the same cases against a live Snowflake warehouse (live-only) | `evaldata[snowflake]` + `SNOWFLAKE_*` credentials |
 | `08_cortex` | `CortexAnalystSolver` | Snowflake Cortex Analyst answers each question, scored on your warehouse (live-only) | `evaldata[cortex]` + `SNOWFLAKE_*` credentials |
+| `10_dbt` | `PromptSolver` / `MetricLayerSolver` (stubbed) | Evaluate a dbt project's SQL and its Semantic Layer, offline on the bundled DuckDB | `evaldata[dbt,dbt-sl]` + a dbt-duckdb toolchain |
 
 ### 01_deterministic
 The solver is a `CallableSolver` returning fixed SQL. `test_golden_questions.py` covers the
@@ -110,6 +115,20 @@ the SQL it generates; evaldata runs that SQL on Snowflake and scores it against 
 database role, and Snowflake credentials in the environment — see the
 [Cortex Analyst guide](../docs/guides/cortex.md). Each run consumes Snowflake credits.
 
+### 10_dbt
+Two files evaluate a small jaffle-shop dbt project bundled with the example, both offline against
+its DuckDB warehouse with `StubLlm` in place of a model:
+- `test_text_to_sql.py` — `platform_from_profile` reads the warehouse from the project's dbt
+  profile and `load_dbt` builds cases from a cases file. Each gold is a SQL answer key, so a query
+  written differently from the gold that returns the same rows passes `ExecutionAccuracy`.
+- `test_semantic_layer.py` — `load_dbt_metrics` builds Semantic Layer cases scored by MetricFlow:
+  `MetricSpecEquivalence` proves that grouping by `metric_time` equals its default `metric_time__day`
+  grain without running; `MetricResultEquivalence` runs `mf` and confirms a reformulation that
+  returns the same rows; `metric_layer_equivalence` wraps both plus a stubbed LLM judge.
+
+The Semantic Layer file runs `mf`, which needs the `dbt-metricflow` toolchain with a DuckDB adapter
+(the `dbt-sl` extra plus `dbt-duckdb`).
+
 ## Running
 
 ```bash
@@ -141,4 +160,10 @@ SNOWFLAKE_ACCOUNT=... uv run pytest examples/07_snowflake -m e2e -p no:randomly 
 # 08 — live-only: needs the cortex extra + a reachable account with CORTEX_USER (no mock):
 uv sync --extra cortex
 SNOWFLAKE_ACCOUNT=... uv run pytest examples/08_cortex -m e2e -p no:randomly -q
+
+# 10 — text-to-SQL runs with just the dbt extra:
+uv run --extra dbt pytest examples/10_dbt/test_text_to_sql.py -p no:randomly -q
+
+# 10 — the Semantic Layer file also needs the MetricFlow + dbt-duckdb toolchain:
+uv run --extra dbt --extra dbt-sl --group fixtures pytest examples/10_dbt -p no:randomly -q
 ```
