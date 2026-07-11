@@ -1,4 +1,4 @@
-# Evaluate against a dbt project
+# Evaluate text-to-SQL with dbt
 
 Run text-to-SQL evals against a dbt project. `evaldata` reads the compiled artifacts
 (`manifest.json` and optional `catalog.json`), uses the warehouse connection from the project's
@@ -49,8 +49,9 @@ Each entry needs a `question` and a `gold_sql`. `select` limits the schema to na
 evaldata dbt-bench path/to/dbt_project --model openai/gpt-4o-mini --cases cases.yml
 ```
 
-`evaldata` reads the warehouse connection from the project's dbt profile, gives the model the
-project's schema, runs its SQL against each question, and compares the result to the gold query.
+`evaldata` reads the warehouse connection from the project's dbt profile, sends the project's
+schema to the model, runs the model's SQL for each question, and compares the result to the gold
+query.
 It reports the execution accuracy — the fraction of questions whose result matches:
 
 ```
@@ -78,7 +79,7 @@ evaldata doctor --dbt-project path/to/dbt_project
 
 ## Run it in `pytest`
 
-Run dbt evals as `pytest` tests — with your own prompt, a fine-tune, an agent, or a different
+Run dbt evals as `pytest` tests with your own prompt, fine-tune, agent, or different
 scorer — by loading the cases yourself:
 
 ```python

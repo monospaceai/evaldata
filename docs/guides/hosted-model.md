@@ -1,8 +1,8 @@
 # Evaluate a hosted model
 
-Run a hosted, API-served model as the system under test. The solver is a `PromptSolver` that
-calls the model through [litellm](https://docs.litellm.ai) — set the model id and its
-credentials, and it runs.
+Run a hosted, API-served model and score its generated SQL. The solver is a `PromptSolver` that
+calls the model through [litellm](https://docs.litellm.ai); set the model id and provider
+credentials in the environment.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ The solver is a `PromptSolver(model=...)`. Create `test_hosted_ai.py`:
 ```
 
 The example reads the model id from `EVALDATA_HOSTED_MODEL` and passes it to
-`PromptSolver(model=...)` — that's just the model argument, so you can pass a literal instead.
+`PromptSolver(model=...)`. That is the model argument, so you can pass a literal instead.
 litellm reads your provider credentials from the environment, e.g. `OPENAI_API_KEY`.
 
 ## Run it against the live model
@@ -30,9 +30,8 @@ uv run pytest test_hosted_ai.py -q
 
 ## Or run it deterministically (no key, no network)
 
-To run this as a CI plumbing check without a live call, mock the model reply. Add a
-`conftest.py` next to your test that returns the structured `{"sql": ...}` the solver expects,
-matched per question — so the eval exercises the full path except the network:
+To run this in CI without a live model call, mock the model reply. Add a `conftest.py` next to
+your test that returns the structured `{"sql": ...}` the solver expects, matched per question:
 
 ```python
 --8<-- "examples/03_hosted_ai/conftest.py"

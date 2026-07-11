@@ -4,33 +4,24 @@
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/monospaceai/evaldata/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-**Test AI-generated SQL before it reaches production.**
+**Evaluate AI-generated SQL with `pytest`.**
 
-`evaldata` runs evals as ordinary `pytest` tests in your existing CI. It can prove SQL
-equivalence without executing queries, fall back to warehouse execution, or use an LLM judge
-for ambiguous cases.
+`evaldata` runs text-to-SQL evals in your existing test suite.
+
+It checks semantic equivalence with SQL AST normalization, diffs result sets
+in your warehouse, and uses an LLM judge for ambiguous cases.
 
 ## Why evaldata
 
-`evaldata` can often decide SQL equivalence without running the query or calling a grader.
-When structure is inconclusive, it falls back to warehouse execution or an LLM judge.
-
-- **Semantic equivalence.** Confirm two queries have the same meaning by comparing their
-  structure. No execution, no guessing — when it can't confirm, it returns `unknown`.
+- **Semantic equivalence.** Parse both queries, normalize their SQL ASTs, and
+  compare canonical forms. No execution, no LLM — when it can't confirm, it returns
+  `unknown`.
 - **Execution in your warehouse.** Run the query on DuckDB, Postgres, Databricks, or Snowflake
   and compare the results, accounting for row order, NULLs, float tolerance, and types.
 - **It's just `pytest`.** Every eval is a test, run in your suite and your CI on every PR.
   No new runner, notebook, or dashboard.
 - **An LLM judge when you need one.** For ambiguous questions, missing reference answers,
   or explanations to grade, use a grader model with explicit criteria.
-
-Beyond raw SQL, evaldata evaluates [dbt projects](docs/guides/dbt.md) and
-[dbt Semantic Layer queries](docs/guides/dbt-semantic-layer.md), and drives
-[Snowflake Cortex Analyst](docs/guides/cortex.md) as the AI under test.
-
-evaldata reproduces dbt's own Semantic Layer benchmark locally on DuckDB — same dataset, questions,
-and model — scoring 96.4% with `gpt-5.3-codex` as `pytest` tests. See
-[Reproduce dbt's Semantic Layer benchmark](docs/guides/dbt-semantic-layer-benchmark.md).
 
 ## Quickstart
 
@@ -42,8 +33,8 @@ An eval is a `pytest` test: a **case** (a question and its expected answer), a *
 (the system under test that writes the SQL), and a **scorer** (how the answer is judged).
 
 Below, the AI's SQL is written differently from the reference query — reordered predicates,
-different casing — but means the same thing. `observed_equivalence()` proves the match from
-the query structure alone; no query runs.
+different casing — but means the same thing. `observed_equivalence()` confirms the match
+with AST normalization; no query runs.
 
 ```python
 from evaldata import CallableSolver, EvalCase, assert_eval, eval_case, observed_equivalence
@@ -81,6 +72,14 @@ To test a real model instead of fixed SQL, swap the solver for
 `PromptSolver(model="openai/gpt-4o-mini")` (needs the `evaldata[litellm]` extra). To judge
 equivalence without a warehouse, swap the scorer for `judged_equivalence(model)`.
 
+## More use cases
+
+- [Evaluate dbt projects](docs/guides/dbt.md) against gold SQL.
+- [Evaluate dbt Semantic Layer queries](docs/guides/dbt-semantic-layer.md) against gold MetricFlow queries.
+- [Evaluate Snowflake Cortex Analyst](docs/guides/cortex.md) against gold SQL.
+- [Reproduce dbt's Semantic Layer benchmark](docs/guides/dbt-semantic-layer-benchmark.md)
+  locally on DuckDB.
+
 ## Install
 
 ```bash
@@ -89,7 +88,7 @@ uv add "evaldata[postgres]"    # + Postgres adapter
 uv add "evaldata[databricks]"  # + Databricks adapter
 uv add "evaldata[snowflake]"   # + Snowflake adapter
 uv add "evaldata[cortex]"      # + Snowflake Cortex Analyst solver
-uv add "evaldata[litellm]"     # + litellm, to call a model as the AI under test
+uv add "evaldata[litellm]"     # + litellm, to call a model from PromptSolver
 ```
 
 DuckDB, Postgres, Databricks, and Snowflake are the adapters available today. A BigQuery
@@ -116,13 +115,13 @@ Runnable examples in [`examples/`](examples/):
 | --- | --- |
 | [Showcase](examples/01_deterministic/test_showcase.py) | Semantic equivalence with an execution fallback — no setup |
 | [Deterministic](examples/01_deterministic/test_golden_questions.py) | Every expected-type and scorer, with fixed SQL |
-| [Local AI](examples/02_local_ai/test_text_to_sql.py) | A self-hosted Ollama model as the AI under test |
+| [Local AI](examples/02_local_ai/test_text_to_sql.py) | A self-hosted Ollama model |
 | [Hosted AI](examples/03_hosted_ai/test_text_to_sql.py) | A hosted model, mocked so it runs without a key |
 | [Databricks](examples/04_databricks/test_deterministic.py) | The same cases on a live Databricks SQL Warehouse |
 | [LLM judge](examples/05_llm_judge/test_judged_equivalence.py) | Judged equivalence, mocked so it runs without a key |
 | [Benchmark](examples/06_benchmark/test_benchmark.py) | Load a Spider/BIRD dataset and measure execution accuracy |
 | [Snowflake](examples/07_snowflake/test_deterministic.py) | The same cases on a live Snowflake warehouse — live-only, needs `SNOWFLAKE_*` credentials |
-| [Cortex Analyst](examples/08_cortex/test_cortex_analyst.py) | Snowflake Cortex Analyst as the AI under test — live-only, needs `SNOWFLAKE_*` credentials |
+| [Cortex Analyst](examples/08_cortex/test_cortex_analyst.py) | Snowflake Cortex Analyst — live-only, needs `SNOWFLAKE_*` credentials |
 
 See [`examples/README.md`](examples/README.md) for details.
 

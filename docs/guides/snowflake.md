@@ -1,7 +1,7 @@
-# Evaluate against Snowflake
+# Evaluate text-to-SQL on Snowflake
 
-Run evals on Snowflake. The solver returns fixed SQL, and `evaldata` runs the checks as SQL in the
-warehouse instead of pulling rows back into Python.
+Run SQL evals on Snowflake. The example uses fixed SQL so the guide can focus on the adapter:
+`evaldata` runs the checks as SQL in the warehouse instead of pulling rows back into Python.
 
 ## Prerequisites
 
@@ -9,7 +9,7 @@ warehouse instead of pulling rows back into Python.
 uv add "evaldata[snowflake]"
 ```
 
-## What it demonstrates
+## What this guide covers
 
 - **Warehouse pushdown** — `row_count`, `not_null`, and `unique` expectations run as SQL in
   Snowflake.

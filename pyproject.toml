@@ -1,7 +1,7 @@
 [project]
 name = "evaldata"
 version = "0.6.0"
-description = "AI evals framework for data & analytics engineering teams."
+description = "Evaluate AI-generated SQL and text-to-SQL systems with pytest."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -12,7 +12,9 @@ requires-python = ">=3.11"
 keywords = [
     "ai", "evals", "evaluation", "sql", "data", "testing",
     "snowflake", "bigquery", "databricks", "duckdb", "postgres",
-    "pytest", "llm", "text-to-sql",
+    "pytest", "llm", "text-to-sql", "text2sql", "llm-eval", "llm-evaluation",
+    "analytics-engineering", "data-engineering", "dbt", "semantic-layer",
+    "sql-evaluation", "snowflake-cortex",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

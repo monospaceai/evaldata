@@ -62,8 +62,8 @@ the solver instead of `semantic_view` to use one.
 ## Write the eval
 
 `CortexAnalystClient.from_connection` sends questions using the account host and session token of a
-Snowflake connection, so the connection you evaluate against also authenticates the Cortex Analyst
-call. Authentication is configured as for any Snowflake connection (see the
+Snowflake connection, so the Snowflake connection also authenticates the Cortex Analyst call.
+Authentication is configured as for any Snowflake connection (see the
 [Snowflake guide](snowflake.md#authentication)). Score the generated SQL against a gold query with
 `ExecutionAccuracy`, which runs both queries and compares the rows by value:
 
@@ -84,7 +84,7 @@ Each case sends one Cortex Analyst message and runs the SQL on your warehouse, b
 consume Snowflake credits. See the [Support & cost policy](../support-policy.md) for how evaldata
 tests Cortex Analyst without spending credits on every change.
 
-## Accuracy
+## Live benchmark
 
 evaldata includes an off-by-default live benchmark of five questions against this semantic view. It
 scored **100% (5/5)** execution accuracy on 2026-07-08. Cortex Analyst generates SQL with a model,

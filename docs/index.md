@@ -1,18 +1,17 @@
 # evaldata
 
-**Test AI-generated SQL before it reaches production.**
+**Evaluate AI-generated SQL with `pytest`.**
 
-`evaldata` runs evals as ordinary `pytest` tests in your existing CI. It can prove SQL
-equivalence without executing queries, fall back to warehouse execution, or use an LLM judge
-for ambiguous cases.
+`evaldata` runs text-to-SQL evals in your existing test suite.
+
+It checks semantic equivalence with SQL AST normalization, diffs result sets
+in your warehouse, and uses an LLM judge for ambiguous cases.
 
 ## Why evaldata
 
-`evaldata` can often decide SQL equivalence without running the query or calling a grader.
-When structure is inconclusive, it falls back to warehouse execution or an LLM judge.
-
-- **Semantic equivalence.** Confirm two queries have the same meaning by comparing their
-  structure. No execution, no guessing — when it can't confirm, it returns `unknown`.
+- **Semantic equivalence.** Parse both queries, normalize their SQL ASTs, and
+  compare canonical forms. No execution, no LLM — when it can't confirm, it returns
+  `unknown`.
 - **Execution in your warehouse.** Run the query on DuckDB, Postgres, Databricks, or Snowflake
   and compare the results, accounting for row order, NULLs, float tolerance, and types.
 - **It's just `pytest`.** Every eval is a test, run in your suite and your CI on every PR.
@@ -28,15 +27,23 @@ uv add "evaldata[postgres]"    # + Postgres adapter
 uv add "evaldata[databricks]"  # + Databricks adapter
 uv add "evaldata[snowflake]"   # + Snowflake adapter
 uv add "evaldata[cortex]"      # + Snowflake Cortex Analyst solver
-uv add "evaldata[litellm]"     # + litellm, to call a model as the AI under test
+uv add "evaldata[litellm]"     # + litellm, to call a model from PromptSolver
 ```
 
 DuckDB, Postgres, Databricks, and Snowflake are the adapters available today. A BigQuery adapter
 is planned.
 
+## More use cases
+
+- [Evaluate dbt projects](guides/dbt.md) against gold SQL.
+- [Evaluate dbt Semantic Layer queries](guides/dbt-semantic-layer.md) against gold MetricFlow queries.
+- [Evaluate Snowflake Cortex Analyst](guides/cortex.md) against gold SQL.
+- [Reproduce dbt's Semantic Layer benchmark](guides/dbt-semantic-layer-benchmark.md)
+  locally on DuckDB.
+
 ## Where to go next
 
 - **[Getting started](getting-started.md)** — write and run your first eval in a few minutes.
-- **Guides** — [semantic equivalence](guides/semantic-equivalence.md), [LLM judge](guides/llm-judge.md), [a local Ollama model](guides/local-ollama.md), [a hosted model](guides/hosted-model.md), [Databricks](guides/databricks.md), [Snowflake](guides/snowflake.md), [Cortex Analyst](guides/cortex.md).
+- **Guides** — [semantic equivalence](guides/semantic-equivalence.md), [LLM judge](guides/llm-judge.md), [a local Ollama model](guides/local-ollama.md), [a hosted model](guides/hosted-model.md), [dbt](guides/dbt.md), [dbt Semantic Layer](guides/dbt-semantic-layer.md), [Databricks](guides/databricks.md), [Snowflake](guides/snowflake.md), [Cortex Analyst](guides/cortex.md).
 - **[Concepts](concepts.md)** — the building blocks: cases, solvers, scorers, platforms.
 - **[API reference](reference/index.md)** — the public API, generated from docstrings.

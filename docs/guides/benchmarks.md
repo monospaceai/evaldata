@@ -45,8 +45,8 @@ evaldata bench bird --model openai/gpt-4o-mini --limit 100
 - `--json PATH` — also save a JSON file with the scores and every question's result.
 - `path` (positional) — point at an already-unzipped dataset folder instead of the cache.
 
-BIRD tags each question with a difficulty, so the output also breaks the EX down by difficulty
-(the numbers below are made up, not a real score):
+BIRD tags each question with a difficulty, so the output also breaks the EX down by difficulty.
+Example output:
 
 ```
 EX (bird): 54.8% (841/1534)

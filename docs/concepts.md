@@ -31,7 +31,7 @@ A [solver](reference/solvers.md) is the system under test: it turns a case's que
   drives a local Ollama model and a hosted API model — only the model id changes. Requires the
   `litellm` extra.
 
-Swapping the AI under test is a one-line change:
+Swapping the solver is a one-line change:
 
 ```python
 solver = CallableSolver(lambda c: "SELECT ...")     # fixed SQL
@@ -45,14 +45,14 @@ A [scorer](reference/scorers.md) judges the solver's result against the case's `
 
 - **`ResultSetEquivalence`** compares result rows — for the untyped, typed, and gold-query
   shapes. See [Equivalence](reference/equivalence.md) for how the row diff works.
-- **`SemanticEquivalence`** compares the AI's query against a gold query without running either:
+- **`SemanticEquivalence`** compares the solver's query against a gold query without running either:
   it confirms a match or returns `unknown` when it can't — it never refutes. `observed_equivalence()`
   composes it with `ResultSetEquivalence`, so a confirmed match skips running the queries while
   everything else is decided by running both and comparing the results. See
   [Check semantic equivalence](guides/semantic-equivalence.md).
 - **`ExpectationSuiteScorer`** evaluates an expectation suite's structural checks.
-- **`LlmJudge`** asks a grader model to score the AI's SQL against criteria you write, for cases
-  where comparing rows or matching syntax isn't enough. It returns a pass/fail verdict with the
+- **`LlmJudge`** asks a grader model to score the solver's SQL against criteria you write, for cases
+  where comparing rows or AST normalization isn't enough. It returns a pass/fail verdict with the
   grader's score and rationale. See [Score with an LLM judge](guides/llm-judge.md).
 
 Pass a list to `assert_eval`, so a single case can be scored several ways.
