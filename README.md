@@ -8,12 +8,12 @@
 
 `evaldata` runs text-to-SQL evals in your existing test suite.
 
-It checks semantic equivalence with SQL AST normalization, diffs result sets
+It checks semantic equivalence of SQL queries, diffs result sets
 in your warehouse, and uses an LLM judge for ambiguous cases.
 
 ## Why evaldata
 
-- **Semantic equivalence.** Parse both queries, normalize their SQL ASTs, and
+- **Semantic equivalence.** Parse both queries, normalize their ASTs, and
   compare canonical forms. No execution, no LLM — when it can't confirm, it returns
   `unknown`.
 - **Execution in your warehouse.** Run the query on DuckDB, Postgres, Databricks, or Snowflake
