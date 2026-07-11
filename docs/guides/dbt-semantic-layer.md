@@ -2,8 +2,8 @@
 
 Check AI-generated dbt Semantic Layer (MetricFlow) queries against gold answers. `evaldata` reads
 the metrics and dimensions your project defines, uses the warehouse connection from the project's
-dbt profile, and scores each answer with three checks: resolve-and-compare, run-and-compare, and
-an LLM judge. The cascade exits as soon as one check reaches a verdict.
+dbt profile, and scores each answer with three checks: resolved query equivalence, result-set
+equivalence, and an LLM judge. Scoring stops as soon as one check reaches a verdict.
 
 ## Prerequisites
 
@@ -59,8 +59,8 @@ SL accuracy: 84.0% (21/25)
 `--model` is any [litellm](https://docs.litellm.ai/docs/providers) model id. Other options:
 
 - `--grader-model ID` — the model for the judge tier; defaults to `--model`.
-- `--no-judge` — score with the deterministic tiers only (resolve-and-compare, run-and-compare); no
-  LLM judge, so the result is reproducible — the option to reach for in a CI gate.
+- `--no-judge` — score with the deterministic tiers only (resolved query equivalence and
+  result-set equivalence); no LLM judge, so the result is reproducible in CI.
 - `--temperature FLOAT` — sampling temperature for the solver and judge (default `0.0`); reasoning
   models such as the GPT-5 family often accept only `1.0`.
 - `--target-dir DIR` — where the artifacts live, if not `<project>/target`.
@@ -81,8 +81,8 @@ verdict:
 3. **LLM judge.** A grader model reads the candidate and gold queries and decides whether they
    answer the question the same way — a semantic read that doesn't need to run either query.
 
-Later checks run only when the earlier ones don't decide, so the LLM judge is called — and paid
-for — only for the questions the first two checks leave open.
+Later checks run only when earlier checks do not decide, so the LLM judge is called only for
+questions the first two checks leave open.
 
 ## Run it in `pytest`
 
@@ -125,7 +125,7 @@ To compose the cascade yourself, use `MetricSpecEquivalence`,
   return; `evaldata` doesn't reimplement MetricFlow's logic.
 - Resolving a query needs only `target/semantic_manifest.json`; running one needs the built
   warehouse the project's dbt profile points at.
-- The resolve-and-compare check confirms equivalence but never rejects on structure alone: when
+- The resolved query check confirms equivalence but never rejects on resolved form alone: when
   the resolved forms differ, it defers to running the queries rather than call them unequal.
 
 ## Next steps

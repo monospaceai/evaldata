@@ -1,7 +1,7 @@
 # Evaluate a local Ollama model
 
-Run a self-hosted [Ollama](https://ollama.com) model as the system under test, scoring its
-generated SQL against expected rows on a local DuckDB. The solver is a `PromptSolver` that calls
+Run a self-hosted [Ollama](https://ollama.com) model and score its generated SQL against expected
+rows on a local DuckDB. The solver is a `PromptSolver` that calls
 the model through [litellm](https://docs.litellm.ai).
 
 ## Prerequisites
@@ -24,7 +24,7 @@ Create `test_local_ai.py`:
 ```
 
 The example reads the model id from `EVALDATA_LOCAL_MODEL` and passes it to
-`PromptSolver(model=...)` — that's just the model argument, so you can pass a literal instead. If
+`PromptSolver(model=...)`. That is the model argument, so you can pass a literal instead. If
 Ollama runs somewhere other than the default, set `OLLAMA_API_BASE` (litellm reads it).
 
 ## Run it
@@ -33,8 +33,7 @@ Ollama runs somewhere other than the default, set `OLLAMA_API_BASE` (litellm rea
 uv run pytest test_local_ai.py -q
 ```
 
-A failure here means the model produced SQL whose result didn't match the expected rows —
-exactly the regression you'd want CI to catch when you change the model or prompt.
+A failure means the model produced SQL whose result did not match the expected rows.
 
 !!! tip "Run it from a clone"
     This is the bundled `examples/02_local_ai/` example. If you've cloned the repo, run it
@@ -42,5 +41,5 @@ exactly the regression you'd want CI to catch when you change the model or promp
 
 ## Next steps
 
-- [Evaluate a hosted model](hosted-model.md) — run an API-served model as the system under test.
+- [Evaluate a hosted model](hosted-model.md) — run an API-served model.
 - [Concepts](../concepts.md) — solvers, scorers, and expected-types in depth.

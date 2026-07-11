@@ -1,5 +1,5 @@
 site_name: evaldata
-site_description: Test model-generated SQL with deterministic checks and warehouse execution.
+site_description: Evaluate AI-generated SQL and text-to-SQL systems with pytest.
 site_url: https://monospaceai.github.io/evaldata/
 repo_url: https://github.com/monospaceai/evaldata
 repo_name: monospaceai/evaldata
@@ -92,10 +92,10 @@ nav:
   - Guides:
       - Evaluate a local Ollama model: guides/local-ollama.md
       - Evaluate a hosted model: guides/hosted-model.md
-      - Evaluate against Databricks: guides/databricks.md
-      - Evaluate against Snowflake: guides/snowflake.md
+      - Evaluate text-to-SQL on Databricks: guides/databricks.md
+      - Evaluate text-to-SQL on Snowflake: guides/snowflake.md
       - Evaluate Snowflake Cortex Analyst: guides/cortex.md
-      - Evaluate against a dbt project: guides/dbt.md
+      - Evaluate text-to-SQL with dbt: guides/dbt.md
       - Evaluate dbt Semantic Layer queries: guides/dbt-semantic-layer.md
       - Reproduce dbt's Semantic Layer benchmark: guides/dbt-semantic-layer-benchmark.md
       - Check semantic equivalence: guides/semantic-equivalence.md

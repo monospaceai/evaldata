@@ -56,10 +56,10 @@ from evaldata import FirstDecisive, ResultSetEquivalence, SemanticEquivalence
 scorer = FirstDecisive([SemanticEquivalence(), ResultSetEquivalence()])
 ```
 
-Order the members with the cheapest, most decisive check first. Here `SemanticEquivalence` compares
-the two queries' structure without running anything; when it confirms a match the cascade stops and
-no query runs. Only when it can't confirm does `ResultSetEquivalence` execute both queries and diff
-the rows. Execution runs on exactly the cases that need it.
+Order the members with the cheapest, most decisive check first. Here `SemanticEquivalence`
+normalizes and compares SQL ASTs without running anything; when it confirms semantic equivalence
+the cascade stops and no query runs. Only when it can't confirm does `ResultSetEquivalence`
+execute both queries and diff the rows. Execution runs on exactly the cases that need it.
 
 Each run records which members ran and how each one voted, so you can see which layer decided:
 
@@ -74,7 +74,8 @@ result.metadata["first_decisive"]
 Two presets wrap the common query-vs-query cascades. Each expects the case's `expected` to be a
 [`GoldQuery`][evaldata.types.GoldQuery], since equivalence compares one query against a reference.
 
-`observed_equivalence()` confirms by structure, else runs both queries and diffs the results:
+`observed_equivalence()` tries semantic equivalence first, else runs both queries and diffs the
+results:
 
 ```python
 from evaldata import observed_equivalence
@@ -83,8 +84,8 @@ scorer = observed_equivalence()
 # FirstDecisive([SemanticEquivalence(), ResultSetEquivalence()])
 ```
 
-`judged_equivalence(model)` confirms by structure, else asks an LLM judge whether the two queries
-are equivalent — for when you have no warehouse to run them against:
+`judged_equivalence(model)` tries semantic equivalence first, else asks an LLM judge whether the
+two queries are equivalent — for when you have no warehouse to run them against:
 
 ```python
 from evaldata import judged_equivalence
@@ -105,9 +106,9 @@ judge = sql_equivalence_judge("openai/gpt-4o-mini")
 
 ## Compose your own cascade
 
-The presets are ordinary `FirstDecisive` instances, so you can build your own. This one confirms by
-structure, then executes, then asks the judge — so a case whose execution is inconclusive (no
-warehouse reachable, say) still receives a judged verdict:
+The presets are ordinary `FirstDecisive` instances, so you can build your own. This one tries
+semantic equivalence, then executes, then asks the judge — so a case whose execution is
+inconclusive (no warehouse reachable, say) still receives a judged verdict:
 
 ```python
 from evaldata import FirstDecisive, ResultSetEquivalence, SemanticEquivalence, sql_equivalence_judge
@@ -150,7 +151,7 @@ Drop that `judge` into a `FirstDecisive` list wherever a judged verdict belongs 
 ## Next steps
 
 - [Concepts](../concepts.md) — cases, solvers, scorers, and platforms in depth.
-- [Check semantic equivalence](semantic-equivalence.md) — how the structural check confirms or
+- [Check semantic equivalence](semantic-equivalence.md) — how AST normalization confirms or
   returns `unknown`, and the comparison options for the execution member.
 - [Score with an LLM judge](llm-judge.md) — writing criteria, steps, examples, and rubrics for
   `LlmJudge`.

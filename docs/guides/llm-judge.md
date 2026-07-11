@@ -1,6 +1,6 @@
 # Score with an LLM judge
 
-Not every answer can be checked by comparing rows or matching syntax trees. Does the SQL read
+Not every answer can be checked by comparing rows or normalizing SQL ASTs. Does the SQL read
 clearly? Does it follow your team's style? Do two queries return the same thing when you have no
 warehouse to run them on? `LlmJudge` answers questions like these: it asks a grader model to
 score the case against criteria you write, and turns that score into a pass/fail verdict.
@@ -100,9 +100,8 @@ judge = LlmJudge(
 
 ## Choosing a grader model
 
-The grader is separate from the solver — the model under test and the model grading it are
-usually different. `model` takes any litellm identifier (or an `Llm` to use directly), so the
-grader can run on a different provider from the solver.
+The grader is separate from the solver. `model` takes any litellm identifier (or an `Llm` to use
+directly), so the grader can run on a different provider from the model being evaluated.
 
 The grader must support structured output: the judge requests a JSON `{score, reason}` reply and
 treats a malformed one as inconclusive. Grading defaults to `temperature=0.0` for repeatable
@@ -110,9 +109,9 @@ scores; pass `temperature=None` to leave the provider default, or a `timeout` to
 
 ## Run it deterministically in CI
 
-A judged eval calls a live model, which costs money and varies run to run. To run the eval as a
-plumbing check in CI — exercising the full path except the network — mock the grader reply. Add
-a `conftest.py` next to your test that returns the structured `{score, reason}` the judge
+A judged eval calls a live model, which costs money and varies run to run. To exercise the eval
+path in CI without a live model call, mock the grader reply. Add a `conftest.py` next to your
+test that returns the structured `{score, reason}` the judge
 expects:
 
 ```python
@@ -150,13 +149,13 @@ judge = sql_equivalence_judge("openai/gpt-4o-mini")
 ```
 
 Most often you don't reach for it directly. `judged_equivalence(model)` first tries to confirm
-equivalence by comparing the queries' structure, and only falls back to this judge when the
-structure is inconclusive — handy when you have no warehouse to run the queries against. See
+equivalence by normalizing and comparing SQL ASTs, and only falls back to this judge when that
+check is inconclusive. Use it when you have no warehouse to run the queries against. See
 [Check semantic equivalence](semantic-equivalence.md) for that cascade.
 
 ## Next steps
 
-- [Check semantic equivalence](semantic-equivalence.md) — confirm two queries match by
-  structure, with the judge as the fallback.
+- [Check semantic equivalence](semantic-equivalence.md) — confirm two queries match by AST
+  normalization, with the judge as the fallback.
 - [Scorers reference](../reference/scorers.md) — `LlmJudge`, `JudgeExample`, `RubricBand`.
 - [Concepts](../concepts.md) — scorers, solvers, and expected-types in depth.
