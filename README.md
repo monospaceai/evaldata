@@ -124,6 +124,8 @@ Runnable examples in [`examples/`](examples/):
 | [Snowflake](examples/07_snowflake/test_deterministic.py) | The same cases on a live Snowflake warehouse — live-only, needs `SNOWFLAKE_*` credentials |
 | [Cortex Analyst](examples/08_cortex/test_cortex_analyst.py) | Snowflake Cortex Analyst — live-only, needs `SNOWFLAKE_*` credentials |
 | [BigQuery](examples/09_bigquery/test_deterministic.py) | The same cases on a live BigQuery project — live-only, needs Application Default Credentials |
+| [dbt](examples/10_dbt/test_text_to_sql.py) | A dbt project's text-to-SQL, stubbed so it runs offline |
+| [dbt Semantic Layer](examples/10_dbt/test_semantic_layer.py) | dbt Semantic Layer (MetricFlow) queries, scored locally on DuckDB |
 
 See [`examples/README.md`](examples/README.md) for details.
 

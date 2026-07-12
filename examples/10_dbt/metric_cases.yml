@@ -1,0 +1,22 @@
+# Business questions paired with the gold dbt Semantic Layer query that answers each: the metrics
+# to compute and how to group, filter, and order them. Every gold resolves and runs against the
+# semantic layer this project defines.
+- id: revenue-by-month
+  question: What is total revenue for each month?
+  metrics: [revenue]
+  group_by: [metric_time__month]
+
+- id: revenue-by-region
+  question: What is total revenue by customer region?
+  metrics: [revenue]
+  group_by: [customer__region]
+
+- id: revenue-large-orders
+  question: What is total revenue from large orders?
+  metrics: [revenue]
+  where: ["{{ Dimension('order_id__is_large_order') }} = true"]
+
+- id: revenue-by-day
+  question: What is total revenue for each day?
+  metrics: [revenue]
+  group_by: [metric_time]

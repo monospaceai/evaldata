@@ -119,6 +119,15 @@ def test_sl_question(case):
 To compose the cascade yourself, use `MetricSpecEquivalence`,
 `MetricResultEquivalence`, and `MetricLayerJudge` with `MetricFirstDecisive`.
 
+## Runnable example
+
+A self-contained version that runs offline against DuckDB: a small jaffle-shop dbt project with a
+semantic layer ships with it, and `StubLlm` stands in for both the solver and the judge.
+
+```python
+--8<-- "examples/10_dbt/test_semantic_layer.py"
+```
+
 ## How it works
 
 - MetricFlow resolves and runs every query, so a verdict matches what the semantic layer would
