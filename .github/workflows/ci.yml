@@ -152,7 +152,7 @@ jobs:
           python-version: "3.13"
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
       - name: Run the Databricks cloud tests
-        run: just test '-m "cloud and not snowflake and not cortex"'
+        run: just test '-m "cloud and not snowflake and not bigquery and not cortex"'
         env:
           DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
           DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
@@ -260,11 +260,45 @@ jobs:
           SNOWFLAKE_AUTHENTICATOR: WORKLOAD_IDENTITY
           SNOWFLAKE_WORKLOAD_IDENTITY_PROVIDER: OIDC
 
+  # BigQuery cloud e2e via GitHub Workload Identity Federation. Fork PRs can't mint the token.
+  bigquery:
+    name: bigquery (cloud)
+    needs: changes
+    if: >-
+      ((github.event_name == 'push'
+           && github.ref == 'refs/heads/main')
+       || (github.event_name == 'pull_request'
+           && github.event.pull_request.head.repo.full_name == github.repository))
+      && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.13"
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+      - name: Authenticate to Google Cloud
+        # Exchanges the GitHub OIDC token for GCP credentials and exports ADC automatically.
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Run the BigQuery cloud tests
+        run: just test '-m bigquery'
+        env:
+          BIGQUERY_PROJECT: ${{ secrets.BIGQUERY_PROJECT }}
+          BIGQUERY_DATASET: evaldata_ci
+
   # Single required status check: requires success from every job expected to run for this event,
   # so a should-have-run job that was skipped fails instead of passing silently.
   check:
     if: always()
-    needs: [changes, docs, gate, cloud, compat, snowflake]
+    needs: [changes, docs, gate, cloud, compat, snowflake, bigquery]
     runs-on: ubuntu-latest
     env:
       CODE: ${{ needs.changes.outputs.code }}
@@ -277,6 +311,7 @@ jobs:
       CLOUD_RESULT: ${{ needs.cloud.result }}
       COMPAT_RESULT: ${{ needs.compat.result }}
       SNOWFLAKE_RESULT: ${{ needs.snowflake.result }}
+      BIGQUERY_RESULT: ${{ needs.bigquery.result }}
     steps:
       - run: |
           fail=0
@@ -314,6 +349,12 @@ jobs:
             require_success snowflake "$SNOWFLAKE_RESULT"
           else
             allow_skip snowflake "$SNOWFLAKE_RESULT"
+          fi
+
+          if [ "$CODE" = "true" ] && { [ "$IS_MAIN_PUSH" = "true" ] || [ "$IS_SAME_REPO_PR" = "true" ]; }; then
+            require_success bigquery "$BIGQUERY_RESULT"
+          else
+            allow_skip bigquery "$BIGQUERY_RESULT"
           fi
 
           exit $fail

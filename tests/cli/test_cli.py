@@ -584,6 +584,9 @@ class TestDoctor:
             "SNOWFLAKE_USER",
             "SNOWFLAKE_WAREHOUSE",
             "SNOWFLAKE_ROLE",
+            "BIGQUERY_PROJECT",
+            "BIGQUERY_DATASET",
+            "BIGQUERY_LOCATION",
         ):
             monkeypatch.delenv(var, raising=False)
 
@@ -633,6 +636,9 @@ class TestDoctor:
             databricks_server_hostname="h",
             databricks_http_path="/sql/1.0/warehouses/abc",
             snowflake_account="acc",
+            bigquery_project="project",
+            bigquery_dataset="dataset",
+            bigquery_location="US",
         )
         assert {ref.kind for ref in refs} == set(get_args(PlatformKind))
 
@@ -640,6 +646,11 @@ class TestDoctor:
         result = runner.invoke(app, ["doctor", "--databricks-server-hostname", "h"])
         assert result.exit_code == 2
         assert "together" in result.output
+
+    def test_bigquery_dataset_and_location_require_project(self) -> None:
+        result = runner.invoke(app, ["doctor", "--bigquery-dataset", "dataset"])
+        assert result.exit_code == 2
+        assert "require" in result.output
 
     def test_dbt_project_resolves_and_probes(self, tmp_path: Path) -> None:
         project = _copy_dbt_project(tmp_path)

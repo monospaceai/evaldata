@@ -14,7 +14,7 @@ from sqlglot.errors import SqlglotError
 Sql = NewType("Sql", str)
 
 # The supported set: dispatch over this Literal is exhaustively type-checked (match/assert_never).
-PlatformKind = Literal["duckdb", "postgres", "databricks", "snowflake", "sqlite"]
+PlatformKind = Literal["duckdb", "postgres", "databricks", "snowflake", "bigquery", "sqlite"]
 
 SQLDialect = Literal[
     "snowflake",

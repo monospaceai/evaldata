@@ -6,6 +6,7 @@ from evaldata.core import BenchmarkSummary, assert_eval, run_benchmark
 from evaldata.llm import Completion, Llm, StubLlm, TextCompletion, Usage
 from evaldata.loaders import eval_case, load_bird, load_spider
 from evaldata.platforms.registry import (
+    bigquery_platform,
     databricks_platform,
     duckdb_platform,
     postgres_platform,
@@ -64,6 +65,7 @@ __all__ = [
     "TextCompletion",
     "Usage",
     "assert_eval",
+    "bigquery_platform",
     "databricks_platform",
     "duckdb_platform",
     "eval_case",

@@ -22,6 +22,7 @@ def test_prompt_solver_top_level() -> None:
 def test_extension_surface_top_level() -> None:
     from evaldata.llm import Completion, StubLlm, TextCompletion, Usage
     from evaldata.platforms.registry import (
+        bigquery_platform,
         databricks_platform,
         duckdb_platform,
         postgres_platform,
@@ -42,6 +43,7 @@ def test_extension_surface_top_level() -> None:
         "postgres_platform": postgres_platform,
         "databricks_platform": databricks_platform,
         "snowflake_platform": snowflake_platform,
+        "bigquery_platform": bigquery_platform,
         "Usage": Usage,
         "Completion": Completion,
         "TextCompletion": TextCompletion,
@@ -95,6 +97,18 @@ def test_snowflake_adapter_not_top_level() -> None:
         _ = evaldata.SnowflakeAdapter
 
 
+def test_bigquery_adapter_subpackage() -> None:
+    from evaldata.platforms.bigquery import BigQueryAdapter
+
+    assert platforms.BigQueryAdapter is BigQueryAdapter
+    assert "BigQueryAdapter" in dir(platforms)
+
+
+def test_bigquery_adapter_not_top_level() -> None:
+    with pytest.raises(AttributeError):
+        _ = evaldata.BigQueryAdapter
+
+
 def _blocking_import(blocked: str) -> Callable[..., Any]:
     real_import = builtins.__import__
 
@@ -142,6 +156,13 @@ def test_snowflake_adapter_missing_snowflake(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(builtins, "__import__", _blocking_import("snowflake.connector"))
     with pytest.raises(ImportError, match=r"evaldata\[snowflake\]"):
         platforms.__getattr__("SnowflakeAdapter")
+
+
+def test_bigquery_adapter_missing_bigquery(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delitem(__import__("sys").modules, "evaldata.platforms.bigquery", raising=False)
+    monkeypatch.setattr(builtins, "__import__", _blocking_import("google.cloud"))
+    with pytest.raises(ImportError, match=r"evaldata\[bigquery\]"):
+        platforms.__getattr__("BigQueryAdapter")
 
 
 def test_unknown_attribute_top_level() -> None:

@@ -16,7 +16,7 @@ in your warehouse, and uses an LLM judge for ambiguous cases.
 - **Semantic equivalence.** Parse both queries, normalize their ASTs, and
   compare canonical forms. No execution, no LLM — when it can't confirm, it returns
   `unknown`.
-- **Execution in your warehouse.** Run the query on DuckDB, Postgres, Databricks, or Snowflake
+- **Execution in your warehouse.** Run the query on DuckDB, Postgres, Databricks, Snowflake, or BigQuery
   and compare the results, accounting for row order, NULLs, float tolerance, and types.
 - **It's just `pytest`.** Every eval is a test, run in your suite and your CI on every PR.
   No new runner, notebook, or dashboard.
@@ -77,6 +77,7 @@ equivalence without a warehouse, swap the scorer for `judged_equivalence(model)`
 - [Evaluate dbt projects](docs/guides/dbt.md) against gold SQL.
 - [Evaluate dbt Semantic Layer queries](docs/guides/dbt-semantic-layer.md) against gold MetricFlow queries.
 - [Evaluate Snowflake Cortex Analyst](docs/guides/cortex.md) against gold SQL.
+- [Evaluate BigQuery queries](docs/guides/bigquery.md) against a live project.
 - [Reproduce dbt's Semantic Layer benchmark](docs/guides/dbt-semantic-layer-benchmark.md)
   locally on DuckDB.
 
@@ -87,12 +88,12 @@ uv add evaldata                # core (includes the DuckDB adapter)
 uv add "evaldata[postgres]"    # + Postgres adapter
 uv add "evaldata[databricks]"  # + Databricks adapter
 uv add "evaldata[snowflake]"   # + Snowflake adapter
+uv add "evaldata[bigquery]"    # + BigQuery adapter
 uv add "evaldata[cortex]"      # + Snowflake Cortex Analyst solver
 uv add "evaldata[litellm]"     # + litellm, to call a model from PromptSolver
 ```
 
-DuckDB, Postgres, Databricks, and Snowflake are the adapters available today. A BigQuery
-adapter is planned.
+DuckDB, Postgres, Databricks, Snowflake, and BigQuery are the adapters available today.
 
 ## Documentation
 
@@ -102,7 +103,7 @@ Full documentation: **[monospaceai.github.io/evaldata](https://monospaceai.githu
 - [Concepts](https://monospaceai.github.io/evaldata/concepts/) — cases, solvers, scorers, and platforms.
 - Scoring guides — [semantic equivalence](https://monospaceai.github.io/evaldata/guides/semantic-equivalence/), [LLM judge](https://monospaceai.github.io/evaldata/guides/llm-judge/), [composing scorers](https://monospaceai.github.io/evaldata/guides/composing-scorers/).
 - Model guides — [local Ollama](https://monospaceai.github.io/evaldata/guides/local-ollama/), [hosted model](https://monospaceai.github.io/evaldata/guides/hosted-model/).
-- Platform guides — [Databricks](https://monospaceai.github.io/evaldata/guides/databricks/), [Snowflake](https://monospaceai.github.io/evaldata/guides/snowflake/), [Cortex Analyst](https://monospaceai.github.io/evaldata/guides/cortex/).
+- Platform guides — [Databricks](https://monospaceai.github.io/evaldata/guides/databricks/), [Snowflake](https://monospaceai.github.io/evaldata/guides/snowflake/), [BigQuery](https://monospaceai.github.io/evaldata/guides/bigquery/), [Cortex Analyst](https://monospaceai.github.io/evaldata/guides/cortex/).
 - dbt guides — [dbt project](https://monospaceai.github.io/evaldata/guides/dbt/), [dbt Semantic Layer](https://monospaceai.github.io/evaldata/guides/dbt-semantic-layer/), [reproduce dbt's Semantic Layer benchmark](https://monospaceai.github.io/evaldata/guides/dbt-semantic-layer-benchmark/).
 - [Run a text-to-SQL benchmark](https://monospaceai.github.io/evaldata/guides/benchmarks/) — load a Spider/BIRD dataset and measure execution accuracy.
 - [API reference](https://monospaceai.github.io/evaldata/reference/) — the public API, generated from docstrings.
@@ -122,6 +123,7 @@ Runnable examples in [`examples/`](examples/):
 | [Benchmark](examples/06_benchmark/test_benchmark.py) | Load a Spider/BIRD dataset and measure execution accuracy |
 | [Snowflake](examples/07_snowflake/test_deterministic.py) | The same cases on a live Snowflake warehouse — live-only, needs `SNOWFLAKE_*` credentials |
 | [Cortex Analyst](examples/08_cortex/test_cortex_analyst.py) | Snowflake Cortex Analyst — live-only, needs `SNOWFLAKE_*` credentials |
+| [BigQuery](examples/09_bigquery/test_deterministic.py) | The same cases on a live BigQuery project — live-only, needs Application Default Credentials |
 | [dbt](examples/10_dbt/test_text_to_sql.py) | A dbt project's text-to-SQL, stubbed so it runs offline |
 | [dbt Semantic Layer](examples/10_dbt/test_semantic_layer.py) | dbt Semantic Layer (MetricFlow) queries, scored locally on DuckDB |
 

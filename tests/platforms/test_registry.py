@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from evaldata.platforms import (
+    bigquery_platform,
     databricks_platform,
     duckdb_platform,
     postgres_platform,
@@ -52,6 +53,14 @@ class TestRefBuilders:
             dialect="snowflake",
             config={"account": "acme-test", "warehouse": "COMPUTE_WH", "role": "EVALDATA"},
         )
+
+    def test_bigquery_platform_builds_ref(self) -> None:
+        ref = bigquery_platform(name="bq", project="my-proj")
+        assert ref == PlatformRef(name="bq", kind="bigquery", dialect="bigquery", config={"project": "my-proj"})
+
+    def test_bigquery_platform_includes_dataset_and_location_when_set(self) -> None:
+        ref = bigquery_platform(name="bq", project="my-proj", dataset="analytics", location="EU")
+        assert ref.config == {"project": "my-proj", "dataset": "analytics", "location": "EU"}
 
 
 @pytest.mark.unit
@@ -127,6 +136,23 @@ class TestResolve:
         adapter = resolve(snowflake_platform(name="sf-build", account="acme-test", warehouse="COMPUTE_WH"))
         try:
             assert isinstance(adapter, SnowflakeAdapter)
+        finally:
+            close_all()
+
+    def test_bigquery_extra_missing_raises_runtime_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Simulate the 'bigquery' extra not being installed: importing the adapter fails.
+        monkeypatch.setitem(sys.modules, "evaldata.platforms.bigquery", None)
+        with pytest.raises(RuntimeError, match="requires the 'bigquery' extra"):
+            resolve(bigquery_platform(name="bq-missing-extra", project="my-proj"))
+
+    def test_resolves_bigquery_through_registry(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Mock the client so the registry's bigquery dispatch builds an adapter without live creds.
+        from evaldata.platforms.bigquery import BigQueryAdapter
+
+        monkeypatch.setattr("google.cloud.bigquery.Client", lambda **kwargs: types.SimpleNamespace(close=lambda: None))
+        adapter = resolve(bigquery_platform(name="bq-build", project="my-proj", dataset="analytics", location="EU"))
+        try:
+            assert isinstance(adapter, BigQueryAdapter)
         finally:
             close_all()
 

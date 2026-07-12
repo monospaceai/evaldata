@@ -28,6 +28,7 @@ from evaldata.dbt import (
 from evaldata.loaders import load_bird, load_spider
 from evaldata.loaders.benchmarks import SOURCES, cached_dataset_path, fetch_benchmark
 from evaldata.platforms.registry import (
+    bigquery_platform,
     close_all,
     databricks_platform,
     duckdb_platform,
@@ -439,6 +440,9 @@ def _build_refs(
     snowflake_user: str | None = None,
     snowflake_warehouse: str | None = None,
     snowflake_role: str | None = None,
+    bigquery_project: str | None = None,
+    bigquery_dataset: str | None = None,
+    bigquery_location: str | None = None,
 ) -> list[PlatformRef]:
     """Build a `PlatformRef` for each platform flag that was provided.
 
@@ -455,6 +459,9 @@ def _build_refs(
         snowflake_user: A Snowflake user for the ref, or `None`.
         snowflake_warehouse: A Snowflake warehouse for the ref, or `None`.
         snowflake_role: A Snowflake role for the ref, or `None`.
+        bigquery_project: A BigQuery project identifier, or `None` if the flag was not given.
+        bigquery_dataset: A BigQuery default dataset, or `None`.
+        bigquery_location: A BigQuery job location, or `None`.
 
     Returns:
         One `PlatformRef` per platform whose flag(s) were provided, in flag order.
@@ -482,6 +489,15 @@ def _build_refs(
                 user=snowflake_user,
                 warehouse=snowflake_warehouse,
                 role=snowflake_role,
+            )
+        )
+    if bigquery_project is not None:
+        refs.append(
+            bigquery_platform(
+                name="bigquery",
+                project=bigquery_project,
+                dataset=bigquery_dataset,
+                location=bigquery_location,
             )
         )
     return refs
@@ -568,6 +584,27 @@ def doctor(
         envvar="SNOWFLAKE_ROLE",
         help="Snowflake role for the check.",
     ),
+    bigquery_project: str | None = typer.Option(
+        None,
+        "--bigquery-project",
+        metavar="PROJECT",
+        envvar="BIGQUERY_PROJECT",
+        help="BigQuery project to check.",
+    ),
+    bigquery_dataset: str | None = typer.Option(
+        None,
+        "--bigquery-dataset",
+        metavar="DATASET",
+        envvar="BIGQUERY_DATASET",
+        help="BigQuery default dataset for the check.",
+    ),
+    bigquery_location: str | None = typer.Option(
+        None,
+        "--bigquery-location",
+        metavar="LOCATION",
+        envvar="BIGQUERY_LOCATION",
+        help="BigQuery job location for the check.",
+    ),
     dbt_project: Path | None = typer.Option(
         None, "--dbt-project", metavar="DIR", help="dbt project directory to resolve via its profile and check."
     ),
@@ -589,6 +626,9 @@ def doctor(
         snowflake_warehouse: A Snowflake warehouse for the check (also read from
             `SNOWFLAKE_WAREHOUSE`).
         snowflake_role: A Snowflake role for the check (also read from `SNOWFLAKE_ROLE`).
+        bigquery_project: A BigQuery project for the check (also read from `BIGQUERY_PROJECT`).
+        bigquery_dataset: The BigQuery default dataset (also read from `BIGQUERY_DATASET`).
+        bigquery_location: The BigQuery job location (also read from `BIGQUERY_LOCATION`).
         dbt_project: A dbt project directory whose profile target is resolved to a platform and
             checked.
 
@@ -598,6 +638,9 @@ def doctor(
     """
     if (databricks_server_hostname is None) != (databricks_http_path is None):
         msg = "--databricks-server-hostname and --databricks-http-path must be given together"
+        raise typer.BadParameter(msg)
+    if bigquery_project is None and (bigquery_dataset is not None or bigquery_location is not None):
+        msg = "--bigquery-dataset and --bigquery-location require --bigquery-project"
         raise typer.BadParameter(msg)
     refs = _build_refs(
         duckdb=duckdb,
@@ -609,6 +652,9 @@ def doctor(
         snowflake_user=snowflake_user,
         snowflake_warehouse=snowflake_warehouse,
         snowflake_role=snowflake_role,
+        bigquery_project=bigquery_project,
+        bigquery_dataset=bigquery_dataset,
+        bigquery_location=bigquery_location,
     )
     dbt_failure: DbtError | None = None
     if dbt_project is not None:

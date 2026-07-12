@@ -133,7 +133,7 @@ class TestExpectedRelation:
     def test_empty_rows_yield_typed_empty_relation(self) -> None:
         schema = _schema(("n", "INTEGER"))
         out = sql.expected_relation([], schema, ["n"], "duckdb", None).sql(dialect="duckdb")
-        assert out == 'SELECT CAST(NULL AS INT) AS "n" WHERE 1 = 0'
+        assert out == 'SELECT CAST(NULL AS INT) AS "n" FROM (SELECT 1) AS t WHERE 1 = 0'
 
     def test_untyped_emits_bare_literals(self) -> None:
         out = sql.expected_relation([{"n": 1}], None, ["n"], "duckdb", None).sql(dialect="duckdb")
@@ -338,6 +338,14 @@ class TestBagDiff:
         assert "UNION ALL" in out
         assert "GROUP BY" in out
 
+    def test_count_qualifies_grouping_columns(self) -> None:
+        left = sql.expected_relation(
+            [{"cnt": 5, "rn": 7}], _schema(("cnt", "INTEGER"), ("rn", "INTEGER")), ["cnt", "rn"], "bigquery", None
+        )
+        right = sql.aligned_actual(Sql("SELECT 5 AS cnt, 7 AS rn"), ["cnt", "rn"], set(), "bigquery", None)
+        out = sql.bag_diff_count(left, right, ["cnt", "rn"], "bigquery")
+        assert "GROUP BY t.`cnt`, t.`rn`" in out
+
     def test_sample_shape_and_limit(self) -> None:
         left = sql.aligned_actual(Sql("SELECT 2 AS n"), ["n"], set(), "postgres", None)
         right = sql.expected_relation(
@@ -352,7 +360,7 @@ class TestBagDiff:
         # The keyless diff must stay portable: Snowflake and SQLite both reject EXCEPT/MINUS ALL.
         left = sql.expected_relation([{"n": 1}, {"n": 1}], _schema(("n", "INTEGER")), ["n"], "duckdb", None)
         right = sql.aligned_actual(Sql("SELECT 1 AS n"), ["n"], set(), "duckdb", None)
-        for dialect in ("duckdb", "postgres", "sqlite", "snowflake", "databricks"):
+        for dialect in ("duckdb", "postgres", "sqlite", "snowflake", "databricks", "bigquery"):
             count_sql = sql.bag_diff_count(left, right, ["n"], dialect).upper()
             sample_sql = sql.bag_diff_sample(left, right, ["n"], dialect).upper()
             assert "EXCEPT" not in count_sql

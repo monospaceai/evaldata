@@ -49,12 +49,19 @@ def test_null_values_round_trip(under_test: UnderTest) -> None:
 
 
 def test_duplicate_output_columns_return_error(under_test: UnderTest) -> None:
-    # Name-keyed rows cannot represent two columns sharing a name.
     result = under_test.adapter.execute(under_test.fixtures.duplicate_column_names)
-    assert result.error is not None
-    assert "duplicate" in result.error.message
-    assert result.rows == []
-    assert result.schema_ is None
+    if under_test.fixtures.renames_duplicate_columns:
+        # The engine disambiguates the names itself, so no collision reaches the adapter.
+        assert result.error is None
+        assert result.schema_ is not None
+        assert len(result.schema_.names) == 2
+        assert len(set(result.schema_.names)) == 2
+    else:
+        # Name-keyed rows cannot represent two columns sharing a name.
+        assert result.error is not None
+        assert "duplicate" in result.error.message
+        assert result.rows == []
+        assert result.schema_ is None
 
 
 def test_missing_table_returns_error_not_exception(under_test: UnderTest) -> None:
