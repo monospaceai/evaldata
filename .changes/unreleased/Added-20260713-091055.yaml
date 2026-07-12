@@ -1,3 +1,0 @@
-kind: Added
-body: 'BigQuery platform adapter: run SQL evals and data checks on BigQuery. Install `evaldata[bigquery]`.'
-time: 2026-07-13T09:10:55.428494+10:00
