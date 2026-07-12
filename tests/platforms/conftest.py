@@ -47,11 +47,12 @@ class ConformanceFixtures(Protocol):
     empty_result: str  # returns zero rows with a known schema (column "n")
     three_rows: str  # returns three rows in column "n" with values 1, 2, 3
     null_value: str  # returns one row with NULL in column "x"
-    duplicate_column_names: str  # returns two columns both named "x"
+    duplicate_column_names: str  # produces two output columns named "x" (renamed by some engines)
     references_missing_table: str  # references a non-existent table
     parse_error: str  # is syntactically invalid
     slow_query: str  # runs long enough to overrun a sub-second budget, and is interruptible
     reports_types: bool  # whether the driver reports result-column types (False for SQLite)
+    renames_duplicate_columns: bool  # whether the engine disambiguates duplicate output names itself (BigQuery)
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ class DuckDBFixtures:
         "SELECT count(*) AS n FROM t"
     )
     reports_types: bool = True
+    renames_duplicate_columns: bool = False
 
 
 @dataclass(frozen=True)
@@ -95,6 +97,7 @@ class SqliteFixtures:
         "SELECT count(*) AS n FROM t"
     )
     reports_types: bool = False
+    renames_duplicate_columns: bool = False
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,7 @@ class PostgresFixtures:
     parse_error: str = "SLECT 1"
     slow_query: str = "SELECT pg_sleep(10)"
     reports_types: bool = True
+    renames_duplicate_columns: bool = False
 
 
 @dataclass(frozen=True)
@@ -136,6 +140,7 @@ class DatabricksFixtures:
     parse_error: str = "SLECT 1"
     slow_query: str = "SELECT count(*) AS n FROM range(0, 50000) a CROSS JOIN range(0, 50000) b WHERE a.id + b.id > -1"
     reports_types: bool = True
+    renames_duplicate_columns: bool = False
 
 
 @dataclass(frozen=True)
@@ -156,6 +161,31 @@ class SnowflakeFixtures:
     # NOTE: tuned for an XS warehouse; duration needs live confirmation and may need adjustment.
     slow_query: str = "SELECT MAX(SEQ8()) AS n FROM TABLE(GENERATOR(ROWCOUNT => 1000000000))"
     reports_types: bool = True
+    renames_duplicate_columns: bool = False
+
+
+@dataclass(frozen=True)
+class BigQueryFixtures:
+    """BigQuery's concrete `ConformanceFixtures` — GoogleSQL idiom.
+
+    BigQuery's driver reports precise result-column types directly, so `reports_types` is `True`
+    with no probe needed. `UNNEST` supplies the row-list form GoogleSQL lacks as `VALUES ... AS
+    t(n)`; the `slow_query` counts a large generated array, which scans ~0 bytes yet runs long
+    enough to overrun a sub-second budget.
+    """
+
+    one_row_one_column: str = "SELECT 1 AS n"
+    # A WHERE needs a FROM in BigQuery, so the empty result draws from a single-element UNNEST.
+    empty_result: str = "SELECT 1 AS n FROM UNNEST([1]) WHERE 1=0"
+    three_rows: str = "SELECT n FROM UNNEST([1, 2, 3]) AS n"
+    null_value: str = "SELECT NULL AS x"
+    # BigQuery disambiguates the second `x` to `x_1` rather than returning a true collision.
+    duplicate_column_names: str = "SELECT 1 AS x, 2 AS x"
+    references_missing_table: str = "SELECT * FROM does_not_exist_xyz"
+    parse_error: str = "SLECT 1"
+    slow_query: str = "SELECT COUNT(*) AS n FROM UNNEST(GENERATE_ARRAY(1, 100000000))"
+    reports_types: bool = True
+    renames_duplicate_columns: bool = True
 
 
 @dataclass(frozen=True)
@@ -233,6 +263,23 @@ def connect_snowflake() -> PlatformAdapter:
     )
 
 
+def connect_bigquery() -> PlatformAdapter:
+    """Connect a `BigQueryAdapter` to the configured project.
+
+    Reads `BIGQUERY_PROJECT` (required); `BIGQUERY_DATASET` and `BIGQUERY_LOCATION` are optional.
+    Credentials resolve from the ambient environment via Application Default Credentials.
+    Fail-loud: a missing extra, unset project, or an unreachable project raises rather than
+    skipping.
+    """
+    from evaldata.platforms.bigquery import BigQueryAdapter
+
+    return BigQueryAdapter(
+        project=os.environ["BIGQUERY_PROJECT"],
+        dataset=os.environ.get("BIGQUERY_DATASET"),
+        location=os.environ.get("BIGQUERY_LOCATION"),
+    )
+
+
 def connect_sqlite() -> PlatformAdapter:
     """Connect a `SqliteAdapter` to a fresh in-memory database."""
     return SqliteAdapter()
@@ -268,6 +315,12 @@ ADAPTER_SPECS: list[AdapterSpec] = [
         marks=[pytest.mark.e2e, pytest.mark.cloud, pytest.mark.snowflake],
         connect=connect_snowflake,
         fixtures=SnowflakeFixtures,
+    ),
+    AdapterSpec(
+        id="bigquery",
+        marks=[pytest.mark.e2e, pytest.mark.cloud, pytest.mark.bigquery],
+        connect=connect_bigquery,
+        fixtures=BigQueryFixtures,
     ),
 ]
 

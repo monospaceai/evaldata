@@ -22,10 +22,10 @@ only model call is the SQL-equivalence judge deciding what the syntax check cann
 `06_benchmark` instead varies the **data source**: rather than seeding its own cases, it loads a
 text-to-SQL benchmark (Spider-shaped here) and measures execution accuracy with `run_benchmark`.
 
-`07_snowflake` and `08_cortex` are **live-only**: they run against a real Snowflake account and
-so, unlike `03`/`05`/`06`, cannot run without credentials. `07_snowflake` varies the platform (a
-live Snowflake warehouse); `08_cortex` varies the solver (Snowflake Cortex Analyst as the AI under
-test).
+`07_snowflake`, `08_cortex`, and `09_bigquery` are **live-only**: they run against a real
+warehouse or service and so, unlike `03`/`05`/`06`, cannot run without credentials.
+`07_snowflake` and `09_bigquery` vary the platform; `08_cortex` varies the solver (Snowflake
+Cortex Analyst as the AI under test).
 
 ## Tiers
 
@@ -39,6 +39,7 @@ test).
 | `06_benchmark` | `PromptSolver` (mocked) | Loads a text-to-SQL benchmark and measures execution accuracy with `run_benchmark` | `evaldata[litellm]` |
 | `07_snowflake` | `CallableSolver` (fixed SQL) | Runs the same cases against a live Snowflake warehouse (live-only) | `evaldata[snowflake]` + `SNOWFLAKE_*` credentials |
 | `08_cortex` | `CortexAnalystSolver` | Snowflake Cortex Analyst answers each question, scored on your warehouse (live-only) | `evaldata[cortex]` + `SNOWFLAKE_*` credentials |
+| `09_bigquery` | `CallableSolver` (fixed SQL) | Runs the same cases against a live BigQuery project (live-only) | `evaldata[bigquery]` + Application Default Credentials |
 
 ### 01_deterministic
 The solver is a `CallableSolver` returning fixed SQL. `test_golden_questions.py` covers the
@@ -110,6 +111,15 @@ the SQL it generates; evaldata runs that SQL on Snowflake and scores it against 
 database role, and Snowflake credentials in the environment — see the
 [Cortex Analyst guide](../docs/guides/cortex.md). Each run consumes Snowflake credits.
 
+### 09_bigquery
+
+The same deterministic cases as 01, executed against a live BigQuery project. It creates an
+`orders_ex09` table in `BIGQUERY_DATASET` (defaulting to `evaldata_examples`), then shows typed
+result-set comparison, expectation checks pushed down into SQL, and execution accuracy against a
+gold query. Marked `e2e` and `cloud`, so it is **live-only**: install the `bigquery` extra, set
+`BIGQUERY_PROJECT`, and configure Application Default Credentials — see the
+[BigQuery guide](../docs/guides/bigquery.md).
+
 ## Running
 
 ```bash
@@ -141,4 +151,8 @@ SNOWFLAKE_ACCOUNT=... uv run pytest examples/07_snowflake -m e2e -p no:randomly 
 # 08 — live-only: needs the cortex extra + a reachable account with CORTEX_USER (no mock):
 uv sync --extra cortex
 SNOWFLAKE_ACCOUNT=... uv run pytest examples/08_cortex -m e2e -p no:randomly -q
+
+# 09 — live-only: needs the bigquery extra + a reachable project (no mock):
+uv sync --extra bigquery
+BIGQUERY_PROJECT=... uv run pytest examples/09_bigquery -m e2e -p no:randomly -q
 ```

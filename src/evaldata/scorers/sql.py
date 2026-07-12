@@ -273,7 +273,7 @@ def expected_relation(
 
     Returns:
         A SQLGlot query (`SELECT …` or a `UNION ALL` chain) yielding the expected relation.
-        An empty `rows` yields a `SELECT … WHERE 1 = 0` typed empty relation.
+        An empty `rows` yields a typed empty relation over a dummy `FROM` filtered by `1 = 0`.
     """
     types = schema.types_by_name if schema is not None else {}
 
@@ -296,7 +296,9 @@ def expected_relation(
         return exp.Select(expressions=selections)
 
     if not rows:
-        empty = project({}).where(exp.condition("1 = 0"))
+        # A dummy FROM keeps the empty relation valid on engines that reject a WHERE without one.
+        dummy = exp.select(exp.Literal.number(1)).subquery(alias="t")
+        empty = project({}).from_(dummy).where(exp.condition("1 = 0"))
         return empty
 
     relation: exp.Query = project(rows[0])
@@ -403,7 +405,7 @@ def _grouped_counts(relation: exp.Query, in_both: list[str], alias: str) -> exp.
     Returns:
         A `Subquery` aliased `alias`, projecting each shared column as `b__<col>` plus `cnt`.
     """
-    keys = [exp.column(col, quoted=True) for col in in_both]
+    keys = [_qualified(col, "t") for col in in_both]
     projected = [
         exp.column(col, quoted=True).as_(exp.to_identifier(f"{_BAG_PREFIX}{col}", quoted=True)) for col in in_both
     ]

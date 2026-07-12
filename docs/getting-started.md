@@ -109,8 +109,8 @@ This is the runnable example from `examples/01_deterministic/` in the repo.
 
 - Swap the solver for a real model — [a local Ollama model](guides/local-ollama.md) or
   [a hosted model](guides/hosted-model.md).
-- Run against a warehouse — [Databricks](guides/databricks.md) or
-  [Snowflake](guides/snowflake.md).
+- Run against a warehouse — [Databricks](guides/databricks.md), [Snowflake](guides/snowflake.md),
+  or [BigQuery](guides/bigquery.md).
 - Evaluate a dbt project — [dbt](guides/dbt.md) or
   [dbt Semantic Layer](guides/dbt-semantic-layer.md).
 - Score with a grader model — [an LLM judge](guides/llm-judge.md).

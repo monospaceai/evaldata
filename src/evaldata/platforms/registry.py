@@ -130,6 +130,33 @@ def snowflake_platform(
     return PlatformRef(name=name, kind="snowflake", dialect="snowflake", config=config)
 
 
+def bigquery_platform(
+    name: str,
+    *,
+    project: str,
+    dataset: str | None = None,
+    location: str | None = None,
+) -> PlatformRef:
+    """Build a `PlatformRef` for a BigQuery project.
+
+    Holds only non-secret connection details; credentials are not included here.
+
+    Args:
+        name: A unique name identifying this platform connection.
+        project: The Google Cloud project to run jobs and bill against.
+        dataset: The default dataset for unqualified table names, or `None` to leave none.
+        location: The location to run jobs in (e.g. `"US"`, `"EU"`), or `None` for the client
+            default.
+
+    Returns:
+        A serializable `PlatformRef` for the BigQuery project. Building the ref needs no driver.
+    """
+    fields = {"dataset": dataset, "location": location}
+    config: dict[str, str] = {"project": project}
+    config.update({k: v for k, v in fields.items() if v is not None})
+    return PlatformRef(name=name, kind="bigquery", dialect="bigquery", config=config)
+
+
 def _build_duckdb(ref: PlatformRef) -> PlatformAdapter:
     return DuckDBAdapter(database=str(ref.config.get("path", ":memory:")))
 
@@ -188,6 +215,20 @@ def _build_snowflake(ref: PlatformRef) -> PlatformAdapter:
     )
 
 
+def _build_bigquery(ref: PlatformRef) -> PlatformAdapter:
+    try:
+        from evaldata.platforms.bigquery import BigQueryAdapter
+    except ImportError as e:
+        msg = "BigQueryAdapter requires the 'bigquery' extra; install it with `uv sync --extra bigquery`"
+        raise RuntimeError(msg) from e
+    config = ref.config
+    return BigQueryAdapter(
+        project=str(config["project"]),
+        dataset=str(config["dataset"]) if "dataset" in config else None,
+        location=str(config["location"]) if "location" in config else None,
+    )
+
+
 def _build(ref: PlatformRef) -> PlatformAdapter:
     """Build a live adapter for `ref` by exhaustive dispatch over its kind.
 
@@ -209,6 +250,8 @@ def _build(ref: PlatformRef) -> PlatformAdapter:
             return _build_databricks(ref)
         case "snowflake":
             return _build_snowflake(ref)
+        case "bigquery":
+            return _build_bigquery(ref)
         case _ as unreachable:  # pragma: no cover - exhaustiveness guard
             assert_never(unreachable)
 

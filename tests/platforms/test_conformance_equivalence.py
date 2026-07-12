@@ -35,9 +35,9 @@ from .conftest import conform_name, engine_params, render_model
 
 def _string_type(dialect: Dialect) -> str:
     """The string type name to author so it matches what the engine reports: `STRING` on
-    Databricks (whose `VARCHAR` resolves to `string`), `VARCHAR(134217728)` on Snowflake (its
-    default max length for an unbounded `VARCHAR` cast), `VARCHAR` elsewhere."""
-    if dialect == "databricks":
+    Databricks (whose `VARCHAR` resolves to `string`) and BigQuery, `VARCHAR(134217728)` on
+    Snowflake (its default max length for an unbounded `VARCHAR` cast), `VARCHAR` elsewhere."""
+    if dialect in ("databricks", "bigquery"):
         return "STRING"
     if dialect == "snowflake":
         return "VARCHAR(134217728)"
@@ -52,8 +52,13 @@ def _numeric_type(dialect: Dialect) -> str:
 
 
 def _int_type(dialect: Dialect) -> str:
-    """Snowflake types a CAST-to-INTEGER column as NUMBER(38, 0); other engines report INTEGER."""
-    return "NUMBER(38, 0)" if dialect == "snowflake" else "INTEGER"
+    """Snowflake types a CAST-to-INTEGER column as NUMBER(38, 0); BigQuery reports INT64; other
+    engines report INTEGER."""
+    if dialect == "snowflake":
+        return "NUMBER(38, 0)"
+    if dialect == "bigquery":
+        return "INT64"
+    return "INTEGER"
 
 
 @pytest.fixture(params=engine_params())
@@ -248,11 +253,13 @@ def test_derived_query_error_fails_without_raise(engine: tuple[PlatformAdapter, 
 def test_empty_vs_empty_passes(engine: tuple[PlatformAdapter, PlatformKind]) -> None:
     _, dialect = engine
     expected = TypedResultSet(rows=[], schema=_schema(("n", _int_type(dialect)), dialect=dialect))
-    model = (
-        "SELECT CAST(1 AS INTEGER) AS n WHERE 1 = 0"
-        if dialect == "duckdb"
-        else "SELECT CAST(1 AS INTEGER) AS n WHERE false"
-    )
+    if dialect == "duckdb":
+        model = "SELECT CAST(1 AS INTEGER) AS n WHERE 1 = 0"
+    elif dialect == "bigquery":
+        # A WHERE needs a FROM in BigQuery.
+        model = "SELECT CAST(1 AS INTEGER) AS n FROM (SELECT 1) AS t WHERE 1 = 0"
+    else:
+        model = "SELECT CAST(1 AS INTEGER) AS n WHERE false"
     score = _score(engine, model, expected)
     assert score.passed is True
 
@@ -603,11 +610,11 @@ def test_gold_typed_comparison_detects_type_mismatch(engine: tuple[PlatformAdapt
     _, dialect = engine
     expected = GoldQuery(sql="SELECT CAST(1 AS BIGINT) AS n")
     score = _score(engine, "SELECT CAST(1 AS INTEGER) AS n", expected)
-    if dialect in ("sqlite", "snowflake"):
+    if dialect in ("sqlite", "snowflake", "bigquery"):
         # SQLite reports no result-column types on either side, so type comparison abstains
         # rather than refutes. Snowflake types both CAST(1 AS BIGINT) and CAST(1 AS INTEGER)
-        # identically as NUMBER(38,0), so it can't observe the mismatch either. Either way the
-        # rows are otherwise equal, so the score passes.
+        # identically as NUMBER(38,0), and BigQuery types both as INT64, so neither can observe
+        # the mismatch. Either way the rows are otherwise equal, so the score passes.
         assert score.passed is True
         return
     assert score.passed is False

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 from evaldata.platforms.base import PlatformAdapter
 from evaldata.platforms.duckdb import DuckDBAdapter
 from evaldata.platforms.registry import (
+    bigquery_platform,
     databricks_platform,
     duckdb_platform,
     postgres_platform,
@@ -16,17 +17,20 @@ from evaldata.platforms.registry import (
 from evaldata.platforms.sqlite import SqliteAdapter
 
 if TYPE_CHECKING:
+    from evaldata.platforms.bigquery import BigQueryAdapter
     from evaldata.platforms.databricks import DatabricksAdapter
     from evaldata.platforms.postgres import PostgresAdapter
     from evaldata.platforms.snowflake import SnowflakeAdapter
 
 __all__ = [
+    "BigQueryAdapter",
     "DatabricksAdapter",
     "DuckDBAdapter",
     "PlatformAdapter",
     "PostgresAdapter",
     "SnowflakeAdapter",
     "SqliteAdapter",
+    "bigquery_platform",
     "databricks_platform",
     "duckdb_platform",
     "postgres_platform",
@@ -39,6 +43,7 @@ _LAZY_ADAPTERS = {
     "PostgresAdapter": ("evaldata.platforms.postgres", "postgres"),
     "DatabricksAdapter": ("evaldata.platforms.databricks", "databricks"),
     "SnowflakeAdapter": ("evaldata.platforms.snowflake", "snowflake"),
+    "BigQueryAdapter": ("evaldata.platforms.bigquery", "bigquery"),
 }
 
 

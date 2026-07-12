@@ -11,6 +11,7 @@ hosted-AI solvers are tested without spending on every change.
 | DuckDB, SQLite, Postgres | Live, in a runner container | Every pull request |
 | Databricks | Live, against a Free Edition workspace | Every pull request |
 | Snowflake | Live, against a Snowflake account over OIDC | Every merge to `main` |
+| BigQuery | Live, against a BigQuery project over Workload Identity Federation | Every merge to `main` (or same-repo PR) |
 | Cortex Analyst (solver) | Replayed from a recorded response on every change; run live off the pull-request path | Live: manual or scheduled |
 
 The deterministic backend and adapter tests run wherever they are cheap. The shared conformance

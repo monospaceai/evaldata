@@ -94,6 +94,7 @@ nav:
       - Evaluate a hosted model: guides/hosted-model.md
       - Evaluate text-to-SQL on Databricks: guides/databricks.md
       - Evaluate text-to-SQL on Snowflake: guides/snowflake.md
+      - Evaluate text-to-SQL on BigQuery: guides/bigquery.md
       - Evaluate Snowflake Cortex Analyst: guides/cortex.md
       - Evaluate text-to-SQL with dbt: guides/dbt.md
       - Evaluate dbt Semantic Layer queries: guides/dbt-semantic-layer.md

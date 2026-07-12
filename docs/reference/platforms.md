@@ -9,3 +9,5 @@
 ::: evaldata.platforms.postgres
 
 ::: evaldata.platforms.databricks
+
+::: evaldata.platforms.bigquery
