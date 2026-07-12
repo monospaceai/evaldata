@@ -19,8 +19,8 @@ The solver is a `PromptSolver(model=...)`. Create `test_hosted_ai.py`:
 ```
 
 The example reads the model id from `EVALDATA_HOSTED_MODEL` and passes it to
-`PromptSolver(model=...)`. That is the model argument, so you can pass a literal instead.
-litellm reads your provider credentials from the environment, e.g. `OPENAI_API_KEY`.
+`PromptSolver(model=...)`. You can pass a model id directly instead. litellm reads provider
+credentials from the environment, for example `OPENAI_API_KEY`.
 
 ## Run it against the live model
 
@@ -28,28 +28,28 @@ litellm reads your provider credentials from the environment, e.g. `OPENAI_API_K
 uv run pytest test_hosted_ai.py -q
 ```
 
-## Or run it deterministically (no key, no network)
+## Use fixed responses in CI
 
-To run this in CI without a live model call, mock the model reply. Add a `conftest.py` next to
-your test that returns the structured `{"sql": ...}` the solver expects, matched per question:
+Add a `conftest.py` next to your test that returns the structured `{"sql": ...}` response the
+solver expects for each question:
 
 ```python
 --8<-- "examples/03_hosted_ai/conftest.py"
 ```
 
-With the mock in place it runs offline:
+`conftest.py` makes the test use fixed responses:
 
 ```bash
 uv run pytest test_hosted_ai.py -q
 ```
 
-Remove the `conftest.py` (and set a real `OPENAI_API_KEY`) to evaluate the live model instead.
+Remove `conftest.py` to call the hosted model.
 
 !!! tip "Run it from a clone"
     This is the bundled `examples/03_hosted_ai/` example. If you've cloned the repo, run it
-    directly with `uv run pytest examples/03_hosted_ai` — it runs mocked, with no key needed.
+    with `uv run pytest examples/03_hosted_ai`. It includes fixed responses.
 
 ## Next steps
 
-- [Evaluate against Databricks](databricks.md) — run an eval on a real Databricks SQL warehouse.
-- [Concepts](../concepts.md) — solvers, scorers, and expected-types in depth.
+- [Evaluate against Databricks](databricks.md): run an eval on a Databricks SQL warehouse.
+- [Concepts](../concepts.md): solvers, scorers, and expected types in depth.

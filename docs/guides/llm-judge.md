@@ -22,8 +22,8 @@ judge = LlmJudge(
 )
 ```
 
-The grader's score lands in `result.score` and its rationale in `result.explanation`; the result
-is stamped `basis="judged"` to mark it a probabilistic judgment, not a proof.
+The grader's score is in `result.score` and its rationale is in `result.explanation`. The result
+has `basis="judged"`, which marks it as a probabilistic judgment rather than a proof.
 
 Pass it to `assert_eval` like any other scorer:
 
@@ -33,21 +33,20 @@ assert_eval(case, solver, scorers=[judge])
 
 ## Inconclusive, not a guess
 
-A judge can fail to reach a verdict — the provider call errors, or the reply doesn't parse. When
-that happens the result is **inconclusive** (`verdict="inconclusive"`), carrying the failure in
-its explanation, rather than a fail. Inconclusive means the judge couldn't decide; it doesn't mean
-the answer is wrong.
+A judge can fail to reach a verdict if the provider call errors or the response doesn't parse. The
+result is then **inconclusive** (`verdict="inconclusive"`) and carries the failure in its
+explanation. Inconclusive means the judge couldn't decide; it doesn't mean the answer is wrong.
 
-## Shape the grader's judgment
+## Configure the judge
 
-`criteria` alone is often enough. Four optional arguments make the grade more consistent when it
-isn't:
+`criteria` alone is often enough. Four optional arguments control the grading prompt and pass
+threshold:
 
-- **`steps`** — an ordered checklist the grader works through before scoring, rendered as a
+- **`steps`**: an ordered checklist the grader works through before scoring, rendered as a
   numbered block.
-- **`rubric`** — score bands that say what each range means, so the number is anchored.
-- **`examples`** — few-shot anchors, each a graded output with its score and the reason for it.
-- **`threshold`** — the minimum score (inclusive) for a pass. Defaults to `0.5`.
+- **`rubric`**: score bands that describe each range.
+- **`examples`**: few-shot anchors, each a graded output with its score and reason.
+- **`threshold`**: the minimum score (inclusive) for a pass. Defaults to `0.5`.
 
 ```python
 from evaldata import JudgeExample, LlmJudge, RubricBand
@@ -76,19 +75,18 @@ judge = LlmJudge(
 )
 ```
 
-Only the arguments you set appear in the prompt — an unset `rubric` or `examples` is simply
-omitted.
+Unset `rubric` and `examples` values are not included in the prompt.
 
 ## Choose what the grader sees
 
-By default the judge shows the grader three case fields, each only when it is available:
+By default, the judge shows the grader these case fields when they are available:
 
-- **`input`** — the case's question.
-- **`actual_output`** — the SQL the solver produced.
-- **`expected_output`** — the gold query's SQL, when the case has a `GoldQuery` expected.
+- **`input`**: the case's question.
+- **`actual_output`**: the SQL the solver produced.
+- **`expected_output`**: the gold query's SQL, when the case has a `GoldQuery` expected.
 
-Restrict this with `show` when a field would bias or distract the grade — for example, grade the
-output on its own merits without revealing the reference answer:
+Use `show` to hide fields that would bias or distract the grader. For example, grade the output
+without revealing the reference answer:
 
 ```python
 judge = LlmJudge(
@@ -103,22 +101,20 @@ judge = LlmJudge(
 The grader is separate from the solver. `model` takes any litellm identifier (or an `Llm` to use
 directly), so the grader can run on a different provider from the model being evaluated.
 
-The grader must support structured output: the judge requests a JSON `{score, reason}` reply and
-treats a malformed one as inconclusive. Grading defaults to `temperature=0.0` for repeatable
+The grader must support structured output: the judge requests a JSON `{score, reason}` response
+and treats a malformed one as inconclusive. Grading defaults to `temperature=0.0` for repeatable
 scores; pass `temperature=None` to leave the provider default, or a `timeout` to bound the call.
 
-## Run it deterministically in CI
+## Use fixed judge responses in CI
 
-A judged eval calls a live model, which costs money and varies run to run. To exercise the eval
-path in CI without a live model call, mock the grader reply. Add a `conftest.py` next to your
-test that returns the structured `{score, reason}` the judge
-expects:
+A judged eval calls a model, which costs money and can vary between runs. Add a `conftest.py` next
+to your test that returns the structured `{score, reason}` response the judge expects:
 
 ```python
 --8<-- "examples/05_llm_judge/conftest.py"
 ```
 
-With the mock in place the eval runs offline, with no key:
+`conftest.py` makes the eval use fixed judge responses:
 
 ```python
 --8<-- "examples/05_llm_judge/test_judged_equivalence.py"
@@ -128,12 +124,11 @@ With the mock in place the eval runs offline, with no key:
 uv run pytest test_judged_equivalence.py -q
 ```
 
-Remove the `conftest.py` (and set the provider key, e.g. `OPENAI_API_KEY`) to grade against the
-live model instead.
+Remove `conftest.py` to grade with the model.
 
 !!! tip "Run it from a clone"
     This is the bundled `examples/05_llm_judge/` example. If you've cloned the repo, run it
-    directly with `uv run pytest examples/05_llm_judge` — it runs mocked, with no key needed.
+    with `uv run pytest examples/05_llm_judge`. It includes fixed judge responses.
 
 ## A ready-made judge: SQL equivalence
 
@@ -155,7 +150,7 @@ check is inconclusive. Use it when you have no warehouse to run the queries agai
 
 ## Next steps
 
-- [Check semantic equivalence](semantic-equivalence.md) — confirm two queries match by AST
+- [Check semantic equivalence](semantic-equivalence.md): confirm two queries match by AST
   normalization, with the judge as the fallback.
-- [Scorers reference](../reference/scorers.md) — `LlmJudge`, `JudgeExample`, `RubricBand`.
-- [Concepts](../concepts.md) — scorers, solvers, and expected-types in depth.
+- [Scorers reference](../reference/scorers.md): `LlmJudge`, `JudgeExample`, `RubricBand`.
+- [Concepts](../concepts.md): scorers, solvers, and expected types in depth.

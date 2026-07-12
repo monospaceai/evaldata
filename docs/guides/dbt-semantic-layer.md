@@ -24,8 +24,8 @@ dbt parse   # writes target/semantic_manifest.json
 
 ## Write the cases file
 
-A metric cases file pairs each question with the gold metric query — the metrics to compute and how
-to slice, filter, and limit them:
+A metric cases file pairs each question with a gold metric query. The query specifies the metrics
+to compute and how to slice, filter, and limit them:
 
 ```yaml
 # metric_cases.yml
@@ -58,31 +58,29 @@ SL accuracy: 84.0% (21/25)
 
 `--model` is any [litellm](https://docs.litellm.ai/docs/providers) model id. Other options:
 
-- `--grader-model ID` — the model for the judge tier; defaults to `--model`.
-- `--no-judge` — score with the deterministic tiers only (resolved query equivalence and
+- `--grader-model ID`: the model for the judge tier; defaults to `--model`.
+- `--no-judge`: score with the deterministic tiers only (resolved query equivalence and
   result-set equivalence); no LLM judge, so the result is reproducible in CI.
-- `--temperature FLOAT` — sampling temperature for the solver and judge (default `0.0`); reasoning
+- `--temperature FLOAT`: sampling temperature for the solver and judge (default `0.0`); reasoning
   models such as the GPT-5 family often accept only `1.0`.
-- `--target-dir DIR` — where the artifacts live, if not `<project>/target`.
-- `--profiles-dir DIR` / `--target NAME` — find and select the dbt profile target.
-- `--limit N` — run only the first `N` questions.
-- `--json PATH` — also write the scores and every result to a JSON file.
+- `--target-dir DIR`: where the artifacts live, if not `<project>/target`.
+- `--profiles-dir DIR` / `--target NAME`: find and select the dbt profile target.
+- `--limit N`: run only the first `N` questions.
+- `--json PATH`: also write the scores and every result to a JSON file.
 
 ## How it's scored
 
-Each question runs through three checks in order, cheapest first; the cascade exits at the first
-verdict:
+Each question runs through up to three checks in order:
 
 1. **Resolve and compare.** MetricFlow resolves both the candidate and gold queries against the
-   semantic manifest — filling in default time grains and entity paths the way the warehouse would.
+   semantic manifest, filling in default time grains and entity paths.
    Queries that resolve to the same form are equivalent, decided without running anything.
 2. **Run and compare.** When the resolved forms differ, both queries run through `mf` and their
    result rows are compared. The verdict comes from the data the warehouse returns.
 3. **LLM judge.** A grader model reads the candidate and gold queries and decides whether they
-   answer the question the same way — a semantic read that doesn't need to run either query.
+   answer the question the same way. It doesn't run either query.
 
-Later checks run only when earlier checks do not decide, so the LLM judge is called only for
-questions the first two checks leave open.
+The LLM judge runs only if the first two checks are inconclusive.
 
 ## Run it in `pytest`
 
@@ -119,10 +117,10 @@ def test_sl_question(case):
 To compose the cascade yourself, use `MetricSpecEquivalence`,
 `MetricResultEquivalence`, and `MetricLayerJudge` with `MetricFirstDecisive`.
 
-## Runnable example
+## Bundled example
 
-A self-contained version that runs offline against DuckDB: a small jaffle-shop dbt project with a
-semantic layer ships with it, and `StubLlm` stands in for both the solver and the judge.
+The bundled example runs a jaffle-shop Semantic Layer project on DuckDB with fixed responses for
+the solver and judge.
 
 ```python
 --8<-- "examples/10_dbt/test_semantic_layer.py"
@@ -139,6 +137,6 @@ semantic layer ships with it, and `StubLlm` stands in for both the solver and th
 
 ## Next steps
 
-- [Evaluate against a dbt project](dbt.md) — text-to-SQL evals on the same project.
-- [Score with an LLM judge](llm-judge.md) — the judge tier in depth.
-- [dbt reference](../reference/dbt.md) — the Semantic Layer types, loaders, and scorers.
+- [Evaluate against a dbt project](dbt.md): text-to-SQL evals on the same project.
+- [Score with an LLM judge](llm-judge.md): the judge tier in depth.
+- [dbt reference](../reference/dbt.md): the Semantic Layer types, loaders, and scorers.

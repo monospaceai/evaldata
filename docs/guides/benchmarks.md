@@ -1,12 +1,11 @@
 # Run a text-to-SQL benchmark
 
 Score a model on [Spider](https://yale-lily.github.io/spider) or
-[BIRD](https://bird-bench.github.io/) and see its **execution accuracy (EX)** — the fraction of
+[BIRD](https://bird-bench.github.io/) and see its **execution accuracy (EX)**: the fraction of
 questions where the model's SQL returns the same result as the gold query.
 
-To be sure the score is right, we compared our scoring against each benchmark's own scoring code
-— Spider's `result_eq` and BIRD's set comparison — on every question in the dataset. They agree
-everywhere, with a few deliberate exceptions we leave out of that comparison:
+`evaldata` is tested against Spider's `result_eq` and BIRD's set comparison on every question in
+each dataset. The following intentional differences are excluded from that comparison:
 
 - A handful of questions select the same output column name twice. evaldata rejects duplicate
   column names, so it scores those differently.
@@ -17,16 +16,15 @@ These are design choices, not bugs, and together they're under 0.2% of each data
 
 ## Fetch a dataset
 
-`evaldata fetch` downloads a benchmark, checks it against a known checksum, and caches it
-locally:
+`evaldata fetch` downloads a benchmark, validates its checksum, and caches it locally:
 
 ```bash
 evaldata fetch spider
 evaldata fetch bird
 ```
 
-The download is pinned to a checksum, so you get the exact bytes we tested against, or the fetch
-fails. Re-download with `--force`; choose where it lands with `--cache-dir PATH`.
+The download is pinned to the checksum used for validation. A checksum mismatch fails the fetch.
+Re-download with `--force`; choose where it is cached with `--cache-dir PATH`.
 
 ## Run the benchmark
 
@@ -40,10 +38,10 @@ evaldata bench bird --model openai/gpt-4o-mini --limit 100
 
 `--model` is any [litellm](https://docs.litellm.ai/docs/providers) model id. Useful options:
 
-- `--limit N` — run only the first `N` questions (a quick check before a full run).
-- `--split dev` — which part of the dataset to load (`dev` by default).
-- `--json PATH` — also save a JSON file with the scores and every question's result.
-- `path` (positional) — point at an already-unzipped dataset folder instead of the cache.
+- `--limit N`: run only the first `N` questions.
+- `--split dev`: which part of the dataset to load (`dev` by default).
+- `--json PATH`: also save a JSON file with the scores and every question's result.
+- `path` (positional): use an already-unzipped dataset folder instead of the cache.
 
 BIRD tags each question with a difficulty, so the output also breaks the EX down by difficulty.
 Example output:
@@ -72,9 +70,9 @@ these rules. A question passes when the two match; the EX is the fraction that p
 
 ## Score your own model
 
-The CLI's solver is a [`PromptSolver`][evaldata.solvers.PromptSolver] that puts each question's
-database schema in the prompt. To benchmark something else — your own prompt, a fine-tune, a
-multi-step agent — load the cases yourself and pass any [`Solver`][evaldata.solvers.Solver] to
+The CLI uses a [`PromptSolver`][evaldata.solvers.PromptSolver] that puts each question's database
+schema in the prompt. To benchmark your own prompt, fine-tune, or multi-step agent, load the cases
+and pass any [`Solver`][evaldata.solvers.Solver] to
 [`run_benchmark`][evaldata.run_benchmark]:
 
 ```python
@@ -92,14 +90,13 @@ print(f"EX: {summary.accuracy:.1%} ({summary.passed}/{summary.total})")
 ```
 
 [`load_spider`][evaldata.load_spider] and [`load_bird`][evaldata.load_bird] yield `EvalCase`s
-with the question as `input` and the gold query as the expected answer, so the cases are ordinary
-evals — you can score them with any scorer, not only `ExecutionAccuracy`.
+with the question as `input` and the gold query as the expected answer. You can score them with any
+scorer, not only `ExecutionAccuracy`.
 
-## Try it offline
+## Bundled example
 
-The bundled `examples/06_benchmark` example builds a tiny Spider-shaped dataset in a temp
-directory and runs the same `load_spider` → `run_benchmark` path against a mocked model, so it
-needs no download, key, or network:
+The bundled example creates a small Spider-shaped dataset and uses fixed model responses. It needs
+no downloaded benchmark or model call:
 
 ```python
 --8<-- "examples/06_benchmark/test_benchmark.py"
@@ -111,5 +108,5 @@ uv run pytest examples/06_benchmark -q
 
 ## Next steps
 
-- [Concepts](../concepts.md) — solvers, scorers, and expected-types in depth.
-- [Scorers reference](../reference/scorers.md) — the `ExecutionAccuracy` API and its options.
+- [Concepts](../concepts.md): solvers, scorers, and expected types in depth.
+- [Scorers reference](../reference/scorers.md): the `ExecutionAccuracy` API and its options.
