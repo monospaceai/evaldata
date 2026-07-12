@@ -1,7 +1,6 @@
 # Evaluate text-to-SQL on BigQuery
 
-Run SQL evals on BigQuery. The example uses fixed SQL so the guide can focus on the adapter:
-`evaldata` runs the checks as SQL in BigQuery instead of pulling rows back into Python.
+This guide shows how to connect, authenticate, and run SQL evals in BigQuery.
 
 ## Prerequisites
 
@@ -11,12 +10,10 @@ uv add "evaldata[bigquery]"
 
 ## What this guide covers
 
-- **Query pushdown** — `row_count`, `not_null`, and `unique` expectations run as SQL in BigQuery.
-- **Authentication is configured separately** — `bigquery_platform(...)` describes the project,
-  dataset, and location; you set up authentication through Application Default Credentials (see
-  [Authentication](#authentication)).
-- **Temporary setup** — the fixture creates a table for the eval and drops it afterward, leaving
-  nothing behind.
+- **Data checks.** `row_count`, `not_null`, and `unique` expectations run in BigQuery.
+- **Authentication.** `bigquery_platform(...)` stores the project, dataset, and location.
+  [Application Default Credentials](#authentication) provide the identity.
+- **Test data.** The fixture creates a table for the eval, then drops it.
 
 ## Configure a connection
 
@@ -33,23 +30,22 @@ platform = bigquery_platform(
 )
 ```
 
-`project` is the Google Cloud project that jobs run and bill against.
+`project` is the Google Cloud project where BigQuery runs and bills query jobs.
 
-`dataset` sets the default dataset, so SQL can reference tables without a dataset prefix. `location`
-pins the location jobs run in, for example `US` or `EU`.
+`dataset` is the default dataset, so SQL can reference tables without a dataset prefix. `location`
+sets the job location, for example `US` or `EU`.
 
-When an eval runs, `resolve(platform)` opens the client using the credentials configured under
-[Authentication](#authentication).
+When an eval runs, `resolve(platform)` creates a client with the configured credentials.
 
 ## Authentication
 
 `evaldata` resolves credentials through Application Default Credentials (ADC). Set one of these up:
 
-- **gcloud** — run `gcloud auth application-default login` on your workstation.
-- **Service account key** — set `GOOGLE_APPLICATION_CREDENTIALS` to the path of a service-account
+- **gcloud.** Run `gcloud auth application-default login` on your workstation.
+- **Service account key.** Set `GOOGLE_APPLICATION_CREDENTIALS` to the path of a service-account
   JSON key file.
-- **Workload Identity** — on Google Cloud or in CI with Workload Identity Federation, ADC resolves
-  from the attached identity with no key file.
+- **Workload Identity.** On Google Cloud or in CI with Workload Identity Federation, ADC uses the
+  attached identity.
 
 ## Write the eval
 
@@ -77,10 +73,9 @@ evaldata doctor \
 ```
 
 The BigQuery doctor flags also read from `BIGQUERY_PROJECT`, `BIGQUERY_DATASET`, and
-`BIGQUERY_LOCATION`. Once those are set, `evaldata doctor` checks the connection without extra
-flags.
+`BIGQUERY_LOCATION`. With these set, `evaldata doctor` checks the connection without extra flags.
 
 ## Next steps
 
-- [Concepts](../concepts.md) — platforms, scorers, and expected types in depth.
-- [Platforms reference](../reference/platforms.md) — the adapter API.
+- [Concepts](../concepts.md): platforms, scorers, and expected types in depth.
+- [Platforms reference](../reference/platforms.md): the adapter API.

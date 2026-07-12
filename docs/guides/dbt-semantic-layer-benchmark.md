@@ -1,9 +1,8 @@
 # Reproduce dbt's Semantic Layer benchmark
 
 dbt Labs published a benchmark of LLM-generated Semantic Layer queries on an ACME Insurance dataset,
-run through dbt Cloud. `evaldata` reproduces it locally on DuckDB — the same dataset, the same
-questions, and the same model — as `pytest` tests, scored by resolve-and-compare,
-run-and-compare, and an optional grader.
+run through dbt Cloud. `evaldata` reproduces the dataset, questions, and model locally on DuckDB as
+`pytest` tests. It scores them with resolve-and-compare, run-and-compare, and an optional grader.
 
 ## The result
 
@@ -19,18 +18,18 @@ not accept `temperature=0`), so each question is run 10 times and the pass rate 
 | jaffle (authored) | `openai/gpt-4o-mini` | 31.2% (10/32) |
 
 Of the 110 ACME runs, 44 were decided by the resolve-and-compare tier and 62 by run-and-compare; the
-judge was never needed — so `--no-judge` yields the same number with no grader call.
+judge was never needed. `--no-judge` yields the same number with no grader call.
 
 ## How the reproduction is built
 
 - **Dataset and questions.** dbt's ACME project (`dbt-labs/semantic-layer-llm-benchmarking`) is
   ported to dbt-duckdb, and its exact 11-question suite (`dbt-labs/dbt-llm-sl-bench`) is committed as
   `acme_bench.yml`. Both are Apache-2.0 (see the fixture's `NOTICE.md`).
-- **Faithful golds.** Each question's gold MetricFlow query returns the same rows as dbt's gold SQL
+- **Gold-query check.** Each question's gold MetricFlow query returns the same rows as dbt's gold SQL
   on the same warehouse; the e2e asserts this row for row.
-- **Sound scoring.** The run-and-compare tier aligns columns by value, compares numbers within a
-  tolerance, and accepts a redundant extra grouping column — so a correct answer under a different
-  metric label or number format is not marked wrong.
+- **Result comparison.** The run-and-compare tier aligns columns by value, compares numbers within
+  a tolerance, and accepts a redundant extra grouping column. A correct answer with a different
+  metric label or number format still passes.
 
 ## Run it yourself
 
@@ -50,10 +49,10 @@ uv run --all-extras --group fixtures evaldata sl-bench tests/dbt/fixtures/acme_i
   --json acme.json
 ```
 
-`sl-bench` runs the suite once; the table above reports the mean over 10 runs, so a single run
-varies by a few points at this temperature.
+`sl-bench` runs the suite once. The table above reports the mean over 10 runs, so a single run can
+vary by a few points at this temperature.
 
 ## Next steps
 
-- [Evaluate dbt Semantic Layer queries](dbt-semantic-layer.md) — the eval workflow on your own project.
-- [dbt reference](../reference/dbt.md) — the Semantic Layer types, loaders, and scorers.
+- [Evaluate dbt Semantic Layer queries](dbt-semantic-layer.md): the eval workflow on your own project.
+- [dbt reference](../reference/dbt.md): the Semantic Layer types, loaders, and scorers.

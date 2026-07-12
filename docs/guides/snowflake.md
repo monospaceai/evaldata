@@ -1,7 +1,6 @@
 # Evaluate text-to-SQL on Snowflake
 
-Run SQL evals on Snowflake. The example uses fixed SQL so the guide can focus on the adapter:
-`evaldata` runs the checks as SQL in the warehouse instead of pulling rows back into Python.
+This guide shows how to connect, authenticate, and run SQL evals in Snowflake.
 
 ## Prerequisites
 
@@ -11,13 +10,10 @@ uv add "evaldata[snowflake]"
 
 ## What this guide covers
 
-- **Warehouse pushdown** — `row_count`, `not_null`, and `unique` expectations run as SQL in
-  Snowflake.
-- **Authentication is configured separately** — `snowflake_platform(...)` describes the account,
-  warehouse, and role; you set up authentication through environment variables (see
-  [Authentication](#authentication)).
-- **Temporary setup** — the fixture creates a temporary table for the eval and leaves no table
-  behind.
+- **Data checks.** `row_count`, `not_null`, and `unique` expectations run in Snowflake.
+- **Authentication.** `snowflake_platform(...)` stores the account, warehouse, and role.
+  [Environment variables](#authentication) provide the identity.
+- **Test data.** The fixture creates a temporary table for the eval, then removes it.
 
 ## Configure a connection
 
@@ -37,21 +33,20 @@ platform = snowflake_platform(
 )
 ```
 
-`account` is the Snowflake account identifier, for example `myorg-myaccount`. Do not include the
+`account` is the Snowflake account identifier, for example `myorg-myaccount`. Omit the
 `.snowflakecomputing.com` suffix.
 
 `warehouse`, `role`, `database`, and `schema` set the session defaults. Include `database` and
 `schema` when your SQL uses unqualified table names.
 
-When an eval runs, `resolve(platform)` opens the connection using the authentication configured
-under [Authentication](#authentication).
+When an eval runs, `resolve(platform)` opens a connection with the configured credentials.
 
 ## Authentication
 
-- **Password** — set `SNOWFLAKE_PASSWORD`, and pass `user` to `snowflake_platform(...)`.
-- **Key pair** — set `SNOWFLAKE_PRIVATE_KEY_FILE` to a PEM-encoded PKCS#8 private key. If the key is
+- **Password.** Set `SNOWFLAKE_PASSWORD`, and pass `user` to `snowflake_platform(...)`.
+- **Key pair.** Set `SNOWFLAKE_PRIVATE_KEY_FILE` to a PEM-encoded PKCS#8 private key. If the key is
   encrypted, also set `SNOWFLAKE_PRIVATE_KEY_FILE_PWD`.
-- **Workload identity (OIDC)** — pass `authenticator="WORKLOAD_IDENTITY"` and
+- **Workload identity (OIDC).** Pass `authenticator="WORKLOAD_IDENTITY"` and
   `workload_identity_provider="OIDC"` to `snowflake_platform(...)`, then set `SNOWFLAKE_TOKEN` to the
   token issued by your CI provider.
 
@@ -90,9 +85,9 @@ The Snowflake doctor flags also read from environment variables:
 - `SNOWFLAKE_WAREHOUSE`
 - `SNOWFLAKE_ROLE`
 
-Once those are set, `evaldata doctor` checks the connection without extra flags.
+With these set, `evaldata doctor` checks the connection without extra flags.
 
 ## Next steps
 
-- [Concepts](../concepts.md) — platforms, scorers, and expected types in depth.
-- [Platforms reference](../reference/platforms.md) — the adapter API.
+- [Concepts](../concepts.md): platforms, scorers, and expected types in depth.
+- [Platforms reference](../reference/platforms.md): the adapter API.

@@ -20,8 +20,8 @@ dbt build          # or: dbt compile
 dbt docs generate  # writes catalog.json with resolved column types
 ```
 
-`catalog.json` is optional. Without it, `evaldata` uses the column types declared in your model
-YAML instead of the types the warehouse resolved.
+`catalog.json` is optional. It gives `evaldata` the column types resolved by the warehouse.
+Without it, `evaldata` uses the types declared in your model YAML.
 
 ## Write the cases file
 
@@ -52,7 +52,7 @@ evaldata dbt-bench path/to/dbt_project --model openai/gpt-4o-mini --cases cases.
 `evaldata` reads the warehouse connection from the project's dbt profile, sends the project's
 schema to the model, runs the model's SQL for each question, and compares the result to the gold
 query.
-It reports the execution accuracy — the fraction of questions whose result matches:
+It reports execution accuracy: the fraction of questions whose result matches.
 
 ```
 EX (dbt): 72.0% (18/25)
@@ -60,14 +60,14 @@ EX (dbt): 72.0% (18/25)
 
 `--model` is any [litellm](https://docs.litellm.ai/docs/providers) model id. Other options:
 
-- `--mode model` — skip the cases file; instead take every documented model, asking its
+- `--mode model`: skip the cases file; instead take every documented model, asking its
   description as the question and using its compiled SQL as the gold answer.
-- `--mode tests` — instead check each documented model's result against its `not_null` and
-  `unique` data tests, rather than against a gold query.
-- `--target-dir DIR` — where the artifacts live, if not `<project>/target`.
-- `--profiles-dir DIR` / `--target NAME` — find and select the dbt profile target.
-- `--limit N` — run only the first `N` questions.
-- `--json PATH` — also write the scores and every result to a JSON file.
+- `--mode tests`: check each documented model's result against its `not_null` and `unique` data
+  tests instead of a gold query.
+- `--target-dir DIR`: where the artifacts live, if not `<project>/target`.
+- `--profiles-dir DIR` / `--target NAME`: find and select the dbt profile target.
+- `--limit N`: run only the first `N` questions.
+- `--json PATH`: also write the scores and every result to a JSON file.
 
 ## Check the connection
 
@@ -79,8 +79,8 @@ evaldata doctor --dbt-project path/to/dbt_project
 
 ## Run it in `pytest`
 
-Run dbt evals as `pytest` tests with your own prompt, fine-tune, agent, or different
-scorer — by loading the cases yourself:
+Run dbt evals as `pytest` tests with your own prompt, fine-tune, agent, or scorer. Load the cases
+yourself:
 
 ```python
 import pytest
@@ -107,10 +107,10 @@ def test_dbt_question(case):
 `load_dbt` and `platform_from_profile` return a `DbtError` when the project can't be read. The
 cases are ordinary `EvalCase` objects, so any scorer works.
 
-## Runnable example
+## Bundled example
 
-A self-contained version that runs offline: a small jaffle-shop dbt project ships with it and
-`StubLlm` stands in for the model, so no external warehouse service or API key is needed.
+The bundled example includes a small jaffle-shop dbt project, a DuckDB database, and fixed model
+responses.
 
 ```python
 --8<-- "examples/10_dbt/test_text_to_sql.py"
@@ -127,6 +127,6 @@ A self-contained version that runs offline: a small jaffle-shop dbt project ship
 
 ## Next steps
 
-- [Concepts](../concepts.md) — solvers, scorers, and expected types in depth.
-- [Scorers reference](../reference/scorers.md) — `ExecutionAccuracy` and its options.
-- [dbt reference](../reference/dbt.md) — `DbtContext`, `load_dbt`, and `platform_from_profile`.
+- [Concepts](../concepts.md): solvers, scorers, and expected types in depth.
+- [Scorers reference](../reference/scorers.md): `ExecutionAccuracy` and its options.
+- [dbt reference](../reference/dbt.md): `DbtContext`, `load_dbt`, and `platform_from_profile`.

@@ -17,8 +17,8 @@ to `PUBLIC` by default) and access to a semantic model to answer against.
 ## Provision a semantic view
 
 Cortex Analyst answers against a semantic model. This guide uses a
-[semantic view](https://docs.snowflake.com/en/user-guide/views-semantic/overview) — a native
-object created with DDL. The example is a two-table jaffle shop:
+[semantic view](https://docs.snowflake.com/en/user-guide/views-semantic/overview), a native object
+created with DDL. The example is a two-table jaffle shop:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS JAFFLE_SHOP_DB;
@@ -88,10 +88,10 @@ tests Cortex Analyst without spending credits on every change.
 
 evaldata includes an off-by-default live benchmark of five questions against this semantic view. It
 scored **100% (5/5)** execution accuracy on 2026-07-08. Cortex Analyst generates SQL with a model,
-so that number is a dated snapshot — run the benchmark on your own account to reproduce it.
+so the number is a dated snapshot. Run the benchmark on your own account to reproduce it.
 
 ## Next steps
 
-- [Support & cost policy](../support-policy.md) — how live and replayed tests are structured.
-- [Evaluate against Snowflake](snowflake.md) — the adapter, authentication, and warehouse pushdown.
-- [Cortex reference](../reference/cortex.md) — the solver and client API.
+- [Support & cost policy](../support-policy.md): how live and replayed tests are structured.
+- [Evaluate against Snowflake](snowflake.md): connection, authentication, and warehouse checks.
+- [Cortex reference](../reference/cortex.md): the solver and client API.
