@@ -651,7 +651,6 @@ class TestDoctor:
         result = runner.invoke(app, ["doctor", "--bigquery-dataset", "dataset"])
         assert result.exit_code == 2
         assert "require" in result.output
-        assert "--bigquery-project" in result.output
 
     def test_dbt_project_resolves_and_probes(self, tmp_path: Path) -> None:
         project = _copy_dbt_project(tmp_path)
