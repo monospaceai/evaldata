@@ -1,6 +1,6 @@
 [project]
 name = "evaldata"
-version = "0.6.0"
+version = "0.7.0"
 description = "Evaluate AI-generated SQL and text-to-SQL systems with pytest."
 readme = "README.md"
 license = "Apache-2.0"

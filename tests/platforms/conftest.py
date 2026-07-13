@@ -170,7 +170,7 @@ class BigQueryFixtures:
 
     BigQuery's driver reports precise result-column types directly, so `reports_types` is `True`
     with no probe needed. `UNNEST` supplies the row-list form GoogleSQL lacks as `VALUES ... AS
-    t(n)`; the `slow_query` counts a large generated array, which scans ~0 bytes yet runs long
+    t(n)`; the `slow_query` aggregates a large generated array, which scans ~0 bytes yet runs long
     enough to overrun a sub-second budget.
     """
 
@@ -183,7 +183,7 @@ class BigQueryFixtures:
     duplicate_column_names: str = "SELECT 1 AS x, 2 AS x"
     references_missing_table: str = "SELECT * FROM does_not_exist_xyz"
     parse_error: str = "SLECT 1"
-    slow_query: str = "SELECT COUNT(*) AS n FROM UNNEST(GENERATE_ARRAY(1, 100000000))"
+    slow_query: str = "SELECT SUM(n) AS n FROM UNNEST(GENERATE_ARRAY(1, 10000000)) AS n"
     reports_types: bool = True
     renames_duplicate_columns: bool = True
 
