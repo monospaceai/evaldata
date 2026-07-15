@@ -96,6 +96,7 @@ nav:
       - Evaluate text-to-SQL on Snowflake: guides/snowflake.md
       - Evaluate text-to-SQL on BigQuery: guides/bigquery.md
       - Evaluate Snowflake Cortex Analyst: guides/cortex.md
+      - Evaluate SQL with Pydantic Evals: guides/pydantic-evals.md
       - Evaluate text-to-SQL with dbt: guides/dbt.md
       - Evaluate dbt Semantic Layer queries: guides/dbt-semantic-layer.md
       - Reproduce dbt's Semantic Layer benchmark: guides/dbt-semantic-layer-benchmark.md
@@ -115,4 +116,5 @@ nav:
       - Equivalence: reference/equivalence.md
       - Platforms: reference/platforms.md
       - Cortex Analyst: reference/cortex.md
+      - Pydantic Evals: reference/pydantic-evals.md
       - dbt: reference/dbt.md

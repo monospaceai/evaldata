@@ -70,6 +70,9 @@ dbt = [
 dbt-sl = [
     "dbt-metricflow>=0.13",
 ]
+pydantic-evals = [
+    "pydantic-evals>=2.10.0",
+]
 tracing = [
     "openinference-instrumentation>=0.1.52",
     "opentelemetry-exporter-otlp>=1.42.1",
@@ -79,7 +82,7 @@ all-platforms = [
     "evaldata[postgres,snowflake,bigquery,databricks]",
 ]
 all = [
-    "evaldata[all-platforms,litellm,tracing,benchmarks,dbt,dbt-sl,cortex]",
+    "evaldata[all-platforms,litellm,tracing,benchmarks,dbt,dbt-sl,cortex,pydantic-evals]",
 ]
 
 [project.urls]
