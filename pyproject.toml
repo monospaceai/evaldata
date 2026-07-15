@@ -1,7 +1,7 @@
 [project]
 name = "evaldata"
 version = "0.7.0"
-description = "Evaluate AI-generated SQL and text-to-SQL systems with pytest."
+description = "Evaluate AI-generated SQL with pytest."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -35,7 +35,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "pytest>=9.0.3",
     "rich>=15.0.0",
-    "sqlglot>=30.9.0",
+    "sqlglot>=30.12.0",
     "typer>=0.25.1",
 ]
 

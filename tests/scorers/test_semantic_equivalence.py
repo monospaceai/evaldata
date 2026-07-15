@@ -291,21 +291,8 @@ class TestSemanticEquivalence:
         assert score.explanation == "no semantic check could confirm equivalence"
 
 
-def test_sqlglot_subtraction_canary() -> None:
-    """Fails once SQLGlot fixes its `simplify_equality` subtraction bug upstream.
-
-    `_PatchedSimplifier` exists solely to correct that bug. When this assertion flips, the
-    upstream fix has shipped and both the patch and this test can be removed. Fix:
-    https://github.com/tobymao/sqlglot/pull/7791
-    """
-    from sqlglot import parse_one
-    from sqlglot.optimizer.simplify import simplify
-
-    assert simplify(parse_one("0 - a = 1")).sql() == "a = 1"
-
-
-class TestSubtractionPatch:
-    """The local SQLGlot subtraction fix keeps AST equivalence correct and sound."""
+class TestSubtractionEquivalence:
+    """AST equivalence folds `constant - variable` comparisons correctly and soundly."""
 
     def test_confirms_equivalent_subtraction(self) -> None:
         case = _gold_case("SELECT a FROM t WHERE a = -1")
