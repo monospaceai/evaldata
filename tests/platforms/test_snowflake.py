@@ -268,6 +268,46 @@ class TestLifecycle:
 @pytest.mark.e2e
 @pytest.mark.cloud
 @pytest.mark.snowflake
+class TestConcurrencySmoke:
+    """Tiny concurrent-cases smoke test to catch a per-member thread-safety bug (cost-sensitive)."""
+
+    def test_trivial_selects_run_concurrently(self) -> None:
+        import os
+
+        from evaldata import CallableSolver, EvalCase, ExecutionAccuracy, run_benchmark
+        from evaldata.platforms import snowflake_platform
+        from evaldata.platforms.registry import close_all
+        from evaldata.types import GoldQuery
+
+        platform = snowflake_platform(
+            name="sf-conc-smoke",
+            account=os.environ["SNOWFLAKE_ACCOUNT"],
+            user=os.environ.get("SNOWFLAKE_USER"),
+            warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE"),
+            role=os.environ.get("SNOWFLAKE_ROLE"),
+            database=os.environ.get("SNOWFLAKE_DATABASE"),
+            schema=os.environ.get("SNOWFLAKE_SCHEMA"),
+        )
+        try:
+            cases = [
+                EvalCase(
+                    id=f"n-{n}",
+                    input=str(n),
+                    expected=GoldQuery(sql=f"SELECT {n} AS n"),
+                    platform=platform,
+                )
+                for n in range(4)
+            ]
+            solver = CallableSolver(lambda c: f"SELECT {c.input} AS n")
+            summary = run_benchmark(cases, solver, scorers=[ExecutionAccuracy()], max_concurrency=4)
+            assert summary.passed == summary.total == 4
+        finally:
+            close_all()
+
+
+@pytest.mark.e2e
+@pytest.mark.cloud
+@pytest.mark.snowflake
 class TestTypeResolutionLive:
     """Live schema resolution against a real account; unit tests use fakes.
 

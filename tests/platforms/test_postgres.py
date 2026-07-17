@@ -3,9 +3,13 @@
 import pytest
 from sqlglot import exp
 
+from evaldata import CallableSolver, EvalCase, ExecutionAccuracy, run_benchmark
+from evaldata.platforms import postgres_platform
 from evaldata.platforms.base import PlatformAdapter
+from evaldata.platforms.registry import close_all, resolve
+from evaldata.types import GoldQuery
 
-from .conftest import connect_postgres
+from .conftest import _postgres_dsn, connect_postgres
 
 
 @pytest.mark.e2e
@@ -82,3 +86,33 @@ class TestPostgresLifecycle:
             assert result.rows == []
         finally:
             adapter.close()
+
+
+@pytest.mark.e2e
+class TestPostgresConcurrency:
+    """Dedicated-connection pool: concurrent cases each get their own connection and stay correct."""
+
+    def test_concurrent_cases_score_independently(self) -> None:
+        connect_postgres().close()  # fail early if Postgres is unreachable
+        platform = postgres_platform(name="pg-conc-e2e", conninfo=_postgres_dsn())
+        utility = resolve(platform)
+        utility.execute("DROP TABLE IF EXISTS eval_conc")
+        utility.execute("CREATE TABLE eval_conc (id INT, grp INT)")
+        utility.execute("INSERT INTO eval_conc SELECT g, g % 4 FROM generate_series(0, 199) AS g")
+        try:
+            cases = [
+                EvalCase(
+                    id=f"grp-{g}-{i}",
+                    input=str(g),
+                    expected=GoldQuery(sql=f"SELECT count(*) AS c FROM eval_conc WHERE grp = {g}"),
+                    platform=platform,
+                )
+                for i in range(3)
+                for g in range(4)
+            ]
+            solver = CallableSolver(lambda c: f"SELECT count(*) AS c FROM eval_conc WHERE grp = {c.input}")
+            summary = run_benchmark(cases, solver, scorers=[ExecutionAccuracy()], max_concurrency=4)
+            assert summary.passed == summary.total == 12
+        finally:
+            resolve(platform).execute("DROP TABLE IF EXISTS eval_conc")
+            close_all()

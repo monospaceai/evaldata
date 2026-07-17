@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from typing import Any
 
+import anyio
 import pytest
 from pydantic_evals.evaluators import EvaluatorContext
 from pydantic_evals.otel import SpanTreeRecordingError
@@ -161,3 +162,38 @@ def test_end_to_end_dataset_evaluate_sync() -> None:
     report = dataset.evaluate_sync(lambda sql: sql)
     verdicts = {case.name: case.assertions["SqlEquivalence"].value for case in report.cases}
     assert verdicts == {"correct": True, "wrong": False}
+
+
+@pytest.mark.usefixtures("platforms")
+def test_evaluate_async_offloads_to_a_worker_thread() -> None:
+    platform = _seed("pe_async")
+    result = anyio.run(
+        SqlEquivalence(platform=platform).evaluate_async, _ctx("SELECT id, region FROM t", "SELECT id, region FROM t")
+    )
+    assert result.value is True
+    assert result.reason
+
+
+@pytest.mark.usefixtures("platforms")
+def test_concurrent_dataset_scores_each_case_correctly() -> None:
+    # Several DuckDB cases run under Pydantic Evals concurrency: the offloaded `evaluate_async`
+    # acquires a session per case, so verdicts stay correct without a serialization lock.
+    platform = _seed("pe_concurrent")
+    cases = [
+        Case(name=f"ok-{i}", inputs="SELECT id, region FROM t", expected_output="SELECT id, region FROM t")
+        for i in range(4)
+    ] + [
+        Case(
+            name=f"bad-{i}",
+            inputs="SELECT id, region FROM t WHERE id = 1",
+            expected_output="SELECT id, region FROM t",
+        )
+        for i in range(4)
+    ]
+    dataset: Dataset[str, str, Any] = Dataset(
+        name="concurrent", cases=cases, evaluators=[SqlEquivalence(platform=platform)]
+    )
+    report = dataset.evaluate_sync(lambda sql: sql, max_concurrency=4)
+    verdicts = {case.name: case.assertions["SqlEquivalence"].value for case in report.cases}
+    assert all(verdicts[f"ok-{i}"] is True for i in range(4))
+    assert all(verdicts[f"bad-{i}"] is False for i in range(4))

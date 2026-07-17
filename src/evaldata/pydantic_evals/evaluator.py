@@ -1,9 +1,9 @@
 """`SqlEquivalence`: a pydantic-evals `Evaluator` that scores generated SQL by execution."""
 
-import threading
 from dataclasses import dataclass
 from typing import Any
 
+import anyio.to_thread
 from pydantic_evals.evaluators import EvaluationReason, Evaluator, EvaluatorContext
 
 from evaldata.core.runner import evaluate_case
@@ -20,10 +20,6 @@ from evaldata.types import (
     UntypedResultSet,
 )
 
-# Serialises scoring across cases: pydantic-evals runs cases concurrently, but a resolved
-# platform adapter's connection is not thread-safe.
-_SCORE_LOCK = threading.Lock()
-
 _ACCEPTED_EXPECTED = "a str (gold SQL), GoldQuery, UntypedResultSet, or TypedResultSet"
 
 
@@ -37,9 +33,9 @@ class SqlEquivalence(Evaluator[Any, str, Any]):
     `value` is the pass/fail and whose `reason` explains it. Invalid generated SQL scores as a
     failure rather than raising; a missing or unusable case contract raises `ValueError`.
 
-    Scoring is serialised across concurrently-run cases because the platform adapter holds a
-    single, non-thread-safe connection. For parallelism, shard cases across distinct
-    `PlatformRef` names or use evaldata's benchmark runner.
+    Runs safely under Pydantic Evals concurrency: each case acquires its own platform session
+    for the duration of scoring, so `max_concurrency` parallelizes warehouse execution up to
+    the platform's per-name pool size.
 
     Attributes:
         platform: The platform to execute the generated and reference SQL against.
@@ -50,6 +46,17 @@ class SqlEquivalence(Evaluator[Any, str, Any]):
     def __post_init__(self) -> None:
         """Build the equivalence scorer once, off the serialized dataclass fields."""
         self._scorer = observed_equivalence()
+
+    async def evaluate_async(self, ctx: EvaluatorContext[Any, str, Any]) -> EvaluationReason:
+        """Score `ctx` on a worker thread so Pydantic Evals runs cases in parallel.
+
+        Args:
+            ctx: The evaluation context passed straight to `evaluate`.
+
+        Returns:
+            The `EvaluationReason` produced by `evaluate`.
+        """
+        return await anyio.to_thread.run_sync(self.evaluate, ctx)
 
     def evaluate(self, ctx: EvaluatorContext[Any, str, Any]) -> EvaluationReason:
         """Score `ctx.output` against `ctx.expected_output` by executing both on `platform`.
@@ -79,8 +86,7 @@ class SqlEquivalence(Evaluator[Any, str, Any]):
             platform=self.platform,
         )
         solver = CallableSolver(lambda _case: ctx.output)
-        with _SCORE_LOCK:
-            evaluation = evaluate_case(case, solver, scorers=[self._scorer])
+        evaluation = evaluate_case(case, solver, scorers=[self._scorer])
         score = evaluation.report.scores[0]
         return EvaluationReason(value=score.passed, reason=_reason(score))
 

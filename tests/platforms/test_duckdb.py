@@ -1,7 +1,10 @@
-"""DuckDB-specific tests: native-type-string fidelity and file-backed lifecycle."""
+"""DuckDB-specific tests: native-type-string fidelity, file-backed lifecycle, and shared cursors."""
 
+import threading
+import time
 from pathlib import Path
 
+import duckdb
 import pytest
 from sqlglot import exp
 
@@ -69,3 +72,68 @@ class TestDuckDBFilePath:
             result = second.execute("SELECT x FROM t")
             assert result.error is None
             assert result.rows == [{"x": 42}]
+
+
+@pytest.mark.unit
+class TestDuckDBSharedCursor:
+    """`from_connection` adapters share one parent's in-process database and isolate interrupts."""
+
+    def test_members_share_the_parent_database(self) -> None:
+        parent = duckdb.connect(":memory:")
+        try:
+            seeder = DuckDBAdapter.from_connection(parent.cursor())
+            reader = DuckDBAdapter.from_connection(parent.cursor())
+            seeder.execute("CREATE TABLE t (n INTEGER); INSERT INTO t VALUES (1), (2), (3)")
+            result = reader.execute("SELECT count(*) AS c FROM t")
+            assert result.error is None
+            assert result.rows == [{"c": 3}]
+        finally:
+            parent.close()
+
+    def test_closing_a_member_does_not_close_the_parent(self) -> None:
+        parent = duckdb.connect(":memory:")
+        try:
+            member = DuckDBAdapter.from_connection(parent.cursor())
+            member.close()
+            # The parent (and any sibling) still works after a member cursor is closed.
+            assert parent.execute("SELECT 1 AS n").fetchall() == [(1,)]
+            sibling = DuckDBAdapter.from_connection(parent.cursor())
+            assert sibling.execute("SELECT 1 AS n").error is None
+        finally:
+            parent.close()
+
+    def test_interrupt_isolation_between_sibling_cursors(self) -> None:
+        # Canary: interrupting one cursor must not cancel a concurrent query on a sibling
+        # cursor of the same parent. The pool's shared-cursor design (and DuckDB budgets)
+        # relies on this; a future DuckDB bump that changes it should fail here.
+        parent = duckdb.connect(":memory:")
+        slow = (
+            "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 1000000000) "
+            "SELECT count(*) AS n FROM r"
+        )
+        a = parent.cursor()
+        b = parent.cursor()
+        results: dict[str, object] = {}
+
+        def run(cursor: duckdb.DuckDBPyConnection, key: str, sql: str) -> None:
+            try:
+                results[key] = cursor.execute(sql).fetchall()
+            except duckdb.InterruptException:
+                results[key] = "interrupted"
+
+        interrupted = threading.Thread(target=run, args=(a, "a", slow))
+        sibling = threading.Thread(target=run, args=(b, "b", "SELECT count(*) AS n FROM range(3000000)"))
+        try:
+            interrupted.start()
+            sibling.start()
+            # Interrupt A repeatedly until its thread ends, so the interrupt reliably lands
+            # regardless of scheduling (no fragile single sleep).
+            while interrupted.is_alive():
+                a.interrupt()
+                time.sleep(0.01)
+            interrupted.join(timeout=5)
+            sibling.join(timeout=5)
+        finally:
+            parent.close()
+        assert results["a"] == "interrupted"
+        assert results["b"] == [(3000000,)]  # sibling completed; it was not cancelled

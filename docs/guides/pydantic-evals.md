@@ -75,13 +75,33 @@ for case in report.cases:
     print(case.name, result.value, result.reason)
 ```
 
-## Serialization caveat
+## Concurrency
 
-Scoring runs against a warehouse connection that evaldata caches per platform name and that is not
-safe to share across threads. Pydantic Evals runs cases concurrently, but `SqlEquivalence` scores
-under a lock, so warehouse scoring is **serialized** regardless of `max_concurrency`. For real
-parallelism, shard cases across platforms with distinct names, or use evaldata's own
-[benchmark runner](benchmarks.md). Call `close_all()` when done to close the cached connections.
+`SqlEquivalence` works with Pydantic Evals concurrency out of the box: pass `max_concurrency` to
+`evaluate_sync` and cases score in parallel. Each case acquires its own warehouse session from a
+per-platform-name connection pool for the duration of scoring and returns it afterwards, so nothing
+is shared unsafely across threads. Effective parallelism is `min(max_concurrency, pool size)`; extra
+cases queue until a session frees up, which also bounds warehouse load.
+
+```python
+report = dataset.evaluate_sync(task, max_concurrency=8)
+```
+
+Each platform has a default pool size — the most concurrent sessions one platform name opens:
+
+| Engine | Default pool size |
+| --- | --- |
+| DuckDB | 8 |
+| Postgres, Snowflake, BigQuery, Databricks | 4 |
+| SQLite | 1 (serial) |
+
+DuckDB pool members are cursors of one shared in-process database, and DuckDB executes their queries
+in parallel, so concurrency is a real speed-up (not just overlap). Two caveats when scoring under
+concurrency: a case's `cost_budget.max_seconds` is wall-clock and is contended by other in-flight
+cases, so a busy pool can make a query overrun sooner; and each dedicated-connection session is
+independent, so session-local state (temporary tables, `SET` parameters) does not carry across cases
+— seed regular tables (server-side, or the DuckDB shared parent) instead. Call `close_all()` when
+done to close every pooled connection.
 
 ## Next steps
 

@@ -15,7 +15,7 @@ from evaldata.platforms import (
     resolve,
     snowflake_platform,
 )
-from evaldata.platforms.registry import close_all
+from evaldata.platforms.registry import acquired, close_all, pool_for
 from evaldata.types import PlatformRef
 
 
@@ -100,6 +100,17 @@ class TestResolve:
         with pytest.raises(RuntimeError, match="requires the 'postgres' extra"):
             resolve(postgres_platform(name="pg-missing-extra", conninfo=""))
 
+    def test_resolves_postgres_through_registry(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Mock psycopg so the registry's postgres dispatch builds an adapter without a live server.
+        from evaldata.platforms.postgres import PostgresAdapter
+
+        monkeypatch.setattr("psycopg.connect", lambda *args, **kwargs: types.SimpleNamespace(close=lambda: None))
+        adapter = resolve(postgres_platform(name="pg-build", conninfo="host=db"))
+        try:
+            assert isinstance(adapter, PostgresAdapter)
+        finally:
+            close_all()
+
     def test_databricks_extra_missing_raises_runtime_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Simulate the 'databricks' extra not being installed: importing the adapter fails.
         monkeypatch.setitem(sys.modules, "evaldata.platforms.databricks", None)
@@ -155,6 +166,68 @@ class TestResolve:
             assert isinstance(adapter, BigQueryAdapter)
         finally:
             close_all()
+
+
+@pytest.mark.unit
+class TestAcquired:
+    def test_yields_a_working_pool_member(self) -> None:
+        platform = duckdb_platform(name="acq-work")
+        with acquired(platform) as member:
+            member.execute("CREATE TABLE t (n INTEGER); INSERT INTO t VALUES (1), (2)")
+            result = member.execute("SELECT count(*) AS c FROM t")
+        assert result.error is None
+        assert result.rows == [{"c": 2}]
+
+    def test_resolve_seed_is_visible_to_an_acquired_member(self) -> None:
+        # Seeding through `resolve(platform).execute(<seed>)` must be visible to a member
+        # acquired for scoring (shared DuckDB parent).
+        platform = duckdb_platform(name="acq-seed")
+        resolve(platform).execute("CREATE TABLE t (n INTEGER); INSERT INTO t VALUES (1), (2), (3)")
+        with acquired(platform) as member:
+            result = member.execute("SELECT count(*) AS c FROM t")
+        assert result.rows == [{"c": 3}]
+
+    def test_resolve_returns_utility_never_a_checkout_member(self) -> None:
+        platform = duckdb_platform(name="acq-utility")
+        utility = resolve(platform)
+        with acquired(platform) as member:
+            assert member is not utility
+
+    def test_serial_acquires_reuse_one_member(self) -> None:
+        platform = duckdb_platform(name="acq-reuse")
+        with acquired(platform) as first:
+            first_id = id(first)
+        with acquired(platform) as second:
+            assert id(second) == first_id  # released member reused on the next serial acquire
+
+    def test_member_is_released_even_when_the_block_raises(self) -> None:
+        platform = duckdb_platform(name="acq-raise")
+        with pytest.raises(RuntimeError, match="boom"), acquired(platform) as first:
+            first_id = id(first)
+            msg = "boom"
+            raise RuntimeError(msg)
+        with acquired(platform) as second:
+            assert id(second) == first_id  # the raising block still returned its member
+
+    def test_acquire_from_a_dedicated_pool(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A dedicated-connection engine (Snowflake) builds an independent member per checkout;
+        # the fake connector keeps this off any live account.
+        monkeypatch.setattr("snowflake.connector.connect", lambda **kwargs: types.SimpleNamespace(close=lambda: None))
+        platform = snowflake_platform(name="acq-dedicated", account="acme-test")
+        with acquired(platform) as first, acquired(platform) as second:
+            assert first is not second  # each concurrent checkout is its own connection
+
+
+@pytest.mark.unit
+class TestPoolFor:
+    def test_returns_the_same_pool_for_a_name(self) -> None:
+        platform = duckdb_platform(name="pf-cached")
+        assert pool_for(platform) is pool_for(platform)
+
+    def test_same_name_different_config_raises(self) -> None:
+        pool_for(duckdb_platform(name="pf-guard", path=":memory:"))
+        with pytest.raises(ValueError, match="already bound to a different configuration"):
+            pool_for(duckdb_platform(name="pf-guard", path="/tmp/other.duckdb"))
 
 
 @pytest.mark.e2e

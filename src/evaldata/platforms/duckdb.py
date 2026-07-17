@@ -17,6 +17,24 @@ class DuckDBAdapter:
         """Open a DuckDB connection to `database` (default `:memory:`)."""
         self._conn = duckdb.connect(database)
 
+    @classmethod
+    def from_connection(cls, connection: duckdb.DuckDBPyConnection) -> "DuckDBAdapter":
+        """Build an adapter over an existing DuckDB connection or `.cursor()` handle.
+
+        The handle is adopted as-is rather than reopened, so sibling cursors of one parent
+        share its in-process database. `close` releases only this handle, never a parent it was
+        cursored from.
+
+        Args:
+            connection: A live DuckDB connection or cursor handle to execute against.
+
+        Returns:
+            A `DuckDBAdapter` bound to `connection`.
+        """
+        adapter = cls.__new__(cls)
+        adapter._conn = connection
+        return adapter
+
     def cancel(self) -> None:
         """Interrupt the query currently executing on this connection.
 

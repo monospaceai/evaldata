@@ -1,10 +1,16 @@
 """Platform-reference builders and `PlatformRef` -> live `PlatformAdapter` resolution."""
 
 import os
+import threading
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import assert_never
+
+import duckdb
 
 from evaldata.platforms.base import PlatformAdapter
 from evaldata.platforms.duckdb import DuckDBAdapter
+from evaldata.platforms.pool import ConnectionPool
 from evaldata.platforms.sqlite import SqliteAdapter
 from evaldata.types import PlatformKind, PlatformRef
 
@@ -157,10 +163,6 @@ def bigquery_platform(
     return PlatformRef(name=name, kind="bigquery", dialect="bigquery", config=config)
 
 
-def _build_duckdb(ref: PlatformRef) -> PlatformAdapter:
-    return DuckDBAdapter(database=str(ref.config.get("path", ":memory:")))
-
-
 def _build_sqlite(ref: PlatformRef) -> PlatformAdapter:
     return SqliteAdapter(database=str(ref.config.get("path", ":memory:")))
 
@@ -229,69 +231,166 @@ def _build_bigquery(ref: PlatformRef) -> PlatformAdapter:
     )
 
 
-def _build(ref: PlatformRef) -> PlatformAdapter:
-    """Build a live adapter for `ref` by exhaustive dispatch over its kind.
+# Per-engine pool size: DuckDB members share one parent connection, the cloud engines each
+# open that many real connections, and SQLite stays serial.
+_MAX_SIZE: dict[PlatformKind, int] = {
+    "duckdb": 8,
+    "sqlite": 1,
+    "postgres": 4,
+    "databricks": 4,
+    "snowflake": 4,
+    "bigquery": 4,
+}
 
-    Args:
-        ref: The platform reference to build an adapter for.
+
+def _duckdb_pool(ref: PlatformRef) -> ConnectionPool:
+    """Build a DuckDB pool whose members and utility are cursors of one shared parent connection.
 
     Returns:
-        A live `PlatformAdapter` for the reference's platform kind.
+        A `ConnectionPool` owning the shared parent, closed when the pool closes.
+    """
+    parent = duckdb.connect(str(ref.config.get("path", ":memory:")))
+
+    def factory() -> PlatformAdapter:
+        return DuckDBAdapter.from_connection(parent.cursor())
+
+    return ConnectionPool(ref, factory, _MAX_SIZE["duckdb"], parent=parent)
+
+
+def _sqlite_pool(ref: PlatformRef) -> ConnectionPool:
+    """Build a size-1 SQLite pool; one shared adapter backs both the member and the utility.
+
+    A single connection keeps seeding via the utility visible to the acquired member even for
+    an in-process `:memory:` database, and is safe because the pool never runs cases in parallel.
+
+    Returns:
+        A size-1 `ConnectionPool` over one shared SQLite adapter.
+    """
+    shared = _build_sqlite(ref)
+
+    def factory() -> PlatformAdapter:
+        return shared
+
+    return ConnectionPool(ref, factory, _MAX_SIZE["sqlite"])
+
+
+def _dedicated_pool(ref: PlatformRef, build: Callable[[PlatformRef], PlatformAdapter]) -> ConnectionPool:
+    """Build a pool whose every member and utility is an independent adapter (its own connection).
+
+    Returns:
+        A `ConnectionPool` whose members each own a fresh connection built by `build`.
+    """
+
+    def factory() -> PlatformAdapter:
+        return build(ref)
+
+    return ConnectionPool(ref, factory, _MAX_SIZE[ref.kind])
+
+
+def _build_pool(ref: PlatformRef) -> ConnectionPool:
+    """Build a `ConnectionPool` for `ref` by exhaustive dispatch over its kind.
+
+    Args:
+        ref: The platform reference to build a pool for.
+
+    Returns:
+        A `ConnectionPool` matching the reference's per-engine session model.
     """
     kind: PlatformKind = ref.kind
     match kind:
         case "duckdb":
-            return _build_duckdb(ref)
+            return _duckdb_pool(ref)
         case "sqlite":
-            return _build_sqlite(ref)
+            return _sqlite_pool(ref)
         case "postgres":
-            return _build_postgres(ref)
+            return _dedicated_pool(ref, _build_postgres)
         case "databricks":
-            return _build_databricks(ref)
+            return _dedicated_pool(ref, _build_databricks)
         case "snowflake":
-            return _build_snowflake(ref)
+            return _dedicated_pool(ref, _build_snowflake)
         case "bigquery":
-            return _build_bigquery(ref)
+            return _dedicated_pool(ref, _build_bigquery)
         case _ as unreachable:  # pragma: no cover - exhaustiveness guard
             assert_never(unreachable)
 
 
-_ADAPTERS: dict[str, tuple[PlatformRef, PlatformAdapter]] = {}
+_POOLS: dict[str, ConnectionPool] = {}
+_POOLS_LOCK = threading.Lock()
+
+
+def pool_for(ref: PlatformRef) -> ConnectionPool:
+    """Return the connection pool for `ref.name`, building and caching one on first use.
+
+    Reuses the cached pool on subsequent calls for the same `ref.name`. An unsupported `kind`
+    is unrepresentable — `PlatformRef` validation rejects it before resolution.
+
+    Args:
+        ref: The platform reference to resolve a pool for.
+
+    Returns:
+        The `ConnectionPool` for `ref`, cached and reused across calls.
+
+    Raises:
+        ValueError: If `ref.name` is already bound to a different configuration.
+    """
+    with _POOLS_LOCK:
+        cached = _POOLS.get(ref.name)
+        if cached is not None:
+            if cached.ref != ref:
+                msg = (
+                    f"platform name {ref.name!r} is already bound to a different configuration; "
+                    "platform names must uniquely identify a connection"
+                )
+                raise ValueError(msg)
+            return cached
+        pool = _build_pool(ref)
+        _POOLS[ref.name] = pool
+        return pool
 
 
 def resolve(ref: PlatformRef) -> PlatformAdapter:
-    """Return a live adapter for `ref`, building and caching one on first use.
+    """Return `ref`'s dedicated utility adapter, building its pool on first use.
 
-    Reuses the cached adapter on subsequent calls for the same `ref.name`. An unsupported
-    `kind` is unrepresentable — `PlatformRef` validation rejects it before resolution.
+    The utility adapter is for seeding, `doctor`, and direct execution; it is never a checkout
+    member, so its use never contends with concurrent case execution. Concurrent execution goes
+    through `acquired`. An unsupported `kind` is unrepresentable — `PlatformRef` validation
+    rejects it before resolution.
 
     Args:
         ref: The platform reference to resolve.
 
     Returns:
-        The live `PlatformAdapter` for `ref`, cached and reused across calls.
-
-    Raises:
-        ValueError: If `ref.name` is already bound to a different configuration.
+        The utility `PlatformAdapter` for `ref`, cached and reused across calls.
     """
-    cached = _ADAPTERS.get(ref.name)
-    if cached is not None:
-        cached_ref, adapter = cached
-        if cached_ref != ref:
-            msg = (
-                f"platform name {ref.name!r} is already bound to a different configuration; "
-                "platform names must uniquely identify a connection"
-            )
-            raise ValueError(msg)
-        return adapter
+    return pool_for(ref).utility()
 
-    adapter = _build(ref)
-    _ADAPTERS[ref.name] = (ref, adapter)
-    return adapter
+
+@contextmanager
+def acquired(ref: PlatformRef) -> Iterator[PlatformAdapter]:
+    """Check out one of `ref`'s pool members for the duration of the `with` block.
+
+    Yields a member reserved exclusively for the caller, returned to the pool on exit even if
+    the block raises. Concurrent callers each get a distinct member, blocking once the pool's
+    per-engine size is reached.
+
+    Args:
+        ref: The platform reference whose pool to acquire a member from.
+
+    Yields:
+        A `PlatformAdapter` reserved for the caller until the block exits.
+    """
+    pool = pool_for(ref)
+    member = pool.acquire()
+    try:
+        yield member
+    finally:
+        pool.release(member)
 
 
 def close_all() -> None:
-    """Close every cached adapter and clear the cache (idempotent; no-op when empty)."""
-    for _ref, adapter in _ADAPTERS.values():
-        adapter.close()
-    _ADAPTERS.clear()
+    """Close every cached pool and clear the cache (idempotent; no-op when empty)."""
+    with _POOLS_LOCK:
+        pools = list(_POOLS.values())
+        _POOLS.clear()
+    for pool in pools:
+        pool.close()
