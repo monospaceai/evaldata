@@ -4,11 +4,13 @@ import sqlite3
 import threading
 import time
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 
 from evaldata import CallableSolver, EvalCase, ExecutionAccuracy, run_benchmark
+from evaldata.core.runner import CaseEvaluation, evaluate_case
 from evaldata.platforms import duckdb_platform, sqlite_platform
 from evaldata.platforms.registry import acquired, close_all, resolve
 from evaldata.types import GoldQuery, PlatformRef, SolverError, SolverOutput, Sql
@@ -119,7 +121,11 @@ def _duck_solver() -> CallableSolver:
 
 @pytest.mark.unit
 class TestDuckDBConcurrency:
-    """Concurrency correctness over a shared-cursor DuckDB pool: results stay per-case."""
+    """Concurrency correctness over a shared-cursor DuckDB pool: results stay per-case.
+
+    Cases run through concurrent `evaluate_case` calls (each acquiring its own pool session),
+    which is the path that genuinely scores in parallel.
+    """
 
     @staticmethod
     def _seed(platform: PlatformRef) -> None:
@@ -128,17 +134,23 @@ class TestDuckDBConcurrency:
             "INSERT INTO items SELECT i AS id, i % 4 AS grp FROM range(0, 200) t(i)"
         )
 
+    @staticmethod
+    def _run_concurrently(cases: list[EvalCase], workers: int) -> list[CaseEvaluation]:
+        solver = _duck_solver()
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            # A fresh scorer per case keeps the test about connection concurrency, not scorers.
+            return list(pool.map(lambda c: evaluate_case(c, solver, scorers=[ExecutionAccuracy()]), cases))
+
     def test_many_cases_score_independently_in_memory(self) -> None:
         platform = duckdb_platform(name="duck-conc-mem")
         try:
             self._seed(platform)
-            # 40 cases (10 per group) sharing an 8-member pool: correct ones must pass, the
+            # 40 cases (10 per group) over an 8-member pool: correct ones must pass, the
             # undercounting ones must fail, with no cross-talk between concurrent cursors.
             cases = [_duck_case(platform, g, correct=(i % 2 == 0)) for i in range(10) for g in range(4)]
-            summary = run_benchmark(cases, _duck_solver(), scorers=[ExecutionAccuracy()], max_concurrency=8)
-            assert summary.total == 40
-            by_id = {r.id: r for r in summary.cases}
-            assert all(by_id[c.id].passed == c.id.endswith("-ok") for c in cases)
+            evaluations = self._run_concurrently(cases, workers=8)
+            assert len(evaluations) == 40
+            assert all(e.report.passed == e.report.id.endswith("-ok") for e in evaluations)
         finally:
             close_all()
 
@@ -147,20 +159,22 @@ class TestDuckDBConcurrency:
         try:
             self._seed(platform)
             cases = [_duck_case(platform, g, correct=True) for _ in range(6) for g in range(4)]
-            summary = run_benchmark(cases, _duck_solver(), scorers=[ExecutionAccuracy()], max_concurrency=6)
-            assert summary.passed == summary.total == 24
+            evaluations = self._run_concurrently(cases, workers=6)
+            assert len(evaluations) == 24
+            assert all(e.report.passed for e in evaluations)
         finally:
             close_all()
 
     def test_cases_queue_when_concurrency_exceeds_pool_size(self) -> None:
-        # More concurrent cases (16) than the DuckDB pool's 8 members forces excess cases to
+        # More concurrent workers (16) than the DuckDB pool's 8 members forces excess workers to
         # block on acquire; all must still complete correctly once members free up.
         platform = duckdb_platform(name="duck-conc-queue")
         try:
             self._seed(platform)
             cases = [_duck_case(platform, g, correct=True) for _ in range(4) for g in range(4)]
-            summary = run_benchmark(cases, _duck_solver(), scorers=[ExecutionAccuracy()], max_concurrency=16)
-            assert summary.passed == summary.total == 16
+            evaluations = self._run_concurrently(cases, workers=16)
+            assert len(evaluations) == 16
+            assert all(e.report.passed for e in evaluations)
         finally:
             close_all()
 

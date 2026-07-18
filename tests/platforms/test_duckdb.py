@@ -107,33 +107,39 @@ class TestDuckDBSharedCursor:
         # cursor of the same parent. The pool's shared-cursor design (and DuckDB budgets)
         # relies on this; a future DuckDB bump that changes it should fail here.
         parent = duckdb.connect(":memory:")
-        slow = (
-            "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 1000000000) "
-            "SELECT count(*) AS n FROM r"
-        )
+        parent.execute("PRAGMA threads=1")  # cross-query parallelism only, so both truly overlap
+        # A genuinely slow, non-shortcuttable query so the sibling is still running when A is
+        # interrupted (a count over range folds away and could finish first).
+        n, m = 20_000_000, 20
+        slow = f"SELECT sum(a.i * b.i) AS s FROM range({n}) a(i), range({m}) b(i)"
+        expected = (n * (n - 1) // 2) * (m * (m - 1) // 2)
         a = parent.cursor()
         b = parent.cursor()
         results: dict[str, object] = {}
+        started = {"a": threading.Event(), "b": threading.Event()}
 
-        def run(cursor: duckdb.DuckDBPyConnection, key: str, sql: str) -> None:
+        def run(cursor: duckdb.DuckDBPyConnection, key: str) -> None:
+            started[key].set()
             try:
-                results[key] = cursor.execute(sql).fetchall()
+                results[key] = cursor.execute(slow).fetchall()
             except duckdb.InterruptException:
                 results[key] = "interrupted"
 
-        interrupted = threading.Thread(target=run, args=(a, "a", slow))
-        sibling = threading.Thread(target=run, args=(b, "b", "SELECT count(*) AS n FROM range(3000000)"))
+        interrupted = threading.Thread(target=run, args=(a, "a"))
+        sibling = threading.Thread(target=run, args=(b, "b"))
         try:
             interrupted.start()
             sibling.start()
-            # Interrupt A repeatedly until its thread ends, so the interrupt reliably lands
-            # regardless of scheduling (no fragile single sleep).
+            started["a"].wait(timeout=5)
+            started["b"].wait(timeout=5)
+            # Interrupt A repeatedly until its thread ends while B is still executing, so B's
+            # correct completion proves the interrupt did not reach the sibling cursor.
             while interrupted.is_alive():
                 a.interrupt()
                 time.sleep(0.01)
-            interrupted.join(timeout=5)
-            sibling.join(timeout=5)
+            interrupted.join(timeout=10)
+            sibling.join(timeout=10)
         finally:
             parent.close()
         assert results["a"] == "interrupted"
-        assert results["b"] == [(3000000,)]  # sibling completed; it was not cancelled
+        assert results["b"] == [(expected,)]  # sibling completed correctly; it was not cancelled

@@ -5,6 +5,7 @@ import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import assert_never
+from urllib.parse import quote
 
 import duckdb
 
@@ -164,7 +165,11 @@ def bigquery_platform(
 
 
 def _build_sqlite(ref: PlatformRef) -> PlatformAdapter:
-    return SqliteAdapter(database=str(ref.config.get("path", ":memory:")))
+    path = str(ref.config.get("path", ":memory:"))
+    # A per-name shared-cache URI lets the pool's utility and members be distinct connections
+    # that still share one in-memory database; a file path is shared through the filesystem.
+    database = f"file:evaldata-{quote(ref.name, safe='')}?mode=memory&cache=shared" if path == ":memory:" else path
+    return SqliteAdapter(database=database)
 
 
 def _build_postgres(ref: PlatformRef) -> PlatformAdapter:
@@ -257,23 +262,6 @@ def _duckdb_pool(ref: PlatformRef) -> ConnectionPool:
     return ConnectionPool(ref, factory, _MAX_SIZE["duckdb"], parent=parent)
 
 
-def _sqlite_pool(ref: PlatformRef) -> ConnectionPool:
-    """Build a size-1 SQLite pool; one shared adapter backs both the member and the utility.
-
-    A single connection keeps seeding via the utility visible to the acquired member even for
-    an in-process `:memory:` database, and is safe because the pool never runs cases in parallel.
-
-    Returns:
-        A size-1 `ConnectionPool` over one shared SQLite adapter.
-    """
-    shared = _build_sqlite(ref)
-
-    def factory() -> PlatformAdapter:
-        return shared
-
-    return ConnectionPool(ref, factory, _MAX_SIZE["sqlite"])
-
-
 def _dedicated_pool(ref: PlatformRef, build: Callable[[PlatformRef], PlatformAdapter]) -> ConnectionPool:
     """Build a pool whose every member and utility is an independent adapter (its own connection).
 
@@ -301,7 +289,7 @@ def _build_pool(ref: PlatformRef) -> ConnectionPool:
         case "duckdb":
             return _duckdb_pool(ref)
         case "sqlite":
-            return _sqlite_pool(ref)
+            return _dedicated_pool(ref, _build_sqlite)
         case "postgres":
             return _dedicated_pool(ref, _build_postgres)
         case "databricks":

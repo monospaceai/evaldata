@@ -10,12 +10,16 @@ from pydantic_evals.otel import SpanTreeRecordingError
 
 from evaldata.platforms.registry import close_all, duckdb_platform, resolve
 from evaldata.pydantic_evals import SqlEquivalence
+from evaldata.pydantic_evals.evaluator import _summarize_diff
 from evaldata.types import (
+    ColumnMismatch,
     ExpectationSuite,
     GoldQuery,
     PlatformRef,
+    ResultSetDiff,
     RowCountExpectation,
     TypedResultSet,
+    TypeMismatch,
     UntypedResultSet,
 )
 from pydantic_evals import Case, Dataset
@@ -197,3 +201,21 @@ def test_concurrent_dataset_scores_each_case_correctly() -> None:
     verdicts = {case.name: case.assertions["SqlEquivalence"].value for case in report.cases}
     assert all(verdicts[f"ok-{i}"] is True for i in range(4))
     assert all(verdicts[f"bad-{i}"] is False for i in range(4))
+
+
+def test_summarize_diff_reports_column_type_and_value_mismatches() -> None:
+    diff = ResultSetDiff(
+        expected_row_count=2,
+        actual_row_count=2,
+        missing_columns=["id"],
+        unexpected_columns=["region"],
+        column_order_mismatch=True,
+        type_mismatches=[TypeMismatch(column="amount", expected="INTEGER", actual="VARCHAR")],
+        column_mismatches=[ColumnMismatch(column="total", unexpected_count=3)],
+    )
+    summary = _summarize_diff(diff)
+    assert "missing columns: id" in summary
+    assert "unexpected columns: region" in summary
+    assert "column order differs" in summary
+    assert "type mismatches: amount expected INTEGER, got VARCHAR" in summary
+    assert "value mismatches: total (3)" in summary

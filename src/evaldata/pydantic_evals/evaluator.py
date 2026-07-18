@@ -133,15 +133,29 @@ def _reason(score: ScoreResult) -> str:
 
 
 def _summarize_diff(diff: ResultSetDiff) -> str:
-    """Summarise a result-set diff's row-count mismatch in one line.
+    """Summarise a result-set diff's row, column, type, and value mismatches.
 
     Args:
         diff: The structured difference between the actual and expected result sets.
 
     Returns:
-        A one-line summary of the expected/actual row counts and the missing/extra counts.
+        A one-line summary covering the row counts and any column, column-order, type, or
+        per-column value differences the diff records.
     """
-    return (
+    parts = [
         f"expected {diff.expected_row_count} row(s), got {diff.actual_row_count} "
         f"({diff.missing_row_count} missing, {diff.extra_row_count} extra)"
-    )
+    ]
+    if diff.missing_columns:
+        parts.append(f"missing columns: {', '.join(diff.missing_columns)}")
+    if diff.unexpected_columns:
+        parts.append(f"unexpected columns: {', '.join(diff.unexpected_columns)}")
+    if diff.column_order_mismatch:
+        parts.append("column order differs")
+    if diff.type_mismatches:
+        types = ", ".join(f"{m.column} expected {m.expected}, got {m.actual}" for m in diff.type_mismatches)
+        parts.append(f"type mismatches: {types}")
+    if diff.column_mismatches:
+        values = ", ".join(f"{m.column} ({m.unexpected_count})" for m in diff.column_mismatches)
+        parts.append(f"value mismatches: {values}")
+    return "; ".join(parts)

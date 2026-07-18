@@ -194,10 +194,9 @@ def run_benchmark(
     `assert_eval`, this neither raises nor records to the run accumulator — it returns the
     aggregate for the caller to print or persist.
 
-    With `max_concurrency` above 1, each case's solve-execute-score pipeline runs on a thread
-    pool and acquires its own platform session from the per-name pool, so cases run in parallel
-    up to the pool's per-engine size; excess cases block on acquire. Reports come back in case
-    order regardless of which case finished first.
+    With `max_concurrency` above 1, the solver calls (the network-bound half) run on a thread
+    pool while execution and scoring stay serial and case-ordered. Reports come back in case
+    order regardless of which solver finished first.
 
     Args:
         cases: The eval cases to run, in order.
@@ -213,10 +212,10 @@ def run_benchmark(
     selected = list(islice(cases, limit))
     if max_concurrency > 1:
         with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
-            reports = [
-                evaluation.report
-                for evaluation in pool.map(lambda case: evaluate_case(case, solver, scorers=scorers), selected)
-            ]
+            outputs = list(pool.map(solver.solve, selected))
+        reports = [
+            _score_output(case, output, scorers=scorers).report for case, output in zip(selected, outputs, strict=True)
+        ]
     else:
         reports = [evaluate_case(case, solver, scorers=scorers).report for case in selected]
     total = len(reports)

@@ -133,6 +133,21 @@ class TestClose:
         with pytest.raises(RuntimeError, match="is closed"):
             pool.acquire()
 
+    def test_utility_on_closed_pool_raises(self) -> None:
+        pool, built = _pool()
+        pool.close()
+        with pytest.raises(RuntimeError, match="is closed"):
+            pool.utility()
+        assert built == []  # no resurrected adapter built after close
+
+    def test_release_after_close_drops_member_without_double_close(self) -> None:
+        pool, _ = _pool(max_size=1)
+        member = pool.acquire()
+        pool.close()
+        assert member.close_count == 1  # closed once by close()
+        pool.release(member)  # released after close: dropped, not requeued or closed again
+        assert member.close_count == 1
+
     def test_close_wakes_a_blocked_waiter_with_an_error(self) -> None:
         pool, _ = _pool(max_size=1)
         pool.acquire()  # exhaust the pool

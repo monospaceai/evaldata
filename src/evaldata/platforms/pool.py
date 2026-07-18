@@ -77,14 +77,31 @@ class ConnectionPool:
                 self._cond.wait()
 
     def release(self, member: PlatformAdapter) -> None:
-        """Return `member` to the free list and wake one waiter."""
+        """Return `member` to the free list and wake one waiter; drop it if the pool is closed.
+
+        Args:
+            member: The member previously returned by `acquire`. A member released after `close`
+                is dropped rather than requeued — `close` already closed it.
+        """
         with self._cond:
+            if self._closed:
+                return
             self._free.append(member)
             self._cond.notify()
 
     def utility(self) -> PlatformAdapter:
-        """Return the dedicated utility adapter, building it once on first use."""
+        """Return the dedicated utility adapter, building it once on first use.
+
+        Returns:
+            The utility adapter for direct use, never a checkout member.
+
+        Raises:
+            RuntimeError: If the pool is closed.
+        """
         with self._cond:
+            if self._closed:
+                msg = f"connection pool for platform {self.ref.name!r} is closed"
+                raise RuntimeError(msg)
             if self._utility is None:
                 self._utility = self._factory()
             return self._utility

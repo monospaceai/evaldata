@@ -96,12 +96,16 @@ Each platform has a default pool size — the most concurrent sessions one platf
 | SQLite | 1 (serial) |
 
 DuckDB pool members are cursors of one shared in-process database, and DuckDB executes their queries
-in parallel, so concurrency is a real speed-up (not just overlap). Two caveats when scoring under
-concurrency: a case's `cost_budget.max_seconds` is wall-clock and is contended by other in-flight
-cases, so a busy pool can make a query overrun sooner; and each dedicated-connection session is
-independent, so session-local state (temporary tables, `SET` parameters) does not carry across cases
-— seed regular tables (server-side, or the DuckDB shared parent) instead. Call `close_all()` when
-done to close every pooled connection.
+in parallel, so concurrency is a real speed-up (not just overlap).
+
+Some things to know when scoring under concurrency. A case's `cost_budget.max_seconds` is wall-clock
+and is contended by other in-flight cases, so a busy pool can make a query overrun sooner. Pooled
+sessions are reused and are not reset between cases, so any session-local state a query creates —
+a temporary table, a `SET` parameter, a role or schema change — persists on that connection and can
+be observed by a later case that reuses it (nondeterministically, under concurrency); keep evals to
+side-effect-free queries. Two further edge cases: a query whose cancellation does not take effect
+holds its session until it finishes on its own, and a pooled connection that the server drops is
+reused until the pool is closed. Call `close_all()` when done to close every pooled connection.
 
 ## Next steps
 

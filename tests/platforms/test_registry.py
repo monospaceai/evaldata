@@ -14,6 +14,7 @@ from evaldata.platforms import (
     postgres_platform,
     resolve,
     snowflake_platform,
+    sqlite_platform,
 )
 from evaldata.platforms.registry import acquired, close_all, pool_for
 from evaldata.types import PlatformRef
@@ -199,6 +200,19 @@ class TestAcquired:
             first_id = id(first)
         with acquired(platform) as second:
             assert id(second) == first_id  # released member reused on the next serial acquire
+
+    def test_sqlite_utility_is_distinct_from_a_member_and_shares_data(self) -> None:
+        # SQLite `:memory:` uses a per-name shared-cache database, so the utility and a checkout
+        # member are distinct connections that still see each other's data.
+        platform = sqlite_platform(name="acq-sqlite-share")
+        utility = resolve(platform)
+        utility.execute("CREATE TABLE t (n INTEGER)")  # sqlite executes one statement at a time
+        utility.execute("INSERT INTO t VALUES (1), (2)")
+        with acquired(platform) as member:
+            assert member is not utility  # utility is never a checkout member
+            result = member.execute("SELECT count(*) AS c FROM t")
+        assert result.error is None
+        assert result.rows == [{"c": 2}]
 
     def test_member_is_released_even_when_the_block_raises(self) -> None:
         platform = duckdb_platform(name="acq-raise")
