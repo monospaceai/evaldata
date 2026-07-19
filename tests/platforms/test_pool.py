@@ -218,6 +218,12 @@ class TestAcquireRelease:
         assert second is first
         assert len(built) == 1
 
+    def test_lease_delegates_adapter_attributes(self) -> None:
+        pool, _ = _pool(max_size=1)
+        lease = pool.acquire()
+
+        assert lease.close_count == 0
+
     def test_grows_up_to_max_size(self) -> None:
         pool, built = _pool(max_size=2)
         a = pool.acquire()
@@ -321,6 +327,15 @@ class TestUtility:
 
 
 class TestClose:
+    def test_closes_a_released_member(self) -> None:
+        pool, built = _pool()
+        lease = pool.acquire()
+        pool.release(lease)
+
+        pool.close()
+
+        assert built[0].close_count == 1
+
     def test_closes_members_utility_and_parent(self) -> None:
         parent = _FakeParent()
         pool, built = _pool(parent=parent)
@@ -775,6 +790,26 @@ class TestLifecycle:
         assert isinstance(error.value.__cause__, RuntimeError)
         assert pool._creating == 0  # noqa: SLF001
 
+    def test_factory_thread_start_failure_closes_a_deferred_parent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        parent = _FakeParent()
+        pool = ConnectionPool(_ref(), _FakeAdapter, max_size=1, parent=parent)
+
+        class FailingThread:
+            def __init__(self, **_: object) -> None:
+                return
+
+            def start(self) -> None:
+                pool.close()
+                message = "thread unavailable"
+                raise RuntimeError(message)
+
+        monkeypatch.setattr(platform_pool.threading, "Thread", FailingThread)
+
+        with pytest.raises(PoolUnavailableError, match="could not create"):
+            pool.acquire()
+
+        assert parent.closed is True
+
     def test_cleanup_thread_start_failure_falls_back_to_inline_cleanup(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class FailingThread:
             def __init__(self, **_: object) -> None:
@@ -1197,7 +1232,7 @@ class TestLifecycle:
         lease = pool.acquire()
         record = cast(Any, lease)._member
         record.state = "free"
-        assert pool._prepare(record) is False  # noqa: SLF001
+        assert pool._prepare(record, pool._clock() + 1) is False  # noqa: SLF001
 
         adapter = _PingAdapter()
         pool = ConnectionPool(_ref(), lambda: adapter, policy=PoolPolicy(max_size=1, pre_ping=True))
@@ -1207,6 +1242,26 @@ class TestLifecycle:
         assert pool._ping_within_deadline(record, pool._clock() + 1) is False  # noqa: SLF001
         pool.release(lease)
         assert adapter.close_done.wait(1)
+
+    def test_pre_ping_thread_start_failure_marks_validation_unhealthy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        adapter = _PingAdapter()
+        pool = ConnectionPool(_ref(), lambda: adapter, max_size=1)
+        lease = pool.acquire()
+        record = cast(Any, lease)._member
+        pool._policy = PoolPolicy(max_size=1, pre_ping=True)  # noqa: SLF001
+
+        class FailingThread:
+            def __init__(self, **_: object) -> None:
+                return
+
+            def start(self) -> None:
+                message = "thread unavailable"
+                raise RuntimeError(message)
+
+        monkeypatch.setattr(platform_pool.threading, "Thread", FailingThread)
+
+        assert pool._ping_within_deadline(record, pool._clock() + 1) is False  # noqa: SLF001
+        assert record.active is False
 
     def test_utility_health_check_handles_close_and_detached_state(self) -> None:
         adapter = _BlockingPingAdapter()
@@ -1289,6 +1344,19 @@ class TestLifecycle:
         pool._start_cancellation(record)  # noqa: SLF001
         assert adapter.close_done.wait(1)
         assert adapter.cancel_count == 1
+
+    def test_duplicate_cancellation_request_is_ignored(self) -> None:
+        adapter = _TrackingAdapter()
+        pool = ConnectionPool(_ref(), lambda: adapter, max_size=1)
+        lease = pool.acquire()
+        record = cast(Any, lease)._member
+        scheduled = threading.Event()
+        record.cancel_done = scheduled
+
+        pool._start_cancellation(record)  # noqa: SLF001
+
+        assert record.cancel_done is scheduled
+        assert adapter.cancel_count == 0
 
     def test_quarantine_ceiling_bounds_replacement_creation(self) -> None:
         adapters = [_HangingAdapter(), _HangingAdapter()]

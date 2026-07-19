@@ -6,7 +6,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import Any, Literal, Protocol, TypeAlias, cast, runtime_checkable
 
 from evaldata.platforms.base import (
     NativeTimeoutAdapter,
@@ -58,6 +58,9 @@ class DisconnectClassifier(Protocol):
         ...
 
 
+_MemberState: TypeAlias = Literal["free", "checked_out", "quarantined", "retired"]
+
+
 @dataclass
 class _PoolMember:
     """One adapter and the pool state required to reuse or retire it safely."""
@@ -65,7 +68,7 @@ class _PoolMember:
     adapter: PlatformAdapter
     created_at: float
     idle_since: float
-    state: str = "free"
+    state: _MemberState = "free"
     poisoned: bool = False
     lease: _PoolLease | None = None
     active: bool = False
@@ -73,14 +76,31 @@ class _PoolMember:
     cancel_done: threading.Event | None = None
 
 
+@dataclass(frozen=True)
+class _CreationSucceeded:
+    """A connection factory result that is ready for publication."""
+
+    adapter: PlatformAdapter
+    completed_at: float
+
+
+@dataclass(frozen=True)
+class _CreationFailed:
+    """A connection factory failure captured for the acquiring thread."""
+
+    error: BaseException
+    completed_at: float
+
+
+_CreationOutcome: TypeAlias = _CreationSucceeded | _CreationFailed
+
+
 @dataclass
 class _PendingCreation:
     """One factory call whose result may arrive after its acquirer has timed out."""
 
     done: threading.Event
-    adapter: PlatformAdapter | None = None
-    error: BaseException | None = None
-    completed_at: float | None = None
+    outcome: _CreationOutcome | None = None
     abandoned: bool = False
 
 
@@ -327,21 +347,26 @@ class ConnectionPool:
         pending = _PendingCreation(done=threading.Event())
 
         def build() -> None:
-            adapter: PlatformAdapter | None = None
-            error: BaseException | None = None
             try:
                 adapter = self._factory()
+                if adapter is None:
+                    msg = "connection factory returned None"
+                    raise TypeError(msg)
             except BaseException as exc:  # noqa: BLE001 - a factory thread must always release its reservation
-                error = exc
-            with self._cond:
-                pending.adapter = adapter
-                pending.error = error
-                pending.completed_at = self._clock()
-                abandoned = pending.abandoned
-                pending.done.set()
+                with self._cond:
+                    outcome: _CreationOutcome = _CreationFailed(exc, self._clock())
+                    pending.outcome = outcome
+                    abandoned = pending.abandoned
+                    pending.done.set()
+            else:
+                with self._cond:
+                    outcome = _CreationSucceeded(adapter, self._clock())
+                    pending.outcome = outcome
+                    abandoned = pending.abandoned
+                    pending.done.set()
             if abandoned:
-                if adapter is not None:
-                    self._close_safely(adapter)
+                if isinstance(outcome, _CreationSucceeded):
+                    self._close_safely(outcome.adapter)
                 with self._cond:
                     self._creating -= 1
                     parent = self._take_deferred_parent_locked()
@@ -357,7 +382,7 @@ class ConnectionPool:
                 parent = self._take_deferred_parent_locked()
                 self._cond.notify_all()
             if parent is not None:
-                self._start_cleanup(None, parent)
+                self._start_parent_cleanup(parent)
             msg = f"connection pool for platform {self.ref.name!r} could not create a connection"
             raise PoolUnavailableError(self.ref.name, msg) from error
         if not pending.done.wait(max(deadline - self._clock(), 0.0)):
@@ -372,22 +397,14 @@ class ConnectionPool:
                 raise PoolUnavailableError(self.ref.name, msg)
 
         with self._cond:
-            adapter = pending.adapter
-            error = pending.error
-            completed_at = pending.completed_at
+            outcome = cast(_CreationOutcome, pending.outcome)
             self._creating -= 1
-            timed_out = completed_at is None or completed_at >= deadline
-            if timed_out or error is not None:
-                self._cond.notify_all()
-                publish = False
-            elif adapter is None:
-                error = TypeError("connection factory returned None")
-                self._cond.notify_all()
-                publish = False
-            elif self._closed:
+            timed_out = outcome.completed_at >= deadline
+            if timed_out or isinstance(outcome, _CreationFailed) or self._closed:
                 self._cond.notify_all()
                 publish = False
             else:
+                adapter = outcome.adapter
                 now = self._clock()
                 member = _PoolMember(adapter=adapter, created_at=now, idle_since=now, state="checked_out")
                 lease_type = _TypeResolvingPoolLease if isinstance(adapter, TypeResolvingAdapter) else _PoolLease
@@ -395,26 +412,25 @@ class ConnectionPool:
                 self._members.append(member)
                 self._cond.notify_all()
                 publish = True
-            cleanup_reserved = not publish and adapter is not None
-            if cleanup_reserved:
+            cleanup_adapter = outcome.adapter if not publish and isinstance(outcome, _CreationSucceeded) else None
+            if cleanup_adapter is not None:
                 self._cleanup_pending += 1
             parent = self._take_deferred_parent_locked()
         if not publish:
-            self._start_cleanup(adapter, parent)
+            if cleanup_adapter is not None:
+                self._start_cleanup(cleanup_adapter, parent)
+            elif parent is not None:
+                self._start_parent_cleanup(parent)
             if timed_out:
                 msg = f"connection pool for platform {self.ref.name!r} is unavailable"
                 raise PoolUnavailableError(self.ref.name, msg)
-            if error is not None:
+            if isinstance(outcome, _CreationFailed):
                 msg = f"connection pool for platform {self.ref.name!r} could not create a connection"
-                raise PoolUnavailableError(self.ref.name, msg) from error
+                raise PoolUnavailableError(self.ref.name, msg) from outcome.error
             self._raise_closed()
-        if parent is not None:
-            self._close_parent(parent)
         return member
 
-    def _prepare(self, member: _PoolMember, deadline: float | None = None) -> bool:
-        if deadline is None:
-            deadline = self._clock() + self._policy.acquire_timeout_seconds
+    def _prepare(self, member: _PoolMember, deadline: float) -> bool:
         if self._expired(member, self._clock()):
             self._retire(member, asynchronous=True)
             return False
@@ -702,22 +718,17 @@ class ConnectionPool:
 
     def _start_cleanup(
         self,
-        adapter: PlatformAdapter | None,
+        adapter: PlatformAdapter,
         parent: _Closeable | None = None,
     ) -> None:
         """Close detached resources asynchronously, preserving adapter-before-parent ordering."""
-        if adapter is None and parent is None:
-            return
 
         def cleanup() -> None:
-            if adapter is not None:
-                self._close_safely(adapter)
-                with self._cond:
-                    self._cleanup_pending -= 1
-                    deferred_parent = self._take_deferred_parent_locked()
-                    self._cond.notify_all()
-            else:
-                deferred_parent = None
+            self._close_safely(adapter)
+            with self._cond:
+                self._cleanup_pending -= 1
+                deferred_parent = self._take_deferred_parent_locked()
+                self._cond.notify_all()
             for resource in dict.fromkeys(item for item in (parent, deferred_parent) if item is not None):
                 self._close_parent(resource)
 
@@ -725,6 +736,13 @@ class ConnectionPool:
             threading.Thread(target=cleanup, daemon=True).start()
         except RuntimeError:
             cleanup()
+
+    def _start_parent_cleanup(self, parent: _Closeable) -> None:
+        """Close a detached shared parent asynchronously."""
+        try:
+            threading.Thread(target=self._close_parent, args=(parent,), daemon=True).start()
+        except RuntimeError:
+            self._close_parent(parent)
 
     def _start_cancel(self, adapter: PlatformAdapter, member: _PoolMember, done: threading.Event) -> None:
         """Run cancellation independently so a blocking driver cannot delay the caller."""
