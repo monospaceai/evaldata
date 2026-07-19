@@ -1,0 +1,3 @@
+kind: Added
+body: 'Bounded per-platform connection pools: run warehouse-backed cases concurrently with configurable `PoolPolicy` limits, native query deadlines, cancellation, health checks, and safe cleanup.'
+time: 2026-07-19T20:25:42+10:00

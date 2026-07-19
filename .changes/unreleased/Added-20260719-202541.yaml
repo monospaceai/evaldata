@@ -1,0 +1,3 @@
+kind: Added
+body: 'Pydantic Evals integration: use `SqlEquivalence` to score generated SQL inside an existing `Dataset` against a gold query or expected rows. Install `evaldata[pydantic-evals]`.'
+time: 2026-07-19T20:25:41+10:00
