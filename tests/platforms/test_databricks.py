@@ -1,4 +1,4 @@
-"""`DatabricksAdapter` tests: unit (fake driver) + a live type-resolution e2e check."""
+"""Tests for `DatabricksAdapter`."""
 
 from typing import Any
 
@@ -45,6 +45,7 @@ class _FakeConnection:
     def __init__(self, cursor: _FakeCursor) -> None:
         self._cursor = cursor
         self.closed = False
+        self.open = True
 
     def cursor(self) -> _FakeCursor:
         return self._cursor
@@ -54,10 +55,6 @@ class _FakeConnection:
 
 
 def _adapter(cursor: _FakeCursor, *, active: bool = False) -> DatabricksAdapter:
-    """Build an adapter bound to a fake connection, bypassing the real `__init__`.
-
-    With `active=True` the cursor is set as the in-flight one, so `cancel` can reach it.
-    """
     adapter = object.__new__(DatabricksAdapter)
     adapter._conn = _FakeConnection(cursor)
     adapter._cursor = cursor if active else None
@@ -89,8 +86,6 @@ class TestExecute:
         assert result.schema_ is None
 
     def test_duplicate_names_error_before_fetch(self) -> None:
-        # Duplicate output names are detected from the description, so the Arrow fetch (which
-        # would raise) is never attempted, and the uniform duplicate error is surfaced.
         class _NoFetchCursor(_FakeCursor):
             def fetchall(self) -> list[tuple[Any, ...]]:
                 msg = "fetchall must not run when output names are duplicated"
@@ -103,7 +98,6 @@ class TestExecute:
         assert "duplicate output column name(s)" in result.error.message
 
     def test_non_connector_fetch_error_is_returned_not_raised(self) -> None:
-        # A pyarrow-layer error during fetch must be caught and returned, not propagated.
         class _ArrowFailCursor(_FakeCursor):
             def fetchall(self) -> list[tuple[Any, ...]]:
                 msg = "Can't unify schema with duplicate field names"
@@ -118,8 +112,6 @@ class TestExecute:
 
 @pytest.mark.unit
 class TestTypeProbe:
-    """The probe is two pure methods; the runner (not the adapter) executes it."""
-
     def test_probe_sql_strips_trailing_semicolon_and_whitespace(self) -> None:
         assert DatabricksAdapter.type_probe_sql("SELECT 1 ; ") == "DESCRIBE QUERY SELECT 1"
 
@@ -146,8 +138,6 @@ class TestTypeProbe:
 
 @pytest.mark.unit
 class TestLifecycle:
-    """Connection lifecycle against a mocked connector — keeps coverage independent of creds."""
-
     @staticmethod
     def _patch_connect(monkeypatch: pytest.MonkeyPatch, captured: dict[str, Any]) -> None:
         def fake_connect(**kwargs: Any) -> _FakeConnection:
@@ -165,7 +155,7 @@ class TestLifecycle:
         assert captured["http_path"] == "/p"
         assert captured["catalog"] == "main"
         assert captured["schema"] == "sales"
-        assert callable(captured["credentials_provider"])  # creds resolve lazily, from the env
+        assert callable(captured["credentials_provider"])
 
     def test_init_omits_unset_catalog_and_schema(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: dict[str, Any] = {}
@@ -179,8 +169,31 @@ class TestLifecycle:
         _adapter(cursor, active=True).cancel()
         assert cursor.cancelled is True
 
+    def test_ping_and_disconnect_classification_distinguish_server_errors(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        adapter = _adapter(_FakeCursor(None, []))
+        assert adapter.ping() is True
+        adapter._conn.open = False  # noqa: SLF001
+        assert adapter.ping() is False
+        from databricks.sql import exc as databricks_exc
+
+        closed = ExecutionError(kind="query_failed", message="x", cause=databricks_exc.SessionAlreadyClosedError("x"))
+        ordinary = ExecutionError(kind="query_failed", message="x", cause=databricks_exc.ServerOperationError("x"))
+        sqlstate = ExecutionError(kind="query_failed", message="x", sqlstate="08006")
+        assert adapter.is_disconnect(sqlstate) is True
+        assert adapter.is_disconnect(closed) is True
+        assert adapter.is_disconnect(ordinary) is False
+        monkeypatch.setattr(adapter, "ping", lambda: pytest.fail("disconnect classification must not perform I/O"))
+        interface = ExecutionError(kind="query_failed", message="x", cause=databricks_exc.InterfaceError("x"))
+        assert adapter.is_disconnect(interface) is True
+
+    def test_ping_treats_cursor_failure_as_unhealthy(self) -> None:
+        adapter = _adapter(_FakeCursor(None, [], error="unavailable"))
+        assert adapter.ping() is False
+
     def test_cancel_is_a_noop_when_no_query_runs(self) -> None:
-        _adapter(_FakeCursor(None, [])).cancel()  # _cursor is None; must not raise
+        _adapter(_FakeCursor(None, [])).cancel()
 
     def test_cancel_swallows_errors(self) -> None:
         class _BadCancelCursor(_FakeCursor):
@@ -188,7 +201,7 @@ class TestLifecycle:
                 msg = "cancel failed"
                 raise RuntimeError(msg)
 
-        _adapter(_BadCancelCursor(None, []), active=True).cancel()  # best-effort: swallowed
+        _adapter(_BadCancelCursor(None, []), active=True).cancel()
 
     def test_close_releases_the_connection(self) -> None:
         conn = _FakeConnection(_FakeCursor(None, []))
@@ -211,11 +224,6 @@ class TestLifecycle:
 @pytest.mark.e2e
 @pytest.mark.cloud
 class TestTypeResolutionLive:
-    """Live `DESCRIBE QUERY` resolution against a real workspace; unit tests use fakes.
-
-    Fails loud (no skip) when `DATABRICKS_SERVER_HOSTNAME`/`DATABRICKS_HTTP_PATH` are unset.
-    """
-
     def test_decimal_and_array_types_resolve_to_precise(self) -> None:
         from .conftest import connect_databricks
 
@@ -229,7 +237,6 @@ class TestTypeResolutionLive:
             resolved = QueryRunner(adapter, sql, "databricks", None).resolved_schema(result.schema_, sql)
             assert not isinstance(resolved, ExecutionError), f"type resolution failed: {resolved}"
             precise = {c.name: c.type for c in resolved.root}
-            # `.raw` surfaces the real DESCRIBE QUERY string if the assumption is wrong.
             assert precise["amount"] == SqlType.parse("decimal(10,2)", "databricks"), precise["amount"].raw
             assert precise["tags"] == SqlType.parse("array<string>", "databricks"), precise["tags"].raw
         finally:

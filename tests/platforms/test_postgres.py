@@ -1,21 +1,72 @@
-"""Postgres-specific tests: native-type-string fidelity via psycopg `type_display`."""
+"""Tests for `PostgresAdapter`."""
 
+import psycopg
 import pytest
 from sqlglot import exp
 
 from evaldata import CallableSolver, EvalCase, ExecutionAccuracy, run_benchmark
 from evaldata.platforms import postgres_platform
 from evaldata.platforms.base import PlatformAdapter
+from evaldata.platforms.postgres import PostgresAdapter
 from evaldata.platforms.registry import close_all, resolve
-from evaldata.types import GoldQuery
+from evaldata.types import ExecutionError, GoldQuery
 
 from .conftest import _postgres_dsn, connect_postgres
 
 
+class _TimeoutCursor:
+    def __init__(self, *, user_error: Exception | None = None, restore_error: Exception | None = None) -> None:
+        self.user_error = user_error
+        self.restore_error = restore_error
+        self.calls: list[tuple[str, tuple[object, ...] | None]] = []
+        self.description = None
+
+    def __enter__(self) -> "_TimeoutCursor":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def execute(self, sql: str, params: tuple[object, ...] | None = None) -> None:
+        self.calls.append((sql, params))
+        if sql == "SELECT user_sql" and self.user_error is not None:
+            raise self.user_error
+        if sql.startswith("SELECT set_config") and self.restore_error is not None and params == ("1s",):
+            raise self.restore_error
+
+    def fetchone(self) -> tuple[str]:
+        return ("1s",)
+
+    def fetchall(self) -> list[tuple[object, ...]]:
+        return []
+
+
+class _TimeoutConnection:
+    def __init__(self, *cursors: _TimeoutCursor, closed: bool = False, broken: bool = False) -> None:
+        self._cursors = list(cursors)
+        self.closed = closed
+        self.broken = broken
+        self.cancelled = False
+
+    def cursor(self) -> _TimeoutCursor:
+        return self._cursors.pop(0)
+
+    def cancel_safe(self) -> None:
+        self.cancelled = True
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def _timeout_adapter(connection: _TimeoutConnection) -> PostgresAdapter:
+    adapter = object.__new__(PostgresAdapter)
+    adapter._conn = connection
+    adapter._reusable = True
+    return adapter
+
+
 @pytest.mark.e2e
 class TestPostgresNativeTypes:
-    """Postgres emits the native type strings (psycopg `type_display`) SQLGlot's `postgres` dialect parses."""
-
     @pytest.fixture
     def adapter(self) -> PlatformAdapter:
         return connect_postgres()
@@ -54,7 +105,6 @@ class TestPostgresNativeTypes:
         ],
     )
     def test_emitted_type_parses_under_postgres_dialect(self, adapter: PlatformAdapter, sql: str) -> None:
-        """The type strings PostgresAdapter emits must round-trip through SQLGlot."""
         result = adapter.execute(sql)
         assert result.error is None
         assert result.schema_ is not None
@@ -64,17 +114,14 @@ class TestPostgresNativeTypes:
 
 @pytest.mark.e2e
 class TestPostgresLifecycle:
-    """Connection lifecycle and non-row-returning statements."""
-
     def test_context_manager_returns_self_and_closes(self) -> None:
-        connect_postgres().close()  # fail early if Postgres is unreachable
+        connect_postgres().close()
         from evaldata.platforms.postgres import PostgresAdapter
 
         from .conftest import _postgres_dsn
 
         with PostgresAdapter(_postgres_dsn()) as adapter:
             assert adapter.execute("SELECT 1 AS n").error is None
-        # Exit closes the connection; a later execute now fails as a value rather than succeeding.
         assert adapter.execute("SELECT 1 AS n").error is not None
 
     def test_non_row_returning_statement_succeeds_without_schema(self) -> None:
@@ -88,12 +135,87 @@ class TestPostgresLifecycle:
             adapter.close()
 
 
+@pytest.mark.unit
+class TestPostgresTimeoutAndHealth:
+    def test_init_cancel_close_and_context_lifecycle(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        connection = _TimeoutConnection()
+        monkeypatch.setattr("evaldata.platforms.postgres.psycopg.connect", lambda *args, **kwargs: connection)
+        adapter = PostgresAdapter("dsn")
+        adapter.cancel()
+        assert connection.cancelled is True
+        with adapter as entered:
+            assert entered is adapter
+        assert connection.closed is True
+
+    def test_execute_without_native_timeout_and_missing_setting_are_structured_results(self) -> None:
+        ordinary_cursor = _TimeoutCursor()
+        ordinary_cursor.description = []
+        ordinary = _timeout_adapter(_TimeoutConnection(ordinary_cursor))
+        assert ordinary.execute("SELECT user_sql").error is None
+
+        class MissingSettingCursor(_TimeoutCursor):
+            def fetchone(self) -> None:
+                return None
+
+        missing = _timeout_adapter(_TimeoutConnection(MissingSettingCursor()))
+        assert missing.execute_with_timeout("SELECT user_sql", 1).error is not None
+        assert missing.is_reusable() is False
+
+    def test_native_timeout_rounds_up_executes_user_sql_once_and_restores(self) -> None:
+        work = _TimeoutCursor()
+        restore = _TimeoutCursor()
+        adapter = _timeout_adapter(_TimeoutConnection(work, restore))
+        result = adapter.execute_with_timeout("SELECT user_sql", 0.0011)
+        assert result.error is None
+        assert work.calls == [
+            ("SELECT current_setting('statement_timeout')", None),
+            ("SELECT set_config('statement_timeout', %s, false)", ("2",)),
+            ("SELECT user_sql", None),
+        ]
+        assert restore.calls == [("SELECT set_config('statement_timeout', %s, false)", ("1s",))]
+
+    def test_native_cancellation_is_budget_error_but_ordinary_cancellation_is_not(self) -> None:
+        cancelled = psycopg.errors.QueryCanceled("cancelled")
+        native = _timeout_adapter(_TimeoutConnection(_TimeoutCursor(user_error=cancelled), _TimeoutCursor()))
+        ordinary = _timeout_adapter(_TimeoutConnection(_TimeoutCursor(user_error=cancelled)))
+        native_result = native.execute_with_timeout("SELECT user_sql", 1)
+        ordinary_result = ordinary.execute("SELECT user_sql")
+        assert native_result.error is not None
+        assert native_result.error.kind == "budget_exceeded"
+        assert ordinary_result.error is not None
+        assert ordinary_result.error.kind == "query_failed"
+
+    def test_restore_failure_marks_successful_session_unreusable(self) -> None:
+        adapter = _timeout_adapter(
+            _TimeoutConnection(_TimeoutCursor(), _TimeoutCursor(restore_error=psycopg.Error("restore failed")))
+        )
+        assert adapter.execute_with_timeout("SELECT user_sql", 1).error is None
+        assert adapter.is_reusable() is False
+
+    def test_ping_fast_fails_closed_or_broken_connection(self) -> None:
+        assert _timeout_adapter(_TimeoutConnection(closed=True)).ping() is False
+        assert _timeout_adapter(_TimeoutConnection(broken=True)).ping() is False
+
+    def test_ping_and_disconnect_classification_cover_live_connection_state(self) -> None:
+        adapter = _timeout_adapter(_TimeoutConnection(_TimeoutCursor()))
+        assert adapter.ping() is True
+        assert adapter.is_disconnect(ExecutionError(kind="query_failed", message="x", sqlstate="08006")) is True
+
+    def test_ping_treats_driver_failure_as_unhealthy(self) -> None:
+        class FailingPingCursor(_TimeoutCursor):
+            def execute(self, sql: str, params: tuple[object, ...] | None = None) -> None:
+                if sql == "SELECT 1":
+                    message = "ping failed"
+                    raise psycopg.Error(message)
+                super().execute(sql, params)
+
+        assert _timeout_adapter(_TimeoutConnection(FailingPingCursor())).ping() is False
+
+
 @pytest.mark.e2e
 class TestPostgresConcurrency:
-    """Dedicated-connection pool: concurrent cases each get their own connection and stay correct."""
-
     def test_concurrent_cases_score_independently(self) -> None:
-        connect_postgres().close()  # fail early if Postgres is unreachable
+        connect_postgres().close()
         platform = postgres_platform(name="pg-conc-e2e", conninfo=_postgres_dsn())
         utility = resolve(platform)
         utility.execute("DROP TABLE IF EXISTS eval_conc")

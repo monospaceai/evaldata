@@ -1,6 +1,7 @@
 """`PostgresAdapter`: PostgreSQL execution backend over `psycopg` (v3)."""
 
 import contextlib
+import math
 import time
 from types import TracebackType
 from typing import Self
@@ -8,7 +9,7 @@ from typing import Self
 import psycopg
 
 from evaldata.platforms.base import execution_error, rows_or_error
-from evaldata.types import Column, ExecutionResult, SqlType
+from evaldata.types import Column, ExecutionError, ExecutionResult, SqlType
 
 
 class PostgresAdapter:
@@ -21,18 +22,12 @@ class PostgresAdapter:
         (`"host=... port=... user=... password=... dbname=..."`) or a
         `postgresql://` URI. Empty uses libpq defaults / `PG*` env vars.
         """
-        # autocommit so a failed statement can't poison later calls with an aborted
-        # transaction; psycopg's connection context manager is intentionally unused.
+        # A failed statement must not leave later calls in an aborted transaction.
         self._conn = psycopg.connect(conninfo, autocommit=True)
+        self._reusable = True
 
     def cancel(self) -> None:
-        """Cancel the query currently executing on this connection.
-
-        Sends a libpq cancel request over a separate channel, so it is safe to call from
-        another thread while `execute` is blocked, and a harmless no-op when no query is
-        running. The cancelled `execute` raises `psycopg.errors.QueryCanceled`, surfaced as
-        `ExecutionResult.error`. Cancellation failures are swallowed — they are non-fatal.
-        """
+        """Cancel the current query without raising cancellation errors."""
         with contextlib.suppress(psycopg.Error):  # best-effort; a failed cancel is non-fatal
             self._conn.cancel_safe()
 
@@ -63,21 +58,91 @@ class PostgresAdapter:
             An `ExecutionResult` with the returned rows, schema, and latency. Query
             failures are returned as `ExecutionResult.error` rather than raised.
         """
-        start = time.perf_counter()
+        return self._execute(sql)
+
+    def execute_with_timeout(self, sql: str, timeout_seconds: float) -> ExecutionResult:
+        """Execute one statement with PostgreSQL's native statement timeout.
+
+        Args:
+            sql: The SQL statement to execute.
+            timeout_seconds: Positive statement deadline in seconds.
+
+        Returns:
+            The statement result, mapping SQLSTATE `57014` to `budget_exceeded`.
+        """
+        return self._execute(sql, timeout_milliseconds=math.ceil(timeout_seconds * 1000))
+
+    def is_reusable(self) -> bool:
+        """Return whether local timeout-setting cleanup has completed successfully."""
+        return getattr(self, "_reusable", True)
+
+    def ping(self) -> bool:
+        """Return whether this PostgreSQL session can execute a simple statement."""
+        if getattr(self._conn, "closed", False) or getattr(self._conn, "broken", False):
+            return False
         try:
             with self._conn.cursor() as cursor:
-                # psycopg types `execute` to accept only LiteralString, to steer callers
-                # toward parameterized queries. Executing arbitrary caller-provided SQL is
-                # this adapter's entire purpose, so that guard is deliberately bypassed.
+                cursor.execute("SELECT 1")
+            return True
+        except psycopg.Error:
+            return False
+
+    def is_disconnect(self, error: ExecutionError) -> bool:
+        """Return whether a structured error or connection state proves disconnection."""
+        return bool(
+            (error.sqlstate is not None and error.sqlstate.startswith("08"))
+            or getattr(self._conn, "closed", False)
+            or getattr(self._conn, "broken", False)
+        )
+
+    def _execute(self, sql: str, *, timeout_milliseconds: int | None = None) -> ExecutionResult:
+        """Execute user SQL once, optionally restoring a temporary statement timeout.
+
+        Returns:
+            The structured statement result.
+        """
+        start = time.perf_counter()
+        previous_timeout: str | None = None
+        description = None
+        rows_raw = []
+        try:
+            with self._conn.cursor() as cursor:
+                if timeout_milliseconds is not None:
+                    cursor.execute("SELECT current_setting('statement_timeout')")
+                    current_timeout = cursor.fetchone()
+                    if current_timeout is None:
+                        self._reusable = False
+                        elapsed = time.perf_counter() - start
+                        return ExecutionResult(
+                            rows=[],
+                            schema=None,
+                            latency_seconds=elapsed,
+                            error=ExecutionError(
+                                kind="query_failed", message="statement timeout setting was unavailable"
+                            ),
+                        )
+                    previous_timeout = str(current_timeout[0])
+                    cursor.execute("SELECT set_config('statement_timeout', %s, false)", (str(timeout_milliseconds),))
                 cursor.execute(sql)  # ty: ignore[no-matching-overload]
                 description = cursor.description
                 rows_raw = cursor.fetchall() if description is not None else []
         except psycopg.Error as e:
             elapsed = time.perf_counter() - start
-            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=execution_error(e))
+            kind = (
+                "budget_exceeded"
+                if timeout_milliseconds is not None and getattr(e, "sqlstate", None) == "57014"
+                else "query_failed"
+            )
+            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=execution_error(e, kind))
+        finally:
+            if previous_timeout is not None:
+                try:
+                    with self._conn.cursor() as cursor:
+                        cursor.execute("SELECT set_config('statement_timeout', %s, false)", (previous_timeout,))
+                except psycopg.Error:
+                    self._reusable = False
         elapsed = time.perf_counter() - start
         if description is None:
-            # Non-row-returning statement (DDL/DML): success, no schema.
             return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed)
         columns = [
             Column(name=col.name, type=SqlType.parse(col.type_display, "postgres"), nullable=col.null_ok)

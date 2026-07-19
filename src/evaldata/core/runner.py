@@ -9,6 +9,7 @@ from typing import cast
 from pydantic import BaseModel, ConfigDict
 
 from evaldata.platforms.base import PlatformAdapter
+from evaldata.platforms.pool import PoolUnavailableError
 from evaldata.platforms.registry import acquired
 from evaldata.reporting.collector import CaseReport, record
 from evaldata.reporting.terminal import render_failure, render_solver_error
@@ -16,7 +17,7 @@ from evaldata.scorers.base import Scorer
 from evaldata.scorers.context import ScoreContext
 from evaldata.scorers.query import QueryRunner
 from evaldata.solvers.base import Solver
-from evaldata.types import EvalCase, ExecutionResult, ScoreResult, SolverOutput, Sql
+from evaldata.types import EvalCase, ExecutionError, ExecutionResult, ScoreResult, SolverOutput, Sql
 
 
 @dataclass(frozen=True)
@@ -100,8 +101,64 @@ def _score_output(
         raise AssertionError(msg)
     if adapter is not None:
         return _execute_and_score(case, output, sql, scorers=scorers, adapter=adapter)
-    with acquired(case.platform) as live:
-        return _execute_and_score(case, output, sql, scorers=scorers, adapter=live)
+    try:
+        with acquired(case.platform) as live:
+            return _execute_and_score(case, output, sql, scorers=scorers, adapter=live)
+    except PoolUnavailableError as error:
+        return _platform_unavailable(case, output, sql, scorers, error)
+
+
+def _platform_unavailable(
+    case: EvalCase,
+    output: SolverOutput,
+    sql: Sql,
+    scorers: Sequence[Scorer],
+    error: PoolUnavailableError,
+) -> CaseEvaluation:
+    """Score a bounded acquisition failure as an execution error rather than raising it.
+
+    Returns:
+        A failed case evaluation with a `platform_unavailable` execution result.
+    """
+    result = ExecutionResult(
+        rows=[],
+        schema=None,
+        latency_seconds=0.0,
+        error=ExecutionError(kind="platform_unavailable", message=str(error)),
+    )
+    adapter = _UnavailableAdapter(result)
+    dialect = case.platform.dialect or case.platform.kind
+    context = ScoreContext(queries=QueryRunner(adapter, sql, dialect, None))
+    scores = [scorer.score(case, output, result, context=context) for scorer in scorers]
+    failures = [score for score in scores if not score.passed]
+    report = CaseReport(id=case.id, input=case.input, passed=False, scores=list(scores))
+    return CaseEvaluation(report=report, output=output, result=result, failures=failures)
+
+
+class _UnavailableAdapter:
+    """An error-only adapter used to prevent derived scorer SQL after failed acquisition."""
+
+    def __init__(self, result: ExecutionResult) -> None:
+        """Store the unavailable-platform result returned for every execution.
+
+        Args:
+            result: The failure result to return.
+        """
+        self._result = result
+
+    def execute(self, sql: str) -> ExecutionResult:
+        """Return the stored acquisition failure.
+
+        Returns:
+            The unavailable-platform result.
+        """
+        return self._result
+
+    def cancel(self) -> None:
+        """Perform no cancellation because no query was started."""
+
+    def close(self) -> None:
+        """Perform no cleanup because no connection was acquired."""
 
 
 def _execute_and_score(
@@ -162,8 +219,7 @@ def assert_eval(
     record(evaluation.report)
     if evaluation.output.error is not None:
         raise AssertionError(render_solver_error(case, evaluation.output.error))
-    if evaluation.failures:
-        # `result` is always set when scorers ran (the solver-error path returns before scoring).
+    if not evaluation.report.passed:
         result = cast(ExecutionResult, evaluation.result)
         raise AssertionError(render_failure(case, evaluation.output, result, evaluation.failures))
 

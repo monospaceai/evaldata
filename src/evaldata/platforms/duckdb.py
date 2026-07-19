@@ -7,7 +7,7 @@ from typing import Self
 import duckdb
 
 from evaldata.platforms.base import execution_error, rows_or_error
-from evaldata.types import Column, ExecutionResult, SqlType
+from evaldata.types import Column, ExecutionError, ExecutionResult, SqlType
 
 
 class DuckDBAdapter:
@@ -89,3 +89,7 @@ class DuckDBAdapter:
             null_ok = desc[6] if len(desc) > 6 else None
             columns.append(Column(name=name, type=SqlType.parse(str(type_), "duckdb"), nullable=null_ok))
         return rows_or_error(columns, rows_raw, elapsed)
+
+    def is_disconnect(self, error: ExecutionError) -> bool:
+        """Return whether DuckDB reported a fatal or disconnected connection."""
+        return isinstance(error.cause, (duckdb.ConnectionException, duckdb.FatalException))

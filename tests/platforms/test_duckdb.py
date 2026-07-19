@@ -1,4 +1,4 @@
-"""DuckDB-specific tests: native-type-string fidelity, file-backed lifecycle, and shared cursors."""
+"""Tests for `DuckDBAdapter`."""
 
 import threading
 import time
@@ -9,12 +9,11 @@ import pytest
 from sqlglot import exp
 
 from evaldata.platforms.duckdb import DuckDBAdapter
+from evaldata.types import ExecutionError
 
 
 @pytest.mark.unit
 class TestDuckDBNativeTypes:
-    """DuckDB emits the native SQL type strings SQLGlot's `duckdb` dialect parses."""
-
     @pytest.fixture
     def adapter(self) -> DuckDBAdapter:
         return DuckDBAdapter()
@@ -49,7 +48,6 @@ class TestDuckDBNativeTypes:
         ],
     )
     def test_emitted_type_parses_under_duckdb_dialect(self, adapter: DuckDBAdapter, sql: str) -> None:
-        """The type strings DuckDBAdapter emits must round-trip through SQLGlot."""
         result = adapter.execute(sql)
         assert result.error is None
         assert result.schema_ is not None
@@ -59,11 +57,7 @@ class TestDuckDBNativeTypes:
 
 @pytest.mark.unit
 class TestDuckDBFilePath:
-    """`database=` argument is honoured — a file-backed DB persists across reopens."""
-
     def test_file_backed_database_persists(self, tmp_path: Path) -> None:
-        # Context-manager exit calls close() for deterministic release of the OS file
-        # handle / WAL lock — implicit cleanup is unreliable on Windows.
         db_path = str(tmp_path / "test.duckdb")
         with DuckDBAdapter(database=db_path) as first:
             first.execute("CREATE TABLE t (x INTEGER)")
@@ -76,8 +70,6 @@ class TestDuckDBFilePath:
 
 @pytest.mark.unit
 class TestDuckDBSharedCursor:
-    """`from_connection` adapters share one parent's in-process database and isolate interrupts."""
-
     def test_members_share_the_parent_database(self) -> None:
         parent = duckdb.connect(":memory:")
         try:
@@ -95,7 +87,6 @@ class TestDuckDBSharedCursor:
         try:
             member = DuckDBAdapter.from_connection(parent.cursor())
             member.close()
-            # The parent (and any sibling) still works after a member cursor is closed.
             assert parent.execute("SELECT 1 AS n").fetchall() == [(1,)]
             sibling = DuckDBAdapter.from_connection(parent.cursor())
             assert sibling.execute("SELECT 1 AS n").error is None
@@ -103,13 +94,8 @@ class TestDuckDBSharedCursor:
             parent.close()
 
     def test_interrupt_isolation_between_sibling_cursors(self) -> None:
-        # Canary: interrupting one cursor must not cancel a concurrent query on a sibling
-        # cursor of the same parent. The pool's shared-cursor design (and DuckDB budgets)
-        # relies on this; a future DuckDB bump that changes it should fail here.
         parent = duckdb.connect(":memory:")
-        parent.execute("PRAGMA threads=1")  # cross-query parallelism only, so both truly overlap
-        # A genuinely slow, non-shortcuttable query so the sibling is still running when A is
-        # interrupted (a count over range folds away and could finish first).
+        parent.execute("PRAGMA threads=1")
         n, m = 20_000_000, 20
         slow = f"SELECT sum(a.i * b.i) AS s FROM range({n}) a(i), range({m}) b(i)"
         expected = (n * (n - 1) // 2) * (m * (m - 1) // 2)
@@ -132,8 +118,6 @@ class TestDuckDBSharedCursor:
             sibling.start()
             started["a"].wait(timeout=5)
             started["b"].wait(timeout=5)
-            # Interrupt A repeatedly until its thread ends while B is still executing, so B's
-            # correct completion proves the interrupt did not reach the sibling cursor.
             while interrupted.is_alive():
                 a.interrupt()
                 time.sleep(0.01)
@@ -142,4 +126,22 @@ class TestDuckDBSharedCursor:
         finally:
             parent.close()
         assert results["a"] == "interrupted"
-        assert results["b"] == [(expected,)]  # sibling completed correctly; it was not cancelled
+        assert results["b"] == [(expected,)]
+
+
+@pytest.mark.unit
+class TestDuckDBConnectionHealth:
+    def test_only_fatal_or_connection_errors_retire_a_member(self) -> None:
+        adapter = DuckDBAdapter()
+        try:
+            assert adapter.is_disconnect(
+                ExecutionError(kind="query_failed", message="x", cause=duckdb.ConnectionException("x"))
+            )
+            assert adapter.is_disconnect(
+                ExecutionError(kind="query_failed", message="x", cause=duckdb.FatalException("x"))
+            )
+            assert not adapter.is_disconnect(
+                ExecutionError(kind="query_failed", message="x", cause=duckdb.InterruptException("x"))
+            )
+        finally:
+            adapter.close()

@@ -1,6 +1,7 @@
 """`SnowflakeAdapter`: Snowflake execution backend over `snowflake-connector-python`."""
 
 import contextlib
+import math
 import time
 from types import TracebackType
 from typing import Self
@@ -10,7 +11,7 @@ from snowflake.connector.constants import FIELD_ID_TO_NAME
 from snowflake.connector.cursor import ResultMetadata, SnowflakeCursor
 
 from evaldata.platforms.base import execution_error, rows_or_error
-from evaldata.types import Column, ExecutionResult, SqlType
+from evaldata.types import Column, ExecutionError, ExecutionResult, SqlType
 
 
 def _type_string(field_name: str, precision: int | None, scale: int | None, internal_size: int | None) -> str:
@@ -172,11 +173,54 @@ class SnowflakeAdapter:
             An `ExecutionResult` with the returned rows, schema, and latency. Query
             failures are returned as `ExecutionResult.error` rather than raised.
         """
+        return self._execute(sql)
+
+    def execute_with_timeout(self, sql: str, timeout_seconds: float) -> ExecutionResult:
+        """Execute one statement with the connector's native timeout.
+
+        Args:
+            sql: The SQL statement to execute.
+            timeout_seconds: Positive statement deadline in seconds.
+
+        Returns:
+            The structured statement result.
+        """
+        return self._execute(sql, timeout=math.ceil(timeout_seconds))
+
+    def ping(self) -> bool:
+        """Return whether Snowflake reports this session as valid."""
+        try:
+            return bool(self._conn.is_valid())
+        except Exception:
+            return False
+
+    def is_disconnect(self, error: ExecutionError) -> bool:
+        """Return whether a connection-class error leaves this session unusable."""
+        if error.sqlstate is not None and error.sqlstate.startswith("08"):
+            return True
+        cause = error.cause
+        connection_errors = (
+            snowflake.connector.errors.InterfaceError,
+            snowflake.connector.errors.OperationalError,
+            snowflake.connector.errors.RequestTimeoutError,
+            snowflake.connector.errors.ServiceUnavailableError,
+        )
+        return isinstance(cause, connection_errors)
+
+    def _execute(self, sql: str, *, timeout: int | None = None) -> ExecutionResult:
+        """Execute user SQL once, optionally using the connector deadline.
+
+        Returns:
+            The structured statement result.
+        """
         start = time.perf_counter()
         cursor = self._conn.cursor()
         self._cursor = cursor
         try:
-            cursor.execute(sql)
+            if timeout is None:
+                cursor.execute(sql)
+            else:
+                cursor.execute(sql, timeout=timeout)
             description = cursor.description
             rows_raw = cursor.fetchall() if description is not None else []
         except Exception as e:  # noqa: BLE001 - execute must never raise; failures return as ExecutionResult.error
@@ -188,7 +232,6 @@ class SnowflakeAdapter:
                 cursor.close()
         elapsed = time.perf_counter() - start
         if description is None:
-            # Non-row-returning statement (DDL/DML): success, no schema.
             return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed)
         columns = [_column_from_metadata(meta) for meta in description]
         return rows_or_error(columns, [tuple(row) for row in rows_raw], elapsed)

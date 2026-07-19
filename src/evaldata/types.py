@@ -8,12 +8,8 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, RootModel, m
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
 
-# A SQL string designated as a solver's runnable artifact. Static-only: at runtime it is a
-# plain `str`, so it flows transparently into anything that executes SQL; producing one
-# requires an explicit `Sql(...)`, which is where the "this string is SQL" claim is made.
 Sql = NewType("Sql", str)
 
-# The supported set: dispatch over this Literal is exhaustively type-checked (match/assert_never).
 PlatformKind = Literal["duckdb", "postgres", "databricks", "snowflake", "bigquery", "sqlite"]
 
 SQLDialect = Literal[
@@ -27,14 +23,10 @@ SQLDialect = Literal[
     "sqlite",
 ]
 
-# A scorer-level test outcome: a confirmed pass, a refuted fail, or `"inconclusive"` when the
-# test could neither confirm nor refute.
 Verdict = Literal["pass", "fail", "inconclusive"]
 
-# Evidence strength of a verdict: sound on all data / observed on the data run / probabilistic judgment.
 Basis = Literal["proven", "observed", "judged"]
 
-# A normalized graded magnitude in `[0.0, 1.0]`, higher-is-better.
 Score = Annotated[float, Field(ge=0.0, le=1.0)]
 
 
@@ -47,20 +39,25 @@ class PlatformRef(BaseModel):
     kind: PlatformKind
     dialect: SQLDialect | None = None
     config: dict[str, Any] = Field(default_factory=dict)
+    pool: "PoolPolicy | None" = Field(default=None, exclude_if=lambda value: value is None)
+
+
+class PoolPolicy(BaseModel):
+    """Lifecycle limits for a platform's persistent connection pool."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_size: Annotated[int, Field(gt=0)]
+    pre_ping: bool = False
+    acquire_timeout_seconds: Annotated[float, Field(gt=0)] = 30.0
+    cancel_grace_seconds: Annotated[float, Field(ge=0)] = 1.0
+    max_quarantined: Annotated[int, Field(gt=0)] | None = None
+    max_lifetime_seconds: Annotated[float, Field(gt=0)] | None = None
+    max_idle_seconds: Annotated[float, Field(gt=0)] | None = None
 
 
 class SqlType(BaseModel):
-    """A SQL column type, canonicalised through SQLGlot for safe equality.
-
-    `raw` is the native string the platform or author produced (truthful, for diffs).
-    `canonical` is the dialect-neutral SQLGlot rendering used for comparison, or `None`
-    when SQLGlot cannot parse the type. Equality compares `canonical` when both sides
-    have one, else falls back to `raw`.
-
-    Accepts a plain string as authoring shorthand: `"BIGINT"` becomes a `SqlType` with
-    `raw="BIGINT"` and `canonical=None`. Canonicalisation happens eagerly at the
-    ingestion boundary (adapters and the `EvalCase` validator), never at compare time.
-    """
+    """A SQL column type with native and canonical representations."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -220,7 +217,6 @@ class UntypedSchema(RootModel[list[str]]):
         return list(self.root)
 
 
-# A result set's schema: typed (every column has a `SqlType`) or untyped (names only).
 Schema = TypedSchema | UntypedSchema
 
 
@@ -371,7 +367,7 @@ class CostBudget(BaseModel):
 
 
 class EvalCase(BaseModel):
-    """One AI-evaluation case: an input with an expected outcome and a platform to run against."""
+    """One evaluation case: an input with an expected outcome and a platform to run against."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -424,14 +420,7 @@ class EvalCase(BaseModel):
 
 
 class Error(BaseModel):
-    """Base for the typed error types.
-
-    Holds the fields every typed error shares. Subclasses add a `kind` discriminator and any
-    domain-specific structured fields (an `ExecutionError`'s `sqlstate`, a `SolverError`'s
-    `provider`). `cause` keeps the original exception — and its traceback — for in-process
-    debugging and logging; it is excluded from serialization, so reports carry only the
-    structured surface.
-    """
+    """Base type for structured errors."""
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
@@ -439,8 +428,6 @@ class Error(BaseModel):
     cause: Exception | None = Field(default=None, exclude=True, repr=False)
 
 
-# The provider-call failures shared by every LLM-backed call: a 1:1 reflection of the
-# litellm exception hierarchy the LLM seam translates.
 ProviderErrorKind = Literal[
     "timeout",
     "rate_limit",
@@ -503,7 +490,13 @@ class SolverOutput(BaseModel):
         return self
 
 
-ExecutionErrorKind = Literal["query_failed", "budget_exceeded", "duplicate_columns", "type_probe_failed"]
+ExecutionErrorKind = Literal[
+    "query_failed",
+    "budget_exceeded",
+    "duplicate_columns",
+    "type_probe_failed",
+    "platform_unavailable",
+]
 
 
 class ExecutionError(Error):
@@ -565,8 +558,6 @@ class ResultSetDiff(BaseModel):
     actual_row_count: Annotated[int, Field(ge=0)]
     missing_row_count: Annotated[int, Field(ge=0)] = 0
     extra_row_count: Annotated[int, Field(ge=0)] = 0
-    # Bounded samples of the differing rows, capped by the engine so large mismatches
-    # stay readable. `*_row_count` give the full magnitude; these give concrete examples.
     sample_missing_rows: list[dict[str, Any]] = Field(default_factory=list)
     sample_extra_rows: list[dict[str, Any]] = Field(default_factory=list)
     missing_columns: list[str] = Field(default_factory=list)
@@ -638,11 +629,8 @@ class ScoreResult(BaseModel):
         return self
 
 
-# A semantic check either confirms equivalence or cannot decide; it never refutes, so "unknown"
-# means "could not confirm".
 Equivalence = Literal["equivalent", "unknown"]
 
-# The kinds of equivalence-deciding technique.
 EquivalenceMethod = Literal["ast"]
 
 

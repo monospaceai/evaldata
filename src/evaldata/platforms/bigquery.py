@@ -1,9 +1,10 @@
 """`BigQueryAdapter`: BigQuery execution backend over `google-cloud-bigquery`."""
 
 import contextlib
+import math
 import time
 from types import TracebackType
-from typing import Self
+from typing import Self, cast
 
 from google.cloud import bigquery
 from sqlglot import exp
@@ -131,9 +132,37 @@ class BigQueryAdapter:
             An `ExecutionResult` with the returned rows, schema, and latency. Query
             failures are returned as `ExecutionResult.error` rather than raised.
         """
+        return self._execute(sql)
+
+    def execute_with_timeout(self, sql: str, timeout_seconds: float) -> ExecutionResult:
+        """Submit one job with BigQuery's native job deadline.
+
+        Args:
+            sql: The SQL statement to execute.
+            timeout_seconds: Positive job deadline in seconds.
+
+        Returns:
+            The structured job result.
+        """
+        config = self._copy_job_config()
+        config.job_timeout_ms = math.ceil(timeout_seconds * 1000)
+        return self._execute(sql, job_config=config)
+
+    def _copy_job_config(self) -> bigquery.QueryJobConfig:
+        """Return an independent copy of this adapter's base query configuration."""
+        if self._job_config is None:
+            return bigquery.QueryJobConfig()
+        return cast(bigquery.QueryJobConfig, bigquery.QueryJobConfig.from_api_repr(self._job_config.to_api_repr()))
+
+    def _execute(self, sql: str, *, job_config: bigquery.QueryJobConfig | None = None) -> ExecutionResult:
+        """Submit user SQL once with the supplied immutable-per-call configuration.
+
+        Returns:
+            The structured job result.
+        """
         start = time.perf_counter()
         try:
-            job = self._client.query(sql, job_config=self._job_config)
+            job = self._client.query(sql, job_config=self._job_config if job_config is None else job_config)
             self._job = job
             iterator = job.result()
             schema = iterator.schema
@@ -145,7 +174,6 @@ class BigQueryAdapter:
             self._job = None
         elapsed = time.perf_counter() - start
         if not schema:
-            # Non-row-returning statement (DDL/DML): a SELECT always projects at least one column.
             return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed)
         columns = [_column_from_field(field) for field in schema]
         return rows_or_error(columns, rows_raw, elapsed)
