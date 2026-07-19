@@ -86,8 +86,8 @@ its platform features:
   `http_path`; credentials are not part of it.
 
 Set `DATABRICKS_SERVER_HOSTNAME` and `DATABRICKS_HTTP_PATH`, and authenticate with the
-Databricks CLI (https://github.com/databricks/cli). It seeds a session-scoped
-`TEMPORARY VIEW`, so it needs only query permissions and leaves nothing behind.
+Databricks CLI (https://github.com/databricks/cli). The fixture rows are an inline `VALUES`
+relation, so the example needs only query permissions and leaves nothing behind.
 
 ### 05_llm_judge
 Both cases pick AI SQL the syntax check leaves inconclusive, so the SQL-equivalence judge

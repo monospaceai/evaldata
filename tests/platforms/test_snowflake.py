@@ -313,6 +313,8 @@ class TestConcurrencySmoke:
             role=os.environ.get("SNOWFLAKE_ROLE"),
             database=os.environ.get("SNOWFLAKE_DATABASE"),
             schema=os.environ.get("SNOWFLAKE_SCHEMA"),
+            authenticator=os.environ.get("SNOWFLAKE_AUTHENTICATOR"),
+            workload_identity_provider=os.environ.get("SNOWFLAKE_WORKLOAD_IDENTITY_PROVIDER"),
         )
         try:
             cases = [

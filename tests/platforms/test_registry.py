@@ -48,12 +48,25 @@ class TestRefBuilders:
         assert ref.config == {"server_hostname": "h", "http_path": "/p", "catalog": "main", "schema": "sales"}
 
     def test_snowflake_platform_builds_ref(self) -> None:
-        ref = snowflake_platform(name="sf", account="acme-test", warehouse="COMPUTE_WH", role="EVALDATA")
+        ref = snowflake_platform(
+            name="sf",
+            account="acme-test",
+            warehouse="COMPUTE_WH",
+            role="EVALDATA",
+            authenticator="WORKLOAD_IDENTITY",
+            workload_identity_provider="OIDC",
+        )
         assert ref == PlatformRef(
             name="sf",
             kind="snowflake",
             dialect="snowflake",
-            config={"account": "acme-test", "warehouse": "COMPUTE_WH", "role": "EVALDATA"},
+            config={
+                "account": "acme-test",
+                "warehouse": "COMPUTE_WH",
+                "role": "EVALDATA",
+                "authenticator": "WORKLOAD_IDENTITY",
+                "workload_identity_provider": "OIDC",
+            },
         )
 
     def test_bigquery_platform_builds_ref(self) -> None:
