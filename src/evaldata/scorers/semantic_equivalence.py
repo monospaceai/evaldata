@@ -203,38 +203,8 @@ def _normalize(sql: Sql, dialect: Dialect) -> exp.Expression | NormalizationErro
         return NormalizationError(kind="normalize_failed", message=f"could not normalize ({error})", cause=error)
 
 
-class _PatchedSimplifier(Simplifier):
-    """SQLGlot's simplifier with `simplify_equality` corrected for `constant - variable`.
-
-    Upstream mis-folds these (`0 - a = 1` becomes `a = 1`, not `a = -1`), which would over-merge.
-    Temporary until the fix ships in a SQLGlot release; a canary test fails once it lands, flagging
-    removal.
-    """
-
-    def simplify_equality(self, expression: exp.Expression) -> exp.Expression:
-        """Rewrite the `constant - variable` comparison correctly; defer the rest to SQLGlot.
-
-        Args:
-            expression: The comparison node.
-
-        Returns:
-            The corrected comparison when the variable is a subtraction's subtrahend, else
-            SQLGlot's own result.
-        """
-        left = expression.left if isinstance(expression, self.COMPARISONS) else None
-        if (
-            isinstance(left, exp.Sub)
-            and left.left.is_number
-            and not left.right.is_number
-            and expression.right.is_number
-        ):
-            comparison = self.INVERSE_COMPARISONS.get(type(expression), type(expression))
-            return comparison(this=left.right, expression=exp.Sub(this=left.left, expression=expression.right))
-        return super().simplify_equality(expression)
-
-
 def _simplify(expression: exp.Expression, dialect: Dialect) -> exp.Expression:
-    """Simplify `expression` with the local `constant - variable` correction applied.
+    """Simplify `expression` with SQLGlot's simplifier.
 
     Args:
         expression: The expression to simplify.
@@ -243,7 +213,7 @@ def _simplify(expression: exp.Expression, dialect: Dialect) -> exp.Expression:
     Returns:
         The simplified expression.
     """
-    return _PatchedSimplifier(dialect=dialect).simplify(expression)
+    return Simplifier(dialect=dialect).simplify(expression)
 
 
 def _normalize_tree(tree: exp.Expression, dialect: Dialect) -> exp.Expression:

@@ -1,4 +1,4 @@
-"""`BigQueryAdapter` tests: unit (fake client) + a live type-resolution e2e check."""
+"""Tests for `BigQueryAdapter`."""
 
 from typing import Any
 
@@ -48,10 +48,12 @@ class _FakeClient:
     def __init__(self, job: _FakeQueryJob) -> None:
         self._job = job
         self.queried: str | None = None
+        self.job_configs: list[Any] = []
         self.closed = False
 
     def query(self, sql: str, job_config: Any = None) -> _FakeQueryJob:
         self.queried = sql
+        self.job_configs.append(job_config)
         return self._job
 
     def close(self) -> None:
@@ -63,10 +65,6 @@ def _job(schema: list[bigquery.SchemaField], rows: list[tuple[Any, ...]], error:
 
 
 def _adapter(job: _FakeQueryJob, *, active: bool = False) -> BigQueryAdapter:
-    """Build an adapter bound to a fake client, bypassing the real `__init__`.
-
-    With `active=True` the job is set as the in-flight one, so `cancel` can reach it.
-    """
     adapter = object.__new__(BigQueryAdapter)
     adapter._client = _FakeClient(job)
     adapter._job_config = None
@@ -76,6 +74,24 @@ def _adapter(job: _FakeQueryJob, *, active: bool = False) -> BigQueryAdapter:
 
 @pytest.mark.unit
 class TestExecute:
+    def test_native_timeout_builds_config_when_no_base_config_exists(self) -> None:
+        adapter = _adapter(_job([], []))
+        assert adapter.execute_with_timeout("SELECT 1", 1).error is None
+        assert adapter._client.job_configs[0].job_timeout_ms == "1000"  # noqa: SLF001
+
+    def test_native_timeout_clones_base_config_and_rounds_milliseconds_up(self) -> None:
+        adapter = _adapter(_job([], []))
+        base = bigquery.QueryJobConfig(default_dataset="project.dataset")
+        adapter._job_config = base  # noqa: SLF001
+        result = adapter.execute_with_timeout("SELECT 1", 0.0011)
+        config = adapter._client.job_configs[0]  # noqa: SLF001
+        assert result.error is None
+        assert adapter._client.queried == "SELECT 1"  # noqa: SLF001
+        assert config is not base
+        assert config.default_dataset == base.default_dataset
+        assert config.job_timeout_ms == "2"
+        assert base.job_timeout_ms is None
+
     def test_rows_and_schema_on_success(self) -> None:
         schema = [
             bigquery.SchemaField("id", "NUMERIC", mode="NULLABLE", precision=10, scale=2),
@@ -195,8 +211,6 @@ class TestTypeString:
 
 @pytest.mark.unit
 class TestLifecycle:
-    """Client lifecycle against a mocked driver — keeps coverage independent of creds."""
-
     @staticmethod
     def _patch_client(monkeypatch: pytest.MonkeyPatch, captured: dict[str, Any]) -> None:
         def fake_client(**kwargs: Any) -> _FakeClient:
@@ -239,7 +253,7 @@ class TestLifecycle:
         assert job.cancelled is True
 
     def test_cancel_is_a_noop_when_no_query_runs(self) -> None:
-        _adapter(_job([], [])).cancel()  # _job is None; must not raise
+        _adapter(_job([], [])).cancel()
 
     def test_cancel_swallows_errors(self) -> None:
         class _BadCancelJob(_FakeQueryJob):
@@ -247,7 +261,7 @@ class TestLifecycle:
                 msg = "cancel failed"
                 raise RuntimeError(msg)
 
-        _adapter(_BadCancelJob(_FakeRowIterator([], [])), active=True).cancel()  # best-effort: swallowed
+        _adapter(_BadCancelJob(_FakeRowIterator([], [])), active=True).cancel()
 
     def test_close_releases_the_client(self) -> None:
         adapter = _adapter(_job([], []))
@@ -265,11 +279,6 @@ class TestLifecycle:
 @pytest.mark.cloud
 @pytest.mark.bigquery
 class TestTypeResolutionLive:
-    """Live schema resolution against a real project; unit tests use fakes.
-
-    Fails loud (no skip) when `BIGQUERY_PROJECT` is unset.
-    """
-
     def test_numeric_and_string_types_resolve_to_precise(self) -> None:
         from .conftest import connect_bigquery
 
@@ -281,7 +290,6 @@ class TestTypeResolutionLive:
             assert result.error is None, result.error
             assert result.schema_ is not None
             precise = {c.name: c.type for c in result.schema_.root}
-            # `.raw` surfaces the real reported type string if the assumption is wrong.
             assert precise["nums"] == SqlType.parse("ARRAY<INT64>", "bigquery"), precise["nums"].raw
         finally:
             adapter.close()

@@ -31,6 +31,9 @@ Cortex Analyst as the AI under test).
 and its Semantic Layer, then scores stubbed answers offline against the project's bundled DuckDB —
 text-to-SQL with `ExecutionAccuracy`, and MetricFlow queries with the Semantic Layer cascade.
 
+`11_pydantic_evals` shows the **Pydantic Evals integration**: a Pydantic `Dataset` keeps its native
+task and reporting workflow while `SqlEquivalence` scores the generated SQL on DuckDB.
+
 ## Tiers
 
 | Dir | Solver | Purpose | Needs |
@@ -45,6 +48,7 @@ text-to-SQL with `ExecutionAccuracy`, and MetricFlow queries with the Semantic L
 | `08_cortex` | `CortexAnalystSolver` | Snowflake Cortex Analyst answers each question, scored on your warehouse (live-only) | `evaldata[cortex]` + `SNOWFLAKE_*` credentials |
 | `09_bigquery` | `CallableSolver` (fixed SQL) | Runs the same cases against a live BigQuery project (live-only) | `evaldata[bigquery]` + Application Default Credentials |
 | `10_dbt` | `PromptSolver` / `MetricLayerSolver` (stubbed) | Evaluate a dbt project's SQL and its Semantic Layer, offline on the bundled DuckDB | `evaldata[dbt,dbt-sl]` + a dbt-duckdb toolchain |
+| `11_pydantic_evals` | Pydantic Evals task (fixed SQL) | Score a Pydantic `Dataset` with execution-based SQL equivalence | `evaldata[pydantic-evals]` |
 
 ### 01_deterministic
 The solver is a `CallableSolver` returning fixed SQL. `test_golden_questions.py` covers the
@@ -82,8 +86,8 @@ its platform features:
   `http_path`; credentials are not part of it.
 
 Set `DATABRICKS_SERVER_HOSTNAME` and `DATABRICKS_HTTP_PATH`, and authenticate with the
-Databricks CLI (https://github.com/databricks/cli). It seeds a session-scoped
-`TEMPORARY VIEW`, so it needs only query permissions and leaves nothing behind.
+Databricks CLI (https://github.com/databricks/cli). The fixture rows are an inline `VALUES`
+relation, so the example needs only query permissions and leaves nothing behind.
 
 ### 05_llm_judge
 Both cases pick AI SQL the syntax check leaves inconclusive, so the SQL-equivalence judge
@@ -139,6 +143,12 @@ its DuckDB warehouse with `StubLlm` in place of a model:
 The Semantic Layer file runs `mf`, which needs the `dbt-metricflow` toolchain with a DuckDB adapter
 (the `dbt-sl` extra plus `dbt-duckdb`).
 
+### 11_pydantic_evals
+
+A Pydantic Evals `Dataset` sends two natural-language questions through a deterministic task.
+`SqlEquivalence` confirms a CTE that returns the same result as its gold query and rejects a query
+that uses the wrong aggregate. The example runs locally on DuckDB without a model or network call.
+
 ## Running
 
 ```bash
@@ -180,4 +190,7 @@ uv run --extra dbt pytest examples/10_dbt/test_text_to_sql.py -p no:randomly -q
 
 # 10 — the Semantic Layer file also needs the MetricFlow + dbt-duckdb toolchain:
 uv run --extra dbt --extra dbt-sl --group fixtures pytest examples/10_dbt -p no:randomly -q
+
+# 11 — runs locally with the Pydantic Evals extra:
+uv run --extra pydantic-evals pytest examples/11_pydantic_evals -q
 ```

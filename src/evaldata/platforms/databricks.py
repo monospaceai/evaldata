@@ -7,6 +7,7 @@ from typing import Any, Self
 
 import databricks.sql
 from databricks.sdk.core import Config
+from databricks.sql import exc as databricks_exc
 
 from evaldata.platforms.base import execution_error, rows_or_error
 from evaldata.types import Column, ExecutionError, ExecutionResult, SqlType
@@ -87,10 +88,7 @@ class DatabricksAdapter:
         try:
             cursor.execute(sql)
             description = cursor.description
-            # A duplicate-name result is unrepresentable as name-keyed rows, and the
-            # connector's Arrow fetch raises a cryptic error on it — so detect it from the
-            # description and skip the fetch, letting `rows_or_error` surface the uniform
-            # duplicate error below instead.
+            # Skip fetches for duplicate names; name-keyed rows cannot represent them.
             names = [col[0] for col in description] if description is not None else []
             has_duplicates = len(names) != len(set(names))
             rows_raw = cursor.fetchall() if description is not None and not has_duplicates else []
@@ -103,13 +101,40 @@ class DatabricksAdapter:
                 cursor.close()
         elapsed = time.perf_counter() - start
         if description is None:
-            # Non-row-returning statement (DDL/DML): success, no schema.
             return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed)
         columns = [
             Column(name=name, type=SqlType.parse(type_code, "databricks"), nullable=None)
             for (name, type_code, *_rest) in description
         ]
         return rows_or_error(columns, [tuple(row) for row in rows_raw], elapsed)
+
+    def ping(self) -> bool:
+        """Return whether the open connection can execute a simple statement."""
+        if not getattr(self._conn, "open", False):
+            return False
+        try:
+            cursor = self._conn.cursor()
+            try:
+                cursor.execute("SELECT 1")
+            finally:
+                cursor.close()
+            return True
+        except Exception:
+            return False
+
+    def is_disconnect(self, error: ExecutionError) -> bool:
+        """Return whether a transport or closed-session error makes this connection unusable."""
+        if error.sqlstate is not None and error.sqlstate.startswith("08"):
+            return True
+        cause = error.cause
+        terminal = (
+            databricks_exc.SessionAlreadyClosedError,
+            databricks_exc.NonRecoverableNetworkError,
+            databricks_exc.RequestError,
+            databricks_exc.InvalidServerResponseError,
+            databricks_exc.MaxRetryDurationError,
+        )
+        return isinstance(cause, (*terminal, databricks_exc.InterfaceError))
 
     @staticmethod
     def type_probe_sql(sql: str) -> str:
@@ -141,7 +166,6 @@ class DatabricksAdapter:
         """
         if not rows:
             return ExecutionError(kind="type_probe_failed", message="DESCRIBE QUERY returned no rows")
-        # `DESCRIBE QUERY` yields one row per projected column, in projection order.
         types: list[SqlType] = []
         for row in rows:
             data_type = row.get("data_type")

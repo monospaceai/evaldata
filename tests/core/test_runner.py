@@ -1,6 +1,7 @@
-"""End-to-end slice test: EvalCase -> CallableSolver -> DuckDB -> ResultSetEquivalence -> assert_eval."""
+"""End-to-end tests for evaluation orchestration."""
 
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import duckdb
@@ -8,6 +9,7 @@ import pytest
 
 from evaldata import CallableSolver, EvalCase, PlatformRef, ResultSetEquivalence, assert_eval
 from evaldata.platforms import DuckDBAdapter, duckdb_platform
+from evaldata.platforms.pool import PoolUnavailableError
 from evaldata.scorers import QueryRunner, ScoreContext
 from evaldata.types import (
     CostBudget,
@@ -44,7 +46,7 @@ class TestAssertEvalEndToEnd:
     def test_passes_when_sql_is_correct(self, duck: DuckDBAdapter) -> None:
         case = _case([{"count": 2}])
         solver = CallableSolver(lambda c: _ROCK_SQL)
-        assert_eval(case, solver, adapter=duck, scorers=[ResultSetEquivalence()])  # no raise == pass
+        assert_eval(case, solver, adapter=duck, scorers=[ResultSetEquivalence()])
 
     def test_fails_with_diff_and_sql_on_wrong_value(self, duck: DuckDBAdapter) -> None:
         case = _case([{"count": 99}])
@@ -53,10 +55,10 @@ class TestAssertEvalEndToEnd:
             assert_eval(case, solver, adapter=duck, scorers=[ResultSetEquivalence()])
         msg = str(exc.value)
         assert "rock-count" in msg
-        assert _ROCK_SQL in msg  # the generated SQL is surfaced for debugging
-        assert "missing rows" in msg and "extra rows" in msg  # both diff directions rendered
-        assert "99" in msg  # expected-row sample (missing from actual)
-        assert "2" in msg  # actual-row sample (extra vs expected)
+        assert _ROCK_SQL in msg
+        assert "missing rows" in msg and "extra rows" in msg
+        assert "99" in msg
+        assert "2" in msg
 
     def test_fails_with_execution_error_on_bad_sql(self, duck: DuckDBAdapter) -> None:
         case = _case([{"count": 2}])
@@ -66,7 +68,6 @@ class TestAssertEvalEndToEnd:
         assert "execution error" in str(exc.value)
 
     def test_column_alias_mismatch_surfaces_in_diff(self, duck: DuckDBAdapter) -> None:
-        # AI aliases the column 'n' but the case expects 'count' -> missing/extra columns
         case = _case([{"count": 2}])
         solver = CallableSolver(lambda c: "SELECT count(*) AS n FROM tracks WHERE genre = 'Rock'")
         with pytest.raises(AssertionError) as exc:
@@ -91,15 +92,56 @@ class TestAssertEvalAdapterResolution:
             platform=duckdb_platform(name="runner-resolution", path=str(db)),
         )
         solver = CallableSolver(lambda c: "SELECT count(*) AS count FROM t WHERE genre = 'Rock'")
-        assert_eval(case, solver, scorers=[ResultSetEquivalence()])  # no adapter, no raise == pass
+        assert_eval(case, solver, scorers=[ResultSetEquivalence()])
 
-    # An unsupported platform kind is unrepresentable (PlatformRef validation rejects it),
-    # so there is no runtime "no adapter" path to test here.
+    def test_pool_unavailable_becomes_an_execution_result(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from evaldata.core.runner import evaluate_case
+
+        class DerivedQueryScorer:
+            def score(
+                self, case: EvalCase, output: SolverOutput, result: ExecutionResult, *, context: ScoreContext
+            ) -> ScoreResult:
+                derived = context.queries.run(Sql("SELECT 1"))
+                assert derived is result
+                return ScoreResult(scorer="derived", verdict="fail")
+
+        @contextmanager
+        def unavailable(_: PlatformRef) -> Iterator[DuckDBAdapter]:
+            platform_name = "local"
+            message = "connection pool for platform 'local' is unavailable"
+            raise PoolUnavailableError(platform_name, message)
+            yield  # pragma: no cover - satisfies contextmanager's generator contract
+
+        monkeypatch.setattr("evaldata.core.runner.acquired", unavailable)
+        evaluation = evaluate_case(
+            _case([{"count": 2}]), CallableSolver(lambda c: _ROCK_SQL), scorers=[DerivedQueryScorer()]
+        )
+        assert evaluation.result is not None
+        assert evaluation.result.error is not None
+        assert evaluation.result.error.kind == "platform_unavailable"
+        assert evaluation.report.passed is False
+        assert len(evaluation.failures) == 1
+
+    def test_pool_unavailable_raises_even_when_a_custom_scorer_passes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        class PassingScorer:
+            def score(
+                self, case: EvalCase, output: SolverOutput, result: ExecutionResult, *, context: ScoreContext
+            ) -> ScoreResult:
+                return ScoreResult(scorer="passing", verdict="pass")
+
+        @contextmanager
+        def unavailable(_: PlatformRef) -> Iterator[DuckDBAdapter]:
+            platform_name = "local"
+            message = "connection pool for platform 'local' is unavailable"
+            raise PoolUnavailableError(platform_name, message)
+            yield  # pragma: no cover - satisfies contextmanager's generator contract
+
+        monkeypatch.setattr("evaldata.core.runner.acquired", unavailable)
+        with pytest.raises(AssertionError, match="connection pool for platform 'local' is unavailable"):
+            assert_eval(_case([{"count": 2}]), CallableSolver(lambda c: _ROCK_SQL), scorers=[PassingScorer()])
 
 
 class _ErrorSolver:
-    """A stub Solver that always returns a typed solver error."""
-
     def __init__(self, error: SolverError) -> None:
         self._error = error
 
@@ -108,11 +150,15 @@ class _ErrorSolver:
 
 
 class _ExplodingAdapter:
-    """A stub adapter whose execute fails the test if ever called."""
-
     def execute(self, sql: str) -> ExecutionResult:
         msg = "adapter.execute must not be called when the solver errors"
         raise AssertionError(msg)
+
+    def cancel(self) -> None:
+        return
+
+    def close(self) -> None:
+        return
 
 
 @pytest.mark.unit
@@ -129,8 +175,6 @@ class TestAssertEvalSolverError:
 
 
 class _SpyScorer:
-    """A stub Scorer that captures the injected context and passes."""
-
     def __init__(self) -> None:
         self.context: ScoreContext | None = None
 
@@ -142,8 +186,6 @@ class _SpyScorer:
 
 
 class _FixedVerdictScorer:
-    """A stub Scorer returning a canned `ScoreResult` with the given verdict."""
-
     def __init__(self, scorer: str, verdict: str) -> None:
         self._scorer = scorer
         self._verdict = verdict
@@ -207,4 +249,4 @@ class TestAssertEvalContext:
             cost_budget=CostBudget(max_seconds=30.0),
         )
         solver = CallableSolver(lambda c: _ROCK_SQL)
-        assert_eval(case, solver, adapter=duck, scorers=[ResultSetEquivalence()])  # no raise == pass
+        assert_eval(case, solver, adapter=duck, scorers=[ResultSetEquivalence()])

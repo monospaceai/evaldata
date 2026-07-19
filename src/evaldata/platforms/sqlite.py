@@ -16,12 +16,15 @@ class SqliteAdapter:
         """Open a SQLite connection to `database` (default in-memory).
 
         Args:
-            database: A filesystem path to a SQLite database, or `:memory:` for an in-process
-                database.
+            database: A filesystem path to a SQLite database, `:memory:` for an in-process
+                database, or a `file:` URI (e.g. a shared-cache in-memory database, which lives
+                while at least one connection to it stays open).
         """
         # check_same_thread=False: cancel() calls interrupt() from another thread mid-execute().
         # isolation_level=None: autocommit, so writes are durable instead of rolled back on close().
-        self._conn = sqlite3.connect(database, check_same_thread=False, isolation_level=None)
+        self._conn = sqlite3.connect(
+            database, uri=database.startswith("file:"), check_same_thread=False, isolation_level=None
+        )
 
     def cancel(self) -> None:
         """Interrupt the query currently executing on this connection.

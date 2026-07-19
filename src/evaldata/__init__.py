@@ -1,4 +1,4 @@
-"""evaldata — AI evals framework for data and analytics engineering teams."""
+"""Evaluation framework for data and analytics engineering teams."""
 
 from typing import TYPE_CHECKING, Any
 
@@ -32,7 +32,7 @@ from evaldata.scorers import (
     sql_equivalence_judge,
 )
 from evaldata.solvers import SCHEMA_PROMPT_TEMPLATE, CallableSolver, PromptSolver, Solver
-from evaldata.types import EvalCase, PlatformRef
+from evaldata.types import EvalCase, PlatformRef, PoolPolicy
 
 if TYPE_CHECKING:
     from evaldata.llm import LiteLlm
@@ -53,6 +53,7 @@ __all__ = [
     "Llm",
     "LlmJudge",
     "PlatformRef",
+    "PoolPolicy",
     "PromptSolver",
     "QueryRunner",
     "ResultSetEquivalence",

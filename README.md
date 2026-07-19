@@ -74,6 +74,7 @@ equivalence without a warehouse, swap the scorer for `judged_equivalence(model)`
 
 ## More use cases
 
+- [Add execution-based SQL scoring to Pydantic Evals](docs/guides/pydantic-evals.md).
 - [Evaluate dbt projects](docs/guides/dbt.md) against gold SQL.
 - [Evaluate dbt Semantic Layer queries](docs/guides/dbt-semantic-layer.md) against gold MetricFlow queries.
 - [Evaluate Snowflake Cortex Analyst](docs/guides/cortex.md) against gold SQL.
@@ -91,6 +92,7 @@ uv add "evaldata[snowflake]"   # + Snowflake adapter
 uv add "evaldata[bigquery]"    # + BigQuery adapter
 uv add "evaldata[cortex]"      # + Snowflake Cortex Analyst solver
 uv add "evaldata[litellm]"     # + litellm, to call a model from PromptSolver
+uv add "evaldata[pydantic-evals]"  # + Pydantic Evals integration
 ```
 
 DuckDB, Postgres, Databricks, Snowflake, and BigQuery are the adapters available today.
@@ -99,14 +101,15 @@ DuckDB, Postgres, Databricks, Snowflake, and BigQuery are the adapters available
 
 Full documentation: **[monospaceai.github.io/evaldata](https://monospaceai.github.io/evaldata/)**
 
-- [Getting started](https://monospaceai.github.io/evaldata/getting-started/): write and run your first eval.
-- [Concepts](https://monospaceai.github.io/evaldata/concepts/): cases, solvers, scorers, and platforms.
-- Scoring guides: [semantic equivalence](https://monospaceai.github.io/evaldata/guides/semantic-equivalence/), [LLM judge](https://monospaceai.github.io/evaldata/guides/llm-judge/), [composing scorers](https://monospaceai.github.io/evaldata/guides/composing-scorers/).
-- Model guides: [local Ollama](https://monospaceai.github.io/evaldata/guides/local-ollama/), [hosted model](https://monospaceai.github.io/evaldata/guides/hosted-model/).
-- Platform guides: [Databricks](https://monospaceai.github.io/evaldata/guides/databricks/), [Snowflake](https://monospaceai.github.io/evaldata/guides/snowflake/), [BigQuery](https://monospaceai.github.io/evaldata/guides/bigquery/), [Cortex Analyst](https://monospaceai.github.io/evaldata/guides/cortex/).
-- dbt guides: [dbt project](https://monospaceai.github.io/evaldata/guides/dbt/), [dbt Semantic Layer](https://monospaceai.github.io/evaldata/guides/dbt-semantic-layer/), [reproduce dbt's Semantic Layer benchmark](https://monospaceai.github.io/evaldata/guides/dbt-semantic-layer-benchmark/).
-- [Run a text-to-SQL benchmark](https://monospaceai.github.io/evaldata/guides/benchmarks/): load a Spider/BIRD dataset and measure execution accuracy.
-- [API reference](https://monospaceai.github.io/evaldata/reference/): the public API, generated from docstrings.
+- [Getting started](https://monospaceai.github.io/evaldata/latest/getting-started/): write and run your first eval.
+- [Concepts](https://monospaceai.github.io/evaldata/latest/concepts/): cases, solvers, scorers, and platforms.
+- Scoring guides: [semantic equivalence](https://monospaceai.github.io/evaldata/latest/guides/semantic-equivalence/), [LLM judge](https://monospaceai.github.io/evaldata/latest/guides/llm-judge/), [composing scorers](https://monospaceai.github.io/evaldata/latest/guides/composing-scorers/).
+- Model guides: [local Ollama](https://monospaceai.github.io/evaldata/latest/guides/local-ollama/), [hosted model](https://monospaceai.github.io/evaldata/latest/guides/hosted-model/).
+- Integration guides: [Pydantic Evals](https://monospaceai.github.io/evaldata/latest/guides/pydantic-evals/), [dbt project](https://monospaceai.github.io/evaldata/latest/guides/dbt/), [dbt Semantic Layer](https://monospaceai.github.io/evaldata/latest/guides/dbt-semantic-layer/).
+- Platform guides: [Databricks](https://monospaceai.github.io/evaldata/latest/guides/databricks/), [Snowflake](https://monospaceai.github.io/evaldata/latest/guides/snowflake/), [BigQuery](https://monospaceai.github.io/evaldata/latest/guides/bigquery/), [Cortex Analyst](https://monospaceai.github.io/evaldata/latest/guides/cortex/).
+- [Reproduce dbt's Semantic Layer benchmark](https://monospaceai.github.io/evaldata/latest/guides/dbt-semantic-layer-benchmark/).
+- [Run a text-to-SQL benchmark](https://monospaceai.github.io/evaldata/latest/guides/benchmarks/): load a Spider/BIRD dataset and measure execution accuracy.
+- [API reference](https://monospaceai.github.io/evaldata/latest/reference/): the public API, generated from docstrings.
 
 ## Examples
 
@@ -126,6 +129,7 @@ Runnable examples in [`examples/`](examples/):
 | [BigQuery](examples/09_bigquery/test_deterministic.py) | Score SQL with expected results, reference queries, and data expectations on BigQuery |
 | [dbt](examples/10_dbt/test_text_to_sql.py) | Text-to-SQL evaluation for a dbt project with fixed model responses |
 | [dbt Semantic Layer](examples/10_dbt/test_semantic_layer.py) | dbt Semantic Layer (MetricFlow) queries, scored locally on DuckDB |
+| [Pydantic Evals](examples/11_pydantic_evals/test_sql_equivalence.py) | Add execution-based SQL scoring to a Pydantic Evals dataset |
 
 See [`examples/README.md`](examples/README.md) for details.
 

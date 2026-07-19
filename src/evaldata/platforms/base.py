@@ -1,10 +1,9 @@
 """`PlatformAdapter` Protocol: the contract every platform integration implements."""
 
+import threading
 import time
 from collections import Counter
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FuturesTimeout
 from typing import Any, Protocol, runtime_checkable
 
 from evaldata.types import (
@@ -54,6 +53,32 @@ class PlatformAdapter(Protocol):
 
 
 @runtime_checkable
+class NativeTimeoutAdapter(Protocol):
+    """Capability for executing one statement with a backend-native deadline."""
+
+    def execute_with_timeout(self, sql: str, timeout_seconds: float) -> ExecutionResult:
+        """Execute `sql` once with a backend-native timeout.
+
+        Args:
+            sql: The SQL statement to execute.
+            timeout_seconds: The positive statement deadline in seconds.
+
+        Returns:
+            The structured execution result.
+        """
+        ...
+
+
+@runtime_checkable
+class ReusableStateAdapter(Protocol):
+    """Capability for reporting whether local session state remains reusable."""
+
+    def is_reusable(self) -> bool:
+        """Return local, non-I/O session reuse state."""
+        ...
+
+
+@runtime_checkable
 class TypeResolvingAdapter(Protocol):
     """Capability for backends whose `execute().schema_` reports types with unresolved parameters.
 
@@ -89,18 +114,37 @@ class TypeResolvingAdapter(Protocol):
         ...
 
 
-def execute_within_budget(adapter: PlatformAdapter, sql: str, max_seconds: float | None) -> ExecutionResult:
+@runtime_checkable
+class BudgetedExecutionAdapter(Protocol):
+    """Capability for a pool lease that owns bounded execution lifecycle state."""
+
+    def execute_within_budget(
+        self, sql: str, max_seconds: float, *, cancel_grace_seconds: float | None
+    ) -> ExecutionResult:
+        """Execute `sql` with the lease's timeout and quarantine handling."""
+        ...
+
+
+def execute_within_budget(
+    adapter: PlatformAdapter,
+    sql: str,
+    max_seconds: float | None,
+    *,
+    cancel_grace_seconds: float | None = None,
+) -> ExecutionResult:
     """Execute `sql` on `adapter`, cancelling it if it exceeds `max_seconds`.
 
-    With `max_seconds` unset, runs `adapter.execute` directly. Otherwise runs it on a worker
-    thread and waits up to `max_seconds`; if the query is still running, calls
-    `adapter.cancel()` to abort it and returns an `ExecutionResult.error` describing the
-    overrun. The cancelled query is awaited so its connection is released before returning.
+    With `max_seconds` unset, runs `adapter.execute` directly. Otherwise runs it on a daemon
+    worker thread and waits up to `max_seconds`. At expiry, cancellation runs independently,
+    then the caller waits at most `cancel_grace_seconds` before returning a budget error. Pool
+    leases own the corresponding quarantine and deferred-close lifecycle.
 
     Args:
         adapter: The platform adapter to execute against.
         sql: The SQL statement to execute.
         max_seconds: Wall-clock ceiling for the query, or `None` for no limit.
+        cancel_grace_seconds: Extra time to allow cancellation to finish after expiry. Defaults
+            to one second for direct adapters; pool leases use their configured policy.
 
     Returns:
         The adapter's `ExecutionResult` if the query finishes within budget, otherwise an
@@ -108,22 +152,79 @@ def execute_within_budget(adapter: PlatformAdapter, sql: str, max_seconds: float
     """
     if max_seconds is None:
         return adapter.execute(sql)
-    start = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(adapter.execute, sql)
+    if max_seconds <= 0:
+        return _budget_exceeded(time.monotonic(), max_seconds)
+    if isinstance(adapter, BudgetedExecutionAdapter):
+        return adapter.execute_within_budget(sql, max_seconds, cancel_grace_seconds=cancel_grace_seconds)
+    grace = 1.0 if cancel_grace_seconds is None else cancel_grace_seconds
+    return _execute_with_watchdog(adapter, sql, max_seconds, cancel_grace_seconds=grace)
+
+
+def _execute_with_watchdog(
+    adapter: PlatformAdapter, sql: str, max_seconds: float, *, cancel_grace_seconds: float
+) -> ExecutionResult:
+    """Run a caller-owned adapter on a daemon worker without waiting for cancellation forever.
+
+    The caller owns retirement of an adapter that outlives this function. A direct adapter has
+    no pool lease to quarantine, so it must not be reused until its worker and cancellation have
+    both finished.
+
+    Returns:
+        The adapter result when it completes before the deadline, else a budget error.
+    """
+    start = time.monotonic()
+    deadline = start + max_seconds
+    done = threading.Event()
+    outcome: list[ExecutionResult] = []
+    completed_at: list[float] = []
+
+    def run() -> None:
         try:
-            return future.result(timeout=max_seconds)
-        except FuturesTimeout:
-            adapter.cancel()
-    elapsed = time.perf_counter() - start
+            if isinstance(adapter, NativeTimeoutAdapter):
+                outcome.append(adapter.execute_with_timeout(sql, max_seconds))
+            else:
+                outcome.append(adapter.execute(sql))
+        except Exception as e:  # noqa: BLE001 - adapters promise errors-as-values, but watchdogs must finish safely
+            outcome.append(
+                ExecutionResult(
+                    rows=[], schema=None, latency_seconds=time.monotonic() - start, error=execution_error(e)
+                )
+            )
+        finally:
+            completed_at.append(time.monotonic())
+            done.set()
+
+    threading.Thread(target=run, daemon=True).start()
+    if done.wait(max(deadline - time.monotonic(), 0.0)) and completed_at[0] < deadline:
+        return outcome[0]
+    threading.Thread(target=_cancel_safely, args=(adapter,), daemon=True).start()
+    grace_deadline = deadline + max(cancel_grace_seconds, 0.0)
+    done.wait(max(grace_deadline - time.monotonic(), 0.0))
+    return _budget_exceeded(start, max_seconds)
+
+
+def _budget_exceeded(start: float, max_seconds: float) -> ExecutionResult:
+    """Build the timeout result after the original deadline has elapsed.
+
+    Returns:
+        A result containing a `budget_exceeded` error.
+    """
     return ExecutionResult(
         rows=[],
         schema=None,
-        latency_seconds=elapsed,
+        latency_seconds=time.monotonic() - start,
         error=ExecutionError(
             kind="budget_exceeded", message=f"exceeded cost budget: query did not complete within {max_seconds}s"
         ),
     )
+
+
+def _cancel_safely(adapter: PlatformAdapter) -> None:
+    """Request adapter cancellation without letting a broken driver escape its daemon thread."""
+    try:
+        adapter.cancel()
+    except Exception:  # noqa: BLE001 - cancellation is best effort
+        return
 
 
 def _driver_call(exc: Exception, name: str) -> Any:

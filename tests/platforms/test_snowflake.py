@@ -1,4 +1,4 @@
-"""`SnowflakeAdapter` tests: unit (fake driver) + a live type-resolution e2e check."""
+"""Tests for `SnowflakeAdapter`."""
 
 from typing import Any
 
@@ -49,8 +49,9 @@ class _FakeCursor:
         self.aborted: str | None = None
         self.closed = False
 
-    def execute(self, sql: str) -> None:
+    def execute(self, sql: str, timeout: int | None = None) -> None:
         self.executed = sql
+        self.timeout = timeout
         if self._error is not None:
             raise snowflake_connector.errors.ProgrammingError(self._error)
 
@@ -72,6 +73,7 @@ class _FakeConnection:
     def __init__(self, cursor: _FakeCursor) -> None:
         self._cursor = cursor
         self.closed = False
+        self.valid = True
 
     def cursor(self) -> _FakeCursor:
         return self._cursor
@@ -79,12 +81,11 @@ class _FakeConnection:
     def close(self) -> None:
         self.closed = True
 
+    def is_valid(self) -> bool:
+        return self.valid
+
 
 def _adapter(cursor: _FakeCursor, *, active: bool = False) -> SnowflakeAdapter:
-    """Build an adapter bound to a fake connection, bypassing the real `__init__`.
-
-    With `active=True` the cursor is set as the in-flight one, so `cancel` can reach it.
-    """
     adapter = object.__new__(SnowflakeAdapter)
     adapter._conn = _FakeConnection(cursor)
     adapter._cursor = cursor if active else None
@@ -93,6 +94,13 @@ def _adapter(cursor: _FakeCursor, *, active: bool = False) -> SnowflakeAdapter:
 
 @pytest.mark.unit
 class TestExecute:
+    def test_native_timeout_rounds_up_and_executes_sql_once(self) -> None:
+        cursor = _FakeCursor(None, [])
+        result = _adapter(cursor).execute_with_timeout("SELECT 1", 1.01)
+        assert result.error is None
+        assert cursor.executed == "SELECT 1"
+        assert cursor.timeout == 2
+
     def test_rows_and_schema_on_success(self) -> None:
         description = [
             _meta("id", "FIXED", precision=10, scale=2),
@@ -188,8 +196,6 @@ class TestTypeString:
 
 @pytest.mark.unit
 class TestLifecycle:
-    """Connection lifecycle against a mocked connector — keeps coverage independent of creds."""
-
     @staticmethod
     def _patch_connect(monkeypatch: pytest.MonkeyPatch, captured: dict[str, Any]) -> None:
         def fake_connect(**kwargs: Any) -> _FakeConnection:
@@ -231,8 +237,30 @@ class TestLifecycle:
         _adapter(cursor, active=True).cancel()
         assert cursor.aborted == "01a"
 
+    def test_ping_and_disconnect_classification_use_connection_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        adapter = _adapter(_FakeCursor(None, []))
+        assert adapter.ping() is True
+        adapter._conn.valid = False  # noqa: SLF001
+        assert adapter.ping() is False
+        from evaldata.types import ExecutionError
+
+        assert adapter.is_disconnect(ExecutionError(kind="query_failed", message="x", sqlstate="08006")) is True
+        monkeypatch.setattr(adapter, "ping", lambda: pytest.fail("disconnect classification must not perform I/O"))
+        ambiguous = snowflake_connector.errors.OperationalError("connection error")
+        assert adapter.is_disconnect(ExecutionError(kind="query_failed", message="x", cause=ambiguous)) is True
+
+    def test_ping_treats_connector_failure_as_unhealthy(self) -> None:
+        adapter = _adapter(_FakeCursor(None, []))
+
+        def fail() -> bool:
+            msg = "is_valid failed"
+            raise RuntimeError(msg)
+
+        adapter._conn.is_valid = fail  # type: ignore[method-assign]  # noqa: SLF001
+        assert adapter.ping() is False
+
     def test_cancel_is_a_noop_when_no_query_runs(self) -> None:
-        _adapter(_FakeCursor(None, [])).cancel()  # _cursor is None; must not raise
+        _adapter(_FakeCursor(None, [])).cancel()
 
     def test_cancel_is_a_noop_when_sfqid_is_falsy(self) -> None:
         cursor = _FakeCursor(None, [], sfqid=None)
@@ -245,7 +273,7 @@ class TestLifecycle:
                 msg = "abort failed"
                 raise RuntimeError(msg)
 
-        _adapter(_BadAbortCursor(None, []), active=True).cancel()  # best-effort: swallowed
+        _adapter(_BadAbortCursor(None, []), active=True).cancel()
 
     def test_close_releases_the_connection(self) -> None:
         conn = _FakeConnection(_FakeCursor(None, []))
@@ -268,12 +296,47 @@ class TestLifecycle:
 @pytest.mark.e2e
 @pytest.mark.cloud
 @pytest.mark.snowflake
+class TestConcurrencySmoke:
+    def test_trivial_selects_run_concurrently(self) -> None:
+        import os
+
+        from evaldata import CallableSolver, EvalCase, ExecutionAccuracy, run_benchmark
+        from evaldata.platforms import snowflake_platform
+        from evaldata.platforms.registry import close_all
+        from evaldata.types import GoldQuery
+
+        platform = snowflake_platform(
+            name="sf-conc-smoke",
+            account=os.environ["SNOWFLAKE_ACCOUNT"],
+            user=os.environ.get("SNOWFLAKE_USER"),
+            warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE"),
+            role=os.environ.get("SNOWFLAKE_ROLE"),
+            database=os.environ.get("SNOWFLAKE_DATABASE"),
+            schema=os.environ.get("SNOWFLAKE_SCHEMA"),
+            authenticator=os.environ.get("SNOWFLAKE_AUTHENTICATOR"),
+            workload_identity_provider=os.environ.get("SNOWFLAKE_WORKLOAD_IDENTITY_PROVIDER"),
+        )
+        try:
+            cases = [
+                EvalCase(
+                    id=f"n-{n}",
+                    input=str(n),
+                    expected=GoldQuery(sql=f"SELECT {n} AS n"),
+                    platform=platform,
+                )
+                for n in range(4)
+            ]
+            solver = CallableSolver(lambda c: f"SELECT {c.input} AS n")
+            summary = run_benchmark(cases, solver, scorers=[ExecutionAccuracy()], max_concurrency=4)
+            assert summary.passed == summary.total == 4
+        finally:
+            close_all()
+
+
+@pytest.mark.e2e
+@pytest.mark.cloud
+@pytest.mark.snowflake
 class TestTypeResolutionLive:
-    """Live schema resolution against a real account; unit tests use fakes.
-
-    Fails loud (no skip) when `SNOWFLAKE_ACCOUNT` is unset.
-    """
-
     def test_number_and_varchar_types_resolve_to_precise(self) -> None:
         from .conftest import connect_snowflake
 
@@ -283,7 +346,6 @@ class TestTypeResolutionLive:
             assert result.error is None, result.error
             assert result.schema_ is not None
             precise = {c.name: c.type for c in result.schema_.root}
-            # `.raw` surfaces the real reported type string if the assumption is wrong.
             assert precise["AMOUNT"] == SqlType.parse("NUMBER(10,2)", "snowflake"), precise["AMOUNT"].raw
             assert precise["LABEL"] == SqlType.parse("VARCHAR(50)", "snowflake"), precise["LABEL"].raw
         finally:
