@@ -1,10 +1,9 @@
 # Evaluate SQL with Pydantic Evals
 
-[Pydantic Evals](https://ai.pydantic.dev/evals/) is a framework for evaluating the output of AI
-systems. `SqlEquivalence` is a drop-in Pydantic Evals `Evaluator` that scores generated SQL the way
-evaldata does: it executes the generated query and a reference against a real warehouse and checks
-whether they are equivalent. This lets a Pydantic Evals `Dataset` grade text-to-SQL by *result*,
-not by string match.
+Already use [Pydantic Evals](https://ai.pydantic.dev/evals/)? `SqlEquivalence` adds
+execution-based SQL scoring to its datasets and reports. It runs generated SQL on your data
+platform and checks the result against a gold query or expected rows, so equivalent queries pass
+even when their SQL text differs.
 
 ## Prerequisites
 
@@ -14,60 +13,45 @@ uv add "evaldata[pydantic-evals]"
 
 ## Write the eval
 
-Each Pydantic Evals `Case` carries the task input and an `expected_output`. For `SqlEquivalence`,
-the task returns the generated SQL (as `ctx.output`), and `expected_output` is the reference — a
-gold SQL `str`, or an evaldata `GoldQuery`, `UntypedResultSet`, or `TypedResultSet`. Add
-`SqlEquivalence` as an evaluator, pointing it at a platform:
+A Pydantic Evals task receives each case's `inputs`; its return value becomes `ctx.output`.
+`SqlEquivalence` expects that output to be a non-empty SQL string. The case's `expected_output`
+can be a gold SQL string or an evaldata `GoldQuery`, `UntypedResultSet`, or `TypedResultSet`.
+
+Create `test_pydantic_evals.py`:
 
 ```python
-from evaldata.platforms.registry import duckdb_platform, resolve
-from evaldata.pydantic_evals import SqlEquivalence, close_all
-from pydantic_evals import Case, Dataset
-
-# A platform to score against. Seed it with the tables the queries read.
-platform = duckdb_platform("jaffle")
-resolve(platform).execute(
-    "CREATE TABLE orders (id INTEGER, region VARCHAR, amount INTEGER); "
-    "INSERT INTO orders VALUES (1, 'east', 50), (2, 'west', 120), (3, 'east', 20)"
-)
-
-
-def task(sql: str) -> str:
-    """Stand-in for a text-to-SQL system: here the input already is the SQL to score."""
-    return sql
-
-
-dataset = Dataset(
-    name="text-to-sql",
-    cases=[
-        Case(
-            name="totals-by-region",
-            inputs="SELECT region, SUM(amount) AS total FROM orders GROUP BY region",
-            expected_output="SELECT region, SUM(amount) AS total FROM orders GROUP BY region",
-        ),
-        Case(
-            name="wrong-aggregate",
-            inputs="SELECT region, COUNT(amount) AS total FROM orders GROUP BY region",
-            expected_output="SELECT region, SUM(amount) AS total FROM orders GROUP BY region",
-        ),
-    ],
-    evaluators=[SqlEquivalence(platform=platform)],
-)
-
-report = dataset.evaluate_sync(task)
-report.print()
-close_all()
+--8<-- "examples/11_pydantic_evals/test_sql_equivalence.py"
 ```
 
-`SqlEquivalence` judges two queries equivalent when they normalise to the same structure or return
-the same rows: it checks structural equivalence first and otherwise diffs the two result sets. A
-case whose generated SQL returns different rows fails, with a `reason` naming the row-count
-mismatch; invalid SQL fails rather than raising.
+The example uses fixed task responses so it runs without a model or network call. The first
+response rewrites the gold query with a CTE but returns the same rows, so it passes. The second
+uses `COUNT` where the question requires `AVG`, so it fails.
+
+## Run it
+
+```bash
+uv run pytest test_pydantic_evals.py -q
+```
+
+!!! tip "Run it from a clone"
+    This is the bundled `examples/11_pydantic_evals/` example. If you've cloned the repository,
+    run it with `uv run --extra pydantic-evals pytest examples/11_pydantic_evals -q`.
+
+## How scoring works
+
+For a gold query, `SqlEquivalence` first checks whether the generated and gold SQL normalize to
+the same structure. If that check cannot confirm equivalence, it runs the gold query and compares
+the two result sets. An expected result set is compared directly with the generated query's result.
+
+Different results fail with a reason summarizing any row-count, column, type, or value mismatches.
+SQL execution errors also produce a failed evaluation rather than escaping from the evaluator.
+Invalid case contracts, such as an empty task output or unsupported `expected_output`, raise
+`ValueError`.
 
 ## Read the report
 
-`evaluate_sync` returns a Pydantic Evals `EvaluationReport`. Each case exposes the evaluator's
-result under `assertions`:
+`evaluate_sync` returns a Pydantic Evals `EvaluationReport`. Each case stores the evaluator's
+boolean verdict and explanation under `assertions`:
 
 ```python
 for case in report.cases:
@@ -75,37 +59,28 @@ for case in report.cases:
     print(case.name, result.value, result.reason)
 ```
 
-## Concurrency
+## Run cases concurrently
 
-`SqlEquivalence` works with Pydantic Evals concurrency out of the box: pass `max_concurrency` to
-`evaluate_sync` and cases score in parallel. Each case acquires its own warehouse session from a
-per-platform-name connection pool for the duration of scoring and returns it afterwards, so nothing
-is shared unsafely across threads. Effective parallelism is `min(max_concurrency, pool size)`; extra
-cases queue until a session frees up, which also bounds warehouse load.
+Pass `max_concurrency` to let Pydantic Evals score cases in parallel:
 
 ```python
-report = dataset.evaluate_sync(task, max_concurrency=8)
+report = dataset.evaluate_sync(generate_sql, max_concurrency=8)
 ```
 
-Each platform has a default pool size — the most concurrent sessions one platform name opens:
+Each case checks out a session from the platform's connection pool. The pool caps the number of
+simultaneous sessions for one platform name; additional cases wait for a session to become
+available.
 
 | Engine | Default pool size |
 | --- | --- |
 | DuckDB | 8 |
 | Postgres, Snowflake, BigQuery, Databricks | 4 |
-| SQLite | 1 (serial) |
+| SQLite | 1 |
 
-DuckDB pool members are cursors of one shared in-process database, and DuckDB executes their queries
-in parallel, so concurrency is a real speed-up (not just overlap).
-
-Some things to know when scoring under concurrency. A case's `cost_budget.max_seconds` is wall-clock
-and is contended by other in-flight cases, so a busy pool can make a query overrun sooner. Pooled
-sessions are reused and are not reset between cases, so any session-local state a query creates —
-a temporary table, a `SET` parameter, a role or schema change — persists on that connection and can
-be observed by a later case that reuses it (nondeterministically, under concurrency); keep evals to
-side-effect-free queries. Two further edge cases: a query whose cancellation does not take effect
-holds its session until it finishes on its own, and a pooled connection that the server drops is
-reused until the pool is closed. Call `close_all()` when done to close every pooled connection.
+Pooled sessions are reused without resetting session-local state. Keep evaluated SQL
+side-effect-free: temporary tables, session parameters, roles, and schema changes may be visible
+to a later case that receives the same session. Call `close_all()` when the dataset is finished;
+the example's fixture does this during teardown.
 
 ## Next steps
 
