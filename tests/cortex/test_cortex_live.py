@@ -1,7 +1,3 @@
-"""Live end-to-end test against the real Cortex Analyst endpoint (costs Snowflake credits);
-excluded from the default run via the `cortex` marker.
-"""
-
 from decimal import Decimal
 from typing import Any
 
@@ -12,7 +8,7 @@ from evaldata.cortex.solver import CortexAnalystSolver
 from evaldata.platforms.base import PlatformAdapter
 from evaldata.types import EvalCase, ExecutionSuccess, SnowflakeConfig, SnowflakePlatformRef, SolverSuccess
 
-pytestmark = [pytest.mark.cortex, pytest.mark.e2e]
+pytestmark = [pytest.mark.cortex, pytest.mark.e2e, pytest.mark.manual]
 
 
 def _cell(row: dict[str, Any], needle: str) -> Any:

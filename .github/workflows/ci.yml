@@ -117,10 +117,7 @@ jobs:
             sleep 1
           done
           ollama pull qwen2.5-coder:1.5b
-          # Cloud e2e is excluded; the adapters' unit tests keep the coverage gate at 100%.
-          just lint
-          just typecheck
-          just test-cov '-m "not cloud and not snowflake and not cortex"'
+          just check
           just build
         env:
           EVALDATA_LOCAL_MODEL: ollama_chat/qwen2.5-coder:1.5b
@@ -152,7 +149,7 @@ jobs:
           python-version: "3.13"
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
       - name: Run the Databricks cloud tests
-        run: just test '-m "cloud and not snowflake and not bigquery and not cortex"'
+        run: just test-databricks
         env:
           DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
           DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
@@ -250,7 +247,7 @@ jobs:
             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=snowflakecomputing.com" | jq -r '.value')"
           export SNOWFLAKE_TOKEN
-          just test '-m snowflake'
+          just test-snowflake
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_WAREHOUSE: COMPUTE_WH
@@ -289,7 +286,7 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
       - name: Run the BigQuery cloud tests
-        run: just test '-m bigquery'
+        run: just test-bigquery
         env:
           BIGQUERY_PROJECT: ${{ secrets.BIGQUERY_PROJECT }}
           BIGQUERY_DATASET: evaldata_ci

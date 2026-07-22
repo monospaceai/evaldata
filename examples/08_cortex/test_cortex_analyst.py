@@ -21,7 +21,7 @@ from evaldata.platforms import resolve, snowflake_platform
 from evaldata.platforms.snowflake import SnowflakeAdapter
 from evaldata.types import ExecutionFailure
 
-pytestmark = [pytest.mark.e2e, pytest.mark.cortex]
+pytestmark = [pytest.mark.e2e, pytest.mark.cortex, pytest.mark.manual]
 
 _DATABASE = os.environ.get("SNOWFLAKE_DATABASE", "JAFFLE_SHOP_DB")
 _SCHEMA = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
@@ -30,7 +30,7 @@ _ORDERS = f"{_DATABASE}.{_SCHEMA}.ORDERS"
 _SEMANTIC_VIEW = f"{_DATABASE}.{_SCHEMA}.JAFFLE_SHOP_SV"
 _PLATFORM = snowflake_platform(
     name="examples-cortex",
-    account=os.environ.get("SNOWFLAKE_ACCOUNT", ""),
+    account=os.environ.get("SNOWFLAKE_ACCOUNT", "your-account"),
     user=os.environ.get("SNOWFLAKE_USER"),
     warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE"),
     role=os.environ.get("SNOWFLAKE_ROLE"),

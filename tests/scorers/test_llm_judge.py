@@ -258,6 +258,7 @@ class TestLlmJudge:
 
 
 @pytest.mark.e2e
+@pytest.mark.manual
 @pytest.mark.skipif(
     os.environ.get("OPENAI_API_KEY") is None,
     reason="set OPENAI_API_KEY to run live grader e2e",

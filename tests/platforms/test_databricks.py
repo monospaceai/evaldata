@@ -219,6 +219,7 @@ class TestLifecycle:
 
 @pytest.mark.e2e
 @pytest.mark.cloud
+@pytest.mark.databricks
 class TestTypeResolutionLive:
     def test_decimal_and_array_types_resolve_to_precise(self) -> None:
         from .conftest import connect_databricks

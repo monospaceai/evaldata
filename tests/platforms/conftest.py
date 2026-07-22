@@ -339,7 +339,7 @@ ADAPTER_SPECS: list[AdapterSpec] = [
     AdapterSpec(id="postgres", marks=pytest.mark.e2e, connect=connect_postgres, fixtures=PostgresFixtures),
     AdapterSpec(
         id="databricks",
-        marks=[pytest.mark.e2e, pytest.mark.cloud],
+        marks=[pytest.mark.e2e, pytest.mark.cloud, pytest.mark.databricks],
         connect=connect_databricks,
         fixtures=DatabricksFixtures,
     ),
