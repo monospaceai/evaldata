@@ -13,21 +13,20 @@ from evaldata.scorers import ExpectationSuiteScorer, QueryRunner, ScoreContext
 from evaldata.types import (
     Column,
     EvalCase,
-    ExecutionResult,
+    ExecutionSuccess,
     Expectation,
     ExpectationOutcome,
     ExpectationSuite,
     NotNullExpectation,
     PlatformKind,
-    PlatformRef,
     RowCountExpectation,
-    SolverOutput,
+    SolverSuccess,
     Sql,
     SqlType,
     UniqueExpectation,
 )
 
-from .conftest import conform_name, engine_params, render_model
+from .conftest import conform_name, engine_params, platform_ref, render_model
 
 
 @pytest.fixture(params=engine_params())
@@ -54,13 +53,13 @@ def _outcome(
         id="c",
         input="q",
         expected=ExpectationSuite(expectations=[expectation]),
-        platform=PlatformRef(name="x", kind=dialect),
+        platform=platform_ref(dialect),
     )
     queries = QueryRunner(adapter, model_sql, dialect, None)
     schema = [Column(name=name, type=SqlType.parse("INTEGER", dialect)) for name in (columns or [])] or None
-    result = ExecutionResult(rows=[], schema=schema, latency_seconds=0.0)
+    result = ExecutionSuccess(rows=[], schema=schema, latency_seconds=0.0)
     context = ScoreContext(queries=queries)
-    score = ExpectationSuiteScorer().score(case, SolverOutput(output=model_sql), result, context=context)
+    score = ExpectationSuiteScorer().score(case, SolverSuccess(output=model_sql), result, context=context)
     assert len(score.outcomes) == 1
     return score.outcomes[0]
 

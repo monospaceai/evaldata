@@ -6,7 +6,7 @@ import pytest
 
 import evaldata.platforms.base as platform_base
 from evaldata.platforms.base import execute_within_budget, execution_error
-from evaldata.types import ExecutionResult
+from evaldata.types import ExecutionFailure, ExecutionResult, ExecutionSuccess
 
 
 @pytest.mark.unit
@@ -76,7 +76,7 @@ class TestWatchdog:
     def test_unbounded_execution_calls_ordinary_execute(self) -> None:
         class Adapter:
             def execute(self, sql: str) -> ExecutionResult:
-                return ExecutionResult(rows=[], schema=None, latency_seconds=0.0)
+                return ExecutionSuccess(rows=[], schema=None, latency_seconds=0.0)
 
             def cancel(self) -> None:
                 return
@@ -84,7 +84,7 @@ class TestWatchdog:
             def close(self) -> None:
                 return
 
-        assert execute_within_budget(Adapter(), "SELECT 1", None).error is None
+        assert isinstance(execute_within_budget(Adapter(), "SELECT 1", None), ExecutionSuccess)
 
     def test_native_timeout_adapter_executes_once_with_exact_watchdog_deadline(self) -> None:
         class Adapter:
@@ -97,7 +97,7 @@ class TestWatchdog:
 
             def execute_with_timeout(self, sql: str, timeout_seconds: float) -> ExecutionResult:
                 self.calls.append((sql, timeout_seconds))
-                return ExecutionResult(rows=[], schema=None, latency_seconds=0.0)
+                return ExecutionSuccess(rows=[], schema=None, latency_seconds=0.0)
 
             def cancel(self) -> None:
                 return
@@ -107,7 +107,7 @@ class TestWatchdog:
 
         adapter = Adapter()
         result = execute_within_budget(adapter, "SELECT 1", 0.125)
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert adapter.calls == [("SELECT 1", 0.125)]
 
     def test_late_direct_completion_returns_a_budget_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -120,7 +120,7 @@ class TestWatchdog:
                 self.started.set()
                 self.finish.wait()
                 now["value"] = 2.0
-                return ExecutionResult(rows=[], schema=None, latency_seconds=0.0)
+                return ExecutionSuccess(rows=[], schema=None, latency_seconds=0.0)
 
             def cancel(self) -> None:
                 return
@@ -144,7 +144,7 @@ class TestWatchdog:
         adapter.finish.set()
         assert returned.wait(1)
         thread.join(1)
-        assert results[0].error is not None
+        assert isinstance(results[0], ExecutionFailure)
         assert results[0].error.kind == "budget_exceeded"
 
     def test_non_positive_budget_does_not_start_execution(self) -> None:
@@ -154,7 +154,7 @@ class TestWatchdog:
 
             def execute(self, sql: str) -> ExecutionResult:
                 self.executed = True
-                return ExecutionResult(rows=[], schema=None, latency_seconds=0.0)
+                return ExecutionSuccess(rows=[], schema=None, latency_seconds=0.0)
 
             def cancel(self) -> None:
                 return
@@ -164,7 +164,7 @@ class TestWatchdog:
 
         adapter = Adapter()
         result = execute_within_budget(adapter, "SELECT 1", 0)
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         assert result.error.kind == "budget_exceeded"
         assert adapter.executed is False
 
@@ -178,7 +178,7 @@ class TestWatchdog:
 
             def execute(self, sql: str) -> ExecutionResult:
                 self.release.wait()
-                return ExecutionResult(rows=[], schema=None, latency_seconds=0.0)
+                return ExecutionSuccess(rows=[], schema=None, latency_seconds=0.0)
 
             def cancel(self) -> None:
                 self.cancel_attempted.set()
@@ -192,4 +192,4 @@ class TestWatchdog:
         result = execute_within_budget(adapter, "SELECT 1", 0.01, cancel_grace_seconds=0.0)
         assert adapter.cancel_attempted.wait(1)
         adapter.release.set()
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)

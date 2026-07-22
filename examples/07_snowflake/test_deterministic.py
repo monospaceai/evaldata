@@ -22,6 +22,7 @@ from evaldata import (
     eval_case,
 )
 from evaldata.platforms import resolve, snowflake_platform
+from evaldata.types import ExecutionFailure
 
 pytestmark = [pytest.mark.e2e, pytest.mark.cloud, pytest.mark.snowflake]
 
@@ -30,7 +31,7 @@ _SCHEMA = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
 _TABLE = f"{_DATABASE}.{_SCHEMA}.ORDERS_EX07"
 _PLATFORM = snowflake_platform(
     name="examples-snowflake",
-    account=os.environ.get("SNOWFLAKE_ACCOUNT", ""),
+    account=os.environ.get("SNOWFLAKE_ACCOUNT", "your-account"),
     user=os.environ.get("SNOWFLAKE_USER"),
     warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE"),
     role=os.environ.get("SNOWFLAKE_ROLE"),
@@ -53,7 +54,7 @@ def _seed_warehouse() -> Iterator[None]:
     ]
     for sql in statements:
         result = adapter.execute(sql)
-        if result.error is not None:  # pragma: no cover
+        if isinstance(result, ExecutionFailure):  # pragma: no cover
             msg = f"failed to seed Snowflake table {_TABLE!r}: {result.error.message}"
             raise RuntimeError(msg)
     yield

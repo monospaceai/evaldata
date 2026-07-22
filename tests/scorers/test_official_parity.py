@@ -19,10 +19,10 @@ import pytest
 
 from evaldata.platforms.sqlite import SqliteAdapter
 from evaldata.scorers import ExecutionAccuracy, QueryRunner, ScoreContext
-from evaldata.types import EvalCase, GoldQuery, PlatformRef, SolverOutput, Sql
+from evaldata.types import EvalCase, GoldQuery, SolverSuccess, Sql, SQLitePlatformRef
 from tests._vendor.spider_exec_eval import result_eq
 
-_OUTPUT = SolverOutput(output=Sql("SELECT ..."))
+_OUTPUT = SolverSuccess(output=Sql("SELECT ..."))
 
 # (gold_sql, pred_sql, id)
 _CASES = [
@@ -77,7 +77,7 @@ def ours(db_path: str) -> Iterator:
             id="c",
             input="q",
             expected=GoldQuery(sql=gold_sql),
-            platform=PlatformRef(name="sqlite-parity", kind="sqlite"),
+            platform=SQLitePlatformRef(name="sqlite-parity"),
         )
         score = ExecutionAccuracy(**cfg).score(case, _OUTPUT, result, context=context)  # ty: ignore[invalid-argument-type]
         return score.verdict == "pass"

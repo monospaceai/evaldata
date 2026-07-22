@@ -39,7 +39,14 @@ from evaldata.platforms.registry import (
 )
 from evaldata.scorers import ExecutionAccuracy, ExpectationSuiteScorer, Scorer
 from evaldata.solvers import SCHEMA_PROMPT_TEMPLATE, PromptSolver
-from evaldata.types import EvalCase, PlatformRef
+from evaldata.types import (
+    BigQueryPlatformRef,
+    DatabricksPlatformRef,
+    EvalCase,
+    ExecutionFailure,
+    PlatformRef,
+    SnowflakePlatformRef,
+)
 
 app = typer.Typer(help="AI evals for data & analytics engineering teams.", no_args_is_help=True)
 
@@ -429,78 +436,75 @@ def fetch(
     console.print(f"cached at: {root}")
 
 
-def _build_refs(
-    *,
-    duckdb: str | None,
-    postgres: str | None,
-    sqlite: str | None = None,
-    databricks_server_hostname: str | None = None,
-    databricks_http_path: str | None = None,
-    snowflake_account: str | None = None,
-    snowflake_user: str | None = None,
-    snowflake_warehouse: str | None = None,
-    snowflake_role: str | None = None,
-    bigquery_project: str | None = None,
-    bigquery_dataset: str | None = None,
-    bigquery_location: str | None = None,
-) -> list[PlatformRef]:
-    """Build a `PlatformRef` for each platform flag that was provided.
-
-    The Databricks ref requires both `databricks_server_hostname` and `databricks_http_path`;
-    either alone produces no entry.
+def _databricks_ref(server_hostname: str | None, http_path: str | None) -> DatabricksPlatformRef | None:
+    """Build the optional Databricks doctor reference.
 
     Args:
-        duckdb: A DuckDB database path, or `None` if the flag was not given.
-        postgres: A PostgreSQL conninfo, or `None` if the flag was not given.
-        sqlite: A SQLite database path, or `None` if the flag was not given.
-        databricks_server_hostname: A Databricks workspace hostname, or `None`.
-        databricks_http_path: A Databricks SQL Warehouse HTTP path, or `None`.
-        snowflake_account: A Snowflake account identifier, or `None` if the flag was not given.
-        snowflake_user: A Snowflake user for the ref, or `None`.
-        snowflake_warehouse: A Snowflake warehouse for the ref, or `None`.
-        snowflake_role: A Snowflake role for the ref, or `None`.
-        bigquery_project: A BigQuery project identifier, or `None` if the flag was not given.
-        bigquery_dataset: A BigQuery default dataset, or `None`.
-        bigquery_location: A BigQuery job location, or `None`.
+        server_hostname: Workspace hostname, or `None` when omitted.
+        http_path: SQL Warehouse HTTP path, or `None` when omitted.
 
     Returns:
-        One `PlatformRef` per platform whose flag(s) were provided, in flag order.
+        A Databricks reference, or `None` when both flags are absent.
+
+    Raises:
+        BadParameter: If exactly one required flag is present.
     """
-    refs: list[PlatformRef] = []
-    if duckdb is not None:
-        refs.append(duckdb_platform(name="duckdb", path=duckdb))
-    if postgres is not None:
-        refs.append(postgres_platform(name="postgres", conninfo=postgres))
-    if sqlite is not None:
-        refs.append(sqlite_platform(name="sqlite", path=sqlite))
-    if databricks_server_hostname is not None and databricks_http_path is not None:
-        refs.append(
-            databricks_platform(
-                name="databricks",
-                server_hostname=databricks_server_hostname,
-                http_path=databricks_http_path,
-            )
-        )
-    if snowflake_account is not None:
-        refs.append(
-            snowflake_platform(
-                name="snowflake",
-                account=snowflake_account,
-                user=snowflake_user,
-                warehouse=snowflake_warehouse,
-                role=snowflake_role,
-            )
-        )
-    if bigquery_project is not None:
-        refs.append(
-            bigquery_platform(
-                name="bigquery",
-                project=bigquery_project,
-                dataset=bigquery_dataset,
-                location=bigquery_location,
-            )
-        )
-    return refs
+    if server_hostname is None and http_path is None:
+        return None
+    if server_hostname is None or http_path is None:
+        msg = "--databricks-server-hostname and --databricks-http-path must be given together"
+        raise typer.BadParameter(msg)
+    return databricks_platform(name="databricks", server_hostname=server_hostname, http_path=http_path)
+
+
+def _snowflake_ref(
+    account: str | None,
+    user: str | None,
+    warehouse: str | None,
+    role: str | None,
+) -> SnowflakePlatformRef | None:
+    """Build the optional Snowflake doctor reference.
+
+    Args:
+        account: Snowflake account, or `None` when omitted.
+        user: Snowflake user, or `None`.
+        warehouse: Snowflake warehouse, or `None`.
+        role: Snowflake role, or `None`.
+
+    Returns:
+        A Snowflake reference, or `None` when all flags are absent.
+
+    Raises:
+        BadParameter: If a dependent flag is present without `account`.
+    """
+    if account is None:
+        if any(value is not None for value in (user, warehouse, role)):
+            msg = "--snowflake-user, --snowflake-warehouse, and --snowflake-role require --snowflake-account"
+            raise typer.BadParameter(msg)
+        return None
+    return snowflake_platform(name="snowflake", account=account, user=user, warehouse=warehouse, role=role)
+
+
+def _bigquery_ref(project: str | None, dataset: str | None, location: str | None) -> BigQueryPlatformRef | None:
+    """Build the optional BigQuery doctor reference.
+
+    Args:
+        project: Google Cloud project, or `None` when omitted.
+        dataset: Default dataset, or `None`.
+        location: Job location, or `None`.
+
+    Returns:
+        A BigQuery reference, or `None` when all flags are absent.
+
+    Raises:
+        BadParameter: If a dependent flag is present without `project`.
+    """
+    if project is None:
+        if dataset is not None or location is not None:
+            msg = "--bigquery-dataset and --bigquery-location require --bigquery-project"
+            raise typer.BadParameter(msg)
+        return None
+    return bigquery_platform(name="bigquery", project=project, dataset=dataset, location=location)
 
 
 def _probe(ref: PlatformRef) -> tuple[bool, str]:
@@ -508,8 +512,7 @@ def _probe(ref: PlatformRef) -> tuple[bool, str]:
 
     Catches broadly on purpose: adapter construction can raise (e.g. psycopg fails to
     connect, or an optional driver is missing), and `doctor` must report that as a FAIL
-    rather than crash. A query that fails as a value (`ExecutionResult.error`) is a FAIL
-    too.
+    rather than crash. A returned `ExecutionFailure` is also a FAIL.
 
     Args:
         ref: The platform reference to probe.
@@ -522,7 +525,7 @@ def _probe(ref: PlatformRef) -> tuple[bool, str]:
         result = resolve(ref).execute("SELECT 1")
     except Exception as e:  # noqa: BLE001 - diagnostics: any failure is a reported FAIL
         return False, str(e)
-    if result.error is not None:
+    if isinstance(result, ExecutionFailure):
         return False, result.error.message
     return True, "connected"
 
@@ -636,26 +639,19 @@ def doctor(
         BadParameter: If no platform flag is provided, or only one of the two Databricks flags is.
         Exit: With code 1 if any platform connection fails.
     """
-    if (databricks_server_hostname is None) != (databricks_http_path is None):
-        msg = "--databricks-server-hostname and --databricks-http-path must be given together"
-        raise typer.BadParameter(msg)
-    if bigquery_project is None and (bigquery_dataset is not None or bigquery_location is not None):
-        msg = "--bigquery-dataset and --bigquery-location require --bigquery-project"
-        raise typer.BadParameter(msg)
-    refs = _build_refs(
-        duckdb=duckdb,
-        postgres=postgres,
-        sqlite=sqlite,
-        databricks_server_hostname=databricks_server_hostname,
-        databricks_http_path=databricks_http_path,
-        snowflake_account=snowflake_account,
-        snowflake_user=snowflake_user,
-        snowflake_warehouse=snowflake_warehouse,
-        snowflake_role=snowflake_role,
-        bigquery_project=bigquery_project,
-        bigquery_dataset=bigquery_dataset,
-        bigquery_location=bigquery_location,
+    refs: list[PlatformRef] = []
+    if duckdb is not None:
+        refs.append(duckdb_platform(name="duckdb", path=duckdb))
+    if postgres is not None:
+        refs.append(postgres_platform(name="postgres", conninfo=postgres))
+    if sqlite is not None:
+        refs.append(sqlite_platform(name="sqlite", path=sqlite))
+    optional_refs = (
+        _databricks_ref(databricks_server_hostname, databricks_http_path),
+        _snowflake_ref(snowflake_account, snowflake_user, snowflake_warehouse, snowflake_role),
+        _bigquery_ref(bigquery_project, bigquery_dataset, bigquery_location),
     )
+    refs.extend(ref for ref in optional_refs if ref is not None)
     dbt_failure: DbtError | None = None
     if dbt_project is not None:
         resolved = platform_from_profile(dbt_project)

@@ -6,7 +6,7 @@ scorer-conformance suite's `engine` fixture derives its adapter list from.
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, assert_never
 
 import pytest
 import sqlglot
@@ -17,7 +17,38 @@ from evaldata.platforms.base import PlatformAdapter
 from evaldata.platforms.duckdb import DuckDBAdapter
 from evaldata.platforms.sqlite import SqliteAdapter
 from evaldata.scorers.sql import Dialect
-from evaldata.types import PlatformKind
+from evaldata.types import (
+    BigQueryConfig,
+    BigQueryPlatformRef,
+    DatabricksConfig,
+    DatabricksPlatformRef,
+    DuckDBPlatformRef,
+    PlatformKind,
+    PlatformRef,
+    PostgreSQLPlatformRef,
+    SnowflakeConfig,
+    SnowflakePlatformRef,
+    SQLitePlatformRef,
+)
+
+
+def platform_ref(kind: PlatformKind) -> PlatformRef:
+    """Build a valid reference for conformance scoring against an injected adapter."""
+    match kind:
+        case "duckdb":
+            return DuckDBPlatformRef(name="x")
+        case "sqlite":
+            return SQLitePlatformRef(name="x")
+        case "postgres":
+            return PostgreSQLPlatformRef(name="x")
+        case "databricks":
+            return DatabricksPlatformRef(name="x", config=DatabricksConfig(server_hostname="test", http_path="/test"))
+        case "snowflake":
+            return SnowflakePlatformRef(name="x", config=SnowflakeConfig(account="test"))
+        case "bigquery":
+            return BigQueryPlatformRef(name="x", config=BigQueryConfig(project="test"))
+        case _ as unreachable:
+            assert_never(unreachable)
 
 
 def conform_name(name: str, dialect: Dialect) -> str:
@@ -308,7 +339,7 @@ ADAPTER_SPECS: list[AdapterSpec] = [
     AdapterSpec(id="postgres", marks=pytest.mark.e2e, connect=connect_postgres, fixtures=PostgresFixtures),
     AdapterSpec(
         id="databricks",
-        marks=[pytest.mark.e2e, pytest.mark.cloud],
+        marks=[pytest.mark.e2e, pytest.mark.cloud, pytest.mark.databricks],
         connect=connect_databricks,
         fixtures=DatabricksFixtures,
     ),

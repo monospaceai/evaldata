@@ -140,11 +140,10 @@ git clone https://github.com/monospaceai/evaldata.git
 cd evaldata
 uv sync                       # core + dev tooling
 uv run pre-commit install
-just check                    # lint + typecheck + tests with coverage (runs everything)
+just check                    # lint + typecheck + local tests with coverage
 ```
 
-`just check` runs lint, typecheck, and tests with coverage (held at 100%). See the
-`justfile` for the full set of commands.
+Run `just --list` for other development commands.
 
 ### Platform e2e tests
 

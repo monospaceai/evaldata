@@ -1,7 +1,3 @@
-"""Live Cortex Analyst accuracy benchmark over the jaffle-shop semantic view (costs credits);
-excluded from the default run via the `cortex` marker.
-"""
-
 import pytest
 
 from evaldata import ExecutionAccuracy
@@ -9,11 +5,11 @@ from evaldata.core.runner import evaluate_case
 from evaldata.cortex.client import CortexAnalystClient
 from evaldata.cortex.solver import CortexAnalystSolver
 from evaldata.platforms.base import PlatformAdapter
-from evaldata.types import EvalCase, GoldQuery, PlatformRef
+from evaldata.types import EvalCase, GoldQuery, SnowflakeConfig, SnowflakePlatformRef
 
-pytestmark = [pytest.mark.cortex, pytest.mark.e2e]
+pytestmark = [pytest.mark.cortex, pytest.mark.e2e, pytest.mark.manual]
 
-_PLATFORM = PlatformRef(name="jaffle", kind="snowflake")
+_PLATFORM = SnowflakePlatformRef(name="jaffle", config=SnowflakeConfig(account="test"))
 _ORDERS = "JAFFLE_SHOP_DB.PUBLIC.ORDERS"
 _CUSTOMERS = "JAFFLE_SHOP_DB.PUBLIC.CUSTOMERS"
 _JOIN = f"{_ORDERS} o JOIN {_CUSTOMERS} c ON o.CUSTOMER_ID = c.ID"

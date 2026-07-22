@@ -9,7 +9,7 @@ import pytest
 from sqlglot import exp
 
 from evaldata.platforms.duckdb import DuckDBAdapter
-from evaldata.types import ExecutionError
+from evaldata.types import ExecutionError, ExecutionSuccess
 
 
 @pytest.mark.unit
@@ -32,7 +32,7 @@ class TestDuckDBNativeTypes:
     )
     def test_native_type_string_is_exact(self, adapter: DuckDBAdapter, sql: str, expected_type: str) -> None:
         result = adapter.execute(sql)
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.schema_ is not None
         assert result.schema_[0].type.raw == expected_type
 
@@ -49,7 +49,7 @@ class TestDuckDBNativeTypes:
     )
     def test_emitted_type_parses_under_duckdb_dialect(self, adapter: DuckDBAdapter, sql: str) -> None:
         result = adapter.execute(sql)
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.schema_ is not None
         parsed = exp.DataType.build(result.schema_[0].type.raw, dialect="duckdb")
         assert isinstance(parsed, exp.DataType)
@@ -64,7 +64,7 @@ class TestDuckDBFilePath:
             first.execute("INSERT INTO t VALUES (42)")
         with DuckDBAdapter(database=db_path) as second:
             result = second.execute("SELECT x FROM t")
-            assert result.error is None
+            assert isinstance(result, ExecutionSuccess)
             assert result.rows == [{"x": 42}]
 
 
@@ -77,7 +77,7 @@ class TestDuckDBSharedCursor:
             reader = DuckDBAdapter.from_connection(parent.cursor())
             seeder.execute("CREATE TABLE t (n INTEGER); INSERT INTO t VALUES (1), (2), (3)")
             result = reader.execute("SELECT count(*) AS c FROM t")
-            assert result.error is None
+            assert isinstance(result, ExecutionSuccess)
             assert result.rows == [{"c": 3}]
         finally:
             parent.close()
@@ -89,7 +89,7 @@ class TestDuckDBSharedCursor:
             member.close()
             assert parent.execute("SELECT 1 AS n").fetchall() == [(1,)]
             sibling = DuckDBAdapter.from_connection(parent.cursor())
-            assert sibling.execute("SELECT 1 AS n").error is None
+            assert isinstance(sibling.execute("SELECT 1 AS n"), ExecutionSuccess)
         finally:
             parent.close()
 

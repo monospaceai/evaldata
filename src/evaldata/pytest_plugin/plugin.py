@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import TypeAdapter
 
 from evaldata.loaders.python import read_eval_case
 from evaldata.platforms.registry import close_all
@@ -13,6 +14,7 @@ from evaldata.types import EvalCase
 
 _JSON_OPTION = "--evaldata-json"
 _WORKEROUTPUT_KEY = "evaldata_cases"
+_CASE_REPORT_ADAPTER = TypeAdapter(CaseReport)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -86,4 +88,4 @@ def pytest_testnodedown(node: Any, error: object) -> None:
     """
     serialized = getattr(node, "workeroutput", {}).get(_WORKEROUTPUT_KEY)
     if serialized is not None:
-        extend(CaseReport.model_validate(item) for item in serialized)
+        extend(_CASE_REPORT_ADAPTER.validate_python(item) for item in serialized)

@@ -8,16 +8,19 @@ from evaldata.dbt import (
     MetricCase,
     MetricFirstDecisive,
     MetricQuery,
+    MetricSolverFailure,
     MetricSolverOutput,
+    MetricSolverSuccess,
     assert_metric_eval,
     evaluate_metric_case,
     run_metric_benchmark,
 )
-from evaldata.types import PlatformRef, ScoreResult, SolverError
+from evaldata.reporting.collector import SolverFailureCaseReport
+from evaldata.types import DuckDBPlatformRef, ScoreResult, SolverError
 
 pytestmark = pytest.mark.unit
 
-PLATFORM = PlatformRef(name="duck", kind="duckdb")
+PLATFORM = DuckDBPlatformRef(name="duck")
 QUERY = MetricQuery(metrics=["revenue"])
 
 
@@ -49,14 +52,14 @@ def _result(verdict: str, name: str = "s") -> ScoreResult:
 
 
 def _ok_output() -> MetricSolverOutput:
-    return MetricSolverOutput(query=QUERY)
+    return MetricSolverSuccess(query=QUERY)
 
 
 def test_evaluate_reports_solver_error() -> None:
-    output = MetricSolverOutput(error=SolverError(kind="auth", message="bad key"))
+    output = MetricSolverFailure(error=SolverError(kind="auth", message="bad key"))
     report = evaluate_metric_case(_case(), _Solver(output), scorers=[_Scorer("pass")])
     assert report.passed is False
-    assert report.error is not None
+    assert isinstance(report, SolverFailureCaseReport)
 
 
 def test_evaluate_passes_when_all_scorers_pass() -> None:
@@ -74,7 +77,7 @@ def test_assert_metric_eval_passes_silently() -> None:
 
 
 def test_assert_metric_eval_raises_on_solver_error() -> None:
-    output = MetricSolverOutput(error=SolverError(kind="auth", message="bad key"))
+    output = MetricSolverFailure(error=SolverError(kind="auth", message="bad key"))
     with pytest.raises(AssertionError, match="solver error"):
         assert_metric_eval(_case(), _Solver(output), scorers=[_Scorer("pass")])
 
@@ -114,7 +117,7 @@ def test_run_metric_benchmark_concurrency_case_error_does_not_kill_run() -> None
     class _MaybeErroring:
         def solve(self, case: MetricCase) -> MetricSolverOutput:
             if case.id == "b":
-                return MetricSolverOutput(error=SolverError(kind="auth", message="boom"))
+                return MetricSolverFailure(error=SolverError(kind="auth", message="boom"))
             return _ok_output()
 
     cases = [_case("a"), _case("b"), _case("c")]
@@ -122,7 +125,7 @@ def test_run_metric_benchmark_concurrency_case_error_does_not_kill_run() -> None
     assert summary.total == 3
     assert summary.passed == 2
     reports = {r.id: r for r in summary.cases}
-    assert reports["b"].error is not None
+    assert isinstance(reports["b"], SolverFailureCaseReport)
 
 
 class TestMetricFirstDecisive:

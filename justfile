@@ -1,5 +1,4 @@
-# The `fixtures` group carries the dbt toolchain (dbt-metricflow[dbt-duckdb]) the Semantic
-# Layer e2e runs against; the other extras cover the rest of the suite.
+# Run tests with all optional dependencies and dbt fixtures.
 test *args:
     uv run --all-extras --group fixtures pytest {{args}}
 
@@ -9,11 +8,26 @@ test-cov *args:
     uv run coverage combine
     uv run coverage report
 
-# Run only `cloud` e2e (Databricks, …) in isolation; needs the secrets in the env.
 test-cloud *args:
     uv run --all-extras --group fixtures pytest -m cloud {{args}}
 
-# Run only the live Cortex Analyst e2e (consumes Snowflake credits); needs the secrets in the env.
+# Run non-cloud tests with coverage.
+test-gate *args:
+    just test-cov '-m "not cloud and not manual"' {{args}}
+
+test-databricks *args:
+    just test '-m "databricks and not manual"' {{args}}
+
+test-snowflake *args:
+    just test '-m "snowflake and not manual"' {{args}}
+
+test-bigquery *args:
+    just test '-m "bigquery and not manual"' {{args}}
+
+# Run manual tests other than Cortex Analyst.
+test-manual *args:
+    just test '-m "manual and not cortex"' {{args}}
+
 test-cortex *args:
     uv run --all-extras --group fixtures pytest -m cortex {{args}}
 
@@ -51,16 +65,22 @@ docs-deploy version:
     uv run --group docs mike deploy --push --update-aliases {{version}} latest
     uv run --group docs mike set-default --push latest
 
-# Everyday gate: runs everything incl. `cloud` (needs credentials in the env); coverage 100%.
-# The live Cortex e2e (`cortex`) is off by default — it burns credits; run it via `just test-cortex`.
+# Lint, type-check, and run non-cloud tests with coverage.
 check: lint typecheck
-    just test-cov '-m "not cortex"'
+    just test-gate
 
-# Fast iteration: like `check` but skips `cloud`/`cortex`; no coverage gate. CI still runs everything.
+# Fast iteration: like `check` but without coverage.
 check-nocloud: lint typecheck
-    just test '-m "not cloud and not cortex"'
+    just test '-m "not cloud and not manual"'
 
-ci: check build
+_ci: docs-build check
+    just test-databricks
+    just test-snowflake
+    just test-bigquery
+    just build
+
+ci:
+    UV_FROZEN=1 just _ci
 
 release *args="auto":
     changie batch {{args}}

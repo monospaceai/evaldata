@@ -6,15 +6,23 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from evaldata.types import (
+    BigQueryConfig,
+    BigQueryPlatformRef,
     Column,
     ColumnMismatch,
     ColumnPresenceExpectation,
     ColumnTypeExpectation,
     ComparisonConfig,
     CostBudget,
+    DatabricksConfig,
+    DatabricksPlatformRef,
+    DuckDBConfig,
+    DuckDBPlatformRef,
     EvalCase,
     ExecutionError,
+    ExecutionFailure,
     ExecutionResult,
+    ExecutionSuccess,
     Expectation,
     ExpectationOutcome,
     ExpectationSuite,
@@ -22,11 +30,19 @@ from evaldata.types import (
     GoldQuery,
     NotNullExpectation,
     PlatformRef,
+    PostgreSQLConfig,
+    PostgreSQLPlatformRef,
     ResultSetDiff,
     RowCountExpectation,
     ScoreResult,
+    SnowflakeConfig,
+    SnowflakePlatformRef,
     SolverError,
+    SolverFailure,
     SolverOutput,
+    SolverSuccess,
+    SQLiteConfig,
+    SQLitePlatformRef,
     SqlType,
     TypedResultSet,
     TypedSchema,
@@ -38,52 +54,96 @@ from evaldata.types import (
 
 ExpectedAdapter: TypeAdapter[Expected] = TypeAdapter(Expected)
 ExpectationAdapter: TypeAdapter[Expectation] = TypeAdapter(Expectation)
+PlatformRefAdapter: TypeAdapter[PlatformRef] = TypeAdapter(PlatformRef)
+SolverOutputAdapter: TypeAdapter[SolverOutput] = TypeAdapter(SolverOutput)
+ExecutionResultAdapter: TypeAdapter[ExecutionResult] = TypeAdapter(ExecutionResult)
 
 
 @pytest.mark.unit
 class TestPlatformRef:
     def test_minimal_construction(self) -> None:
-        ref = PlatformRef(name="local", kind="duckdb")
+        ref = DuckDBPlatformRef(name="local")
         assert ref.name == "local"
         assert ref.kind == "duckdb"
         assert ref.dialect is None
-        assert ref.config == {}
+        assert ref.config == DuckDBConfig()
 
     def test_full_construction(self) -> None:
-        ref = PlatformRef(
+        ref = PostgreSQLPlatformRef(
             name="prod-pg",
-            kind="postgres",
             dialect="postgres",
-            config={"host": "db.example.com", "dbname": "analytics"},
+            config=PostgreSQLConfig(conninfo="host=db.example.com dbname=analytics"),
         )
-        assert ref.config["dbname"] == "analytics"
+        assert ref.config.conninfo == "host=db.example.com dbname=analytics"
 
     def test_json_schema_round_trip(self) -> None:
-        ref = PlatformRef(name="local", kind="duckdb", config={"path": ":memory:"})
-        restored = PlatformRef.model_validate_json(ref.model_dump_json())
+        ref = DuckDBPlatformRef(name="local", config=DuckDBConfig(path=":memory:"))
+        restored = PlatformRefAdapter.validate_json(ref.model_dump_json())
         assert restored == ref
+
+    @pytest.mark.parametrize(
+        ("ref", "config_type"),
+        [
+            (DuckDBPlatformRef(name="duck"), DuckDBConfig),
+            (SQLitePlatformRef(name="sqlite"), SQLiteConfig),
+            (PostgreSQLPlatformRef(name="pg"), PostgreSQLConfig),
+            (
+                DatabricksPlatformRef(
+                    name="dbx", config=DatabricksConfig(server_hostname="workspace", http_path="/warehouse")
+                ),
+                DatabricksConfig,
+            ),
+            (SnowflakePlatformRef(name="sf", config=SnowflakeConfig(account="account")), SnowflakeConfig),
+            (BigQueryPlatformRef(name="bq", config=BigQueryConfig(project="project")), BigQueryConfig),
+        ],
+    )
+    def test_valid_platform_config(self, ref: PlatformRef, config_type: type[object]) -> None:
+        assert isinstance(ref.config, config_type)
+        assert PlatformRefAdapter.validate_json(ref.model_dump_json()) == ref
 
     # "oracle" and "mysql" are not in PlatformKind and must be rejected at the boundary.
     @pytest.mark.parametrize("kind", ["oracle", "mysql"])
     def test_rejects_unknown_kind(self, kind: str) -> None:
         with pytest.raises(ValidationError):
-            PlatformRef.model_validate({"name": "x", "kind": kind})
+            PlatformRefAdapter.validate_python({"name": "x", "kind": kind})
 
     def test_rejects_unknown_dialect(self) -> None:
         with pytest.raises(ValidationError):
-            PlatformRef.model_validate({"name": "x", "kind": "duckdb", "dialect": "mysql"})
+            PlatformRefAdapter.validate_python({"name": "x", "kind": "duckdb", "dialect": "mysql"})
 
     def test_accepts_cross_platform_dialect_override(self) -> None:
-        ref = PlatformRef(name="local", kind="duckdb", dialect="snowflake")
+        ref = DuckDBPlatformRef(name="local", dialect="snowflake")
         assert ref.dialect == "snowflake"
 
     def test_rejects_empty_name(self) -> None:
         with pytest.raises(ValidationError):
-            PlatformRef(name="", kind="duckdb")
+            DuckDBPlatformRef(name="")
 
     def test_rejects_extra_fields(self) -> None:
         with pytest.raises(ValidationError):
-            PlatformRef.model_validate({"name": "x", "kind": "duckdb", "nmae": "typo"})
+            PlatformRefAdapter.validate_python({"name": "x", "kind": "duckdb", "nmae": "typo"})
+
+    def test_rejects_missing_required_config_field(self) -> None:
+        with pytest.raises(ValidationError, match="server_hostname"):
+            PlatformRefAdapter.validate_python({"name": "x", "kind": "databricks", "config": {"http_path": "/p"}})
+
+    def test_rejects_mistyped_config_field(self) -> None:
+        with pytest.raises(ValidationError, match="project"):
+            PlatformRefAdapter.validate_python({"name": "x", "kind": "bigquery", "config": {"project": 42}})
+
+    def test_rejects_kind_config_mismatch(self) -> None:
+        with pytest.raises(ValidationError, match="project"):
+            PlatformRefAdapter.validate_python({"name": "x", "kind": "duckdb", "config": {"project": "p"}})
+
+    def test_rejects_unknown_config_key(self) -> None:
+        with pytest.raises(ValidationError, match="password"):
+            SnowflakeConfig(account="a", password="secret")  # type: ignore[call-arg]
+
+    def test_secret_is_excluded_from_serialization(self) -> None:
+        ref = SnowflakePlatformRef(name="sf", config=SnowflakeConfig(account="a", authenticator="oauth"))
+        payload = ref.model_dump(mode="json")
+        assert "password" not in payload["config"]
+        assert "token" not in payload["config"]
 
 
 @pytest.mark.unit
@@ -216,7 +276,7 @@ class TestSchema:
         assert restored == s
 
     def test_coerces_from_plain_list(self) -> None:
-        result = ExecutionResult(
+        result = ExecutionSuccess(
             rows=[{"id": 1}],
             schema=[Column(name="id", type="INTEGER")],
             latency_seconds=0.1,
@@ -497,7 +557,7 @@ def _make_case(**overrides: Any) -> EvalCase:
         "id": "rock_track_count",
         "input": "How many tracks are in the 'Rock' genre?",
         "expected": UntypedResultSet(rows=[{"count": 1297}]),
-        "platform": PlatformRef(name="local", kind="duckdb"),
+        "platform": DuckDBPlatformRef(name="local"),
     }
     return EvalCase(**(defaults | overrides))
 
@@ -516,7 +576,7 @@ class TestEvalCase:
             id="case-1",
             input="List active users",
             expected=GoldQuery(sql="SELECT * FROM users WHERE active"),
-            platform=PlatformRef(name="warehouse", kind="postgres"),
+            platform=PostgreSQLPlatformRef(name="warehouse"),
             comparison=ComparisonConfig(column_order="strict"),
             cost_budget=CostBudget(max_seconds=30.0),
             metadata={"owner": "analytics", "ticket": "ANL-42"},
@@ -581,7 +641,7 @@ class TestEvalCase:
 @pytest.mark.unit
 class TestSolverOutput:
     def test_minimal_construction(self) -> None:
-        out = SolverOutput(output="SELECT 1")
+        out = SolverSuccess(output="SELECT 1")
         assert out.output == "SELECT 1"
         assert out.prompt_tokens is None
         assert out.completion_tokens is None
@@ -590,7 +650,7 @@ class TestSolverOutput:
         assert out.metadata == {}
 
     def test_full_construction(self) -> None:
-        out = SolverOutput(
+        out = SolverSuccess(
             output="SELECT COUNT(*) FROM tracks WHERE genre = 'Rock'",
             prompt_tokens=120,
             completion_tokens=18,
@@ -604,62 +664,60 @@ class TestSolverOutput:
         assert out.metadata["model"] == "gpt-4o"
 
     def test_callable_solver_can_omit_usage(self) -> None:
-        out = SolverOutput(output="SELECT 1", metadata={"source": "custom_pipeline"})
+        out = SolverSuccess(output="SELECT 1", metadata={"source": "custom_pipeline"})
         assert out.prompt_tokens is None
         assert out.metadata["source"] == "custom_pipeline"
 
     def test_json_round_trip(self) -> None:
-        out = SolverOutput(output="SELECT 1", prompt_tokens=10, latency_seconds=0.5)
-        restored = SolverOutput.model_validate_json(out.model_dump_json())
+        out = SolverSuccess(output="SELECT 1", prompt_tokens=10, latency_seconds=0.5)
+        restored = SolverOutputAdapter.validate_json(out.model_dump_json())
         assert restored == out
 
     def test_rejects_empty_output(self) -> None:
         with pytest.raises(ValidationError):
-            SolverOutput(output="")
+            SolverSuccess(output="")
 
     def test_rejects_negative_tokens(self) -> None:
         with pytest.raises(ValidationError):
-            SolverOutput.model_validate({"output": "SELECT 1", "prompt_tokens": -1})
+            SolverSuccess(output="SELECT 1", prompt_tokens=-1)
 
     def test_rejects_negative_latency(self) -> None:
         with pytest.raises(ValidationError):
-            SolverOutput.model_validate({"output": "SELECT 1", "latency_seconds": -0.1})
+            SolverSuccess(output="SELECT 1", latency_seconds=-0.1)
 
     def test_rejects_negative_cost(self) -> None:
         with pytest.raises(ValidationError):
-            SolverOutput.model_validate({"output": "SELECT 1", "cost_usd": -0.01})
+            SolverSuccess(output="SELECT 1", cost_usd=-0.01)
 
     def test_accepts_zero_completion_tokens(self) -> None:
-        out = SolverOutput(output="SELECT 1", completion_tokens=0)
+        out = SolverSuccess(output="SELECT 1", completion_tokens=0)
         assert out.completion_tokens == 0
 
     def test_rejects_extra_fields(self) -> None:
         with pytest.raises(ValidationError):
-            SolverOutput.model_validate({"output": "SELECT 1", "sql": "SELECT 1"})
+            SolverSuccess(output="SELECT 1", sql="SELECT 1")  # type: ignore[call-arg]
 
     def test_default_metadata_not_shared(self) -> None:
-        a = SolverOutput(output="SELECT 1")
-        b = SolverOutput(output="SELECT 2")
+        a = SolverSuccess(output="SELECT 1")
+        b = SolverSuccess(output="SELECT 2")
         a.metadata["touched"] = True
         assert b.metadata == {}
 
     def test_error_construction(self) -> None:
-        out = SolverOutput(error=SolverError(kind="timeout", message="timed out"))
-        assert out.output is None
-        assert out.error is not None
+        out = SolverFailure(error=SolverError(kind="timeout", message="timed out"))
         assert out.error.kind == "timeout"
 
     def test_rejects_neither_output_nor_error(self) -> None:
         with pytest.raises(ValidationError):
-            SolverOutput()
+            SolverSuccess()
 
     def test_rejects_both_output_and_error(self) -> None:
         with pytest.raises(ValidationError):
-            SolverOutput(output="SELECT 1", error=SolverError(kind="auth", message="bad key"))
+            SolverSuccess(output="SELECT 1", error=SolverError(kind="auth", message="bad key"))
 
     def test_error_json_round_trip(self) -> None:
-        out = SolverOutput(error=SolverError(kind="rate_limit", message="429", provider="openai"))
-        restored = SolverOutput.model_validate_json(out.model_dump_json())
+        out = SolverFailure(error=SolverError(kind="rate_limit", message="429", provider="openai"))
+        restored = SolverOutputAdapter.validate_json(out.model_dump_json())
         assert restored == out
 
 
@@ -691,19 +749,18 @@ class TestSolverError:
 @pytest.mark.unit
 class TestExecutionResult:
     def test_minimal_construction(self) -> None:
-        result = ExecutionResult(rows=[{"count": 1297}], latency_seconds=0.042)
+        result = ExecutionSuccess(rows=[{"count": 1297}], latency_seconds=0.042)
         assert result.rows == [{"count": 1297}]
         assert result.schema_ is None
         assert result.latency_seconds == 0.042
-        assert result.error is None
         assert result.metadata == {}
 
     def test_empty_rows_allowed(self) -> None:
-        result = ExecutionResult(rows=[], latency_seconds=0.01)
+        result = ExecutionSuccess(rows=[], latency_seconds=0.01)
         assert result.rows == []
 
     def test_with_schema(self) -> None:
-        result = ExecutionResult(
+        result = ExecutionSuccess(
             rows=[{"id": 1, "revenue": 12.5}],
             schema=[Column(name="id", type="INTEGER"), Column(name="revenue", type="DOUBLE")],
             latency_seconds=0.1,
@@ -712,17 +769,26 @@ class TestExecutionResult:
         assert result.schema_.names == ["id", "revenue"]
         assert [t.raw for t in result.schema_.types] == ["INTEGER", "DOUBLE"]
 
+    def test_with_untyped_schema(self) -> None:
+        result = ExecutionSuccess(
+            rows=[{"id": 1}],
+            schema=UntypedSchema(root=["id"]),
+            latency_seconds=0.1,
+        )
+        restored = ExecutionResultAdapter.validate_json(result.model_dump_json())
+        assert restored == result
+        assert isinstance(restored, ExecutionSuccess)
+        assert isinstance(restored.schema_, UntypedSchema)
+
     def test_with_error(self) -> None:
-        result = ExecutionResult(
-            rows=[],
+        result = ExecutionFailure(
             latency_seconds=0.005,
             error=ExecutionError(kind="query_failed", message="syntax error at or near 'FROMM'"),
         )
-        assert result.error is not None
         assert result.error.message == "syntax error at or near 'FROMM'"
 
     def test_with_metadata(self) -> None:
-        result = ExecutionResult(
+        result = ExecutionSuccess(
             rows=[{"x": 1}],
             latency_seconds=0.2,
             metadata={"warehouse": "EVAL_WH", "query_id": "abc-123"},
@@ -730,12 +796,12 @@ class TestExecutionResult:
         assert result.metadata["warehouse"] == "EVAL_WH"
 
     def test_json_round_trip_minimal(self) -> None:
-        result = ExecutionResult(rows=[{"x": 1}], latency_seconds=0.1)
-        restored = ExecutionResult.model_validate_json(result.model_dump_json())
+        result = ExecutionSuccess(rows=[{"x": 1}], latency_seconds=0.1)
+        restored = ExecutionResultAdapter.validate_json(result.model_dump_json())
         assert restored == result
 
     def test_json_round_trip_schema_uses_external_alias(self) -> None:
-        result = ExecutionResult(
+        result = ExecutionSuccess(
             rows=[{"x": 1}],
             schema=[Column(name="x", type="INTEGER")],
             latency_seconds=0.1,
@@ -743,26 +809,48 @@ class TestExecutionResult:
         dumped = result.model_dump_json()
         assert '"schema"' in dumped
         assert '"schema_"' not in dumped
-        restored = ExecutionResult.model_validate_json(dumped)
+        restored = ExecutionResultAdapter.validate_json(dumped)
         assert restored == result
 
     def test_rejects_negative_latency(self) -> None:
         with pytest.raises(ValidationError):
-            ExecutionResult.model_validate({"rows": [], "latency_seconds": -0.001})
+            ExecutionSuccess(rows=[], latency_seconds=-0.001)
 
     def test_rejects_empty_error_string(self) -> None:
         with pytest.raises(ValidationError):
-            ExecutionResult.model_validate({"rows": [], "latency_seconds": 0.0, "error": ""})
+            ExecutionFailure(latency_seconds=0.0, error=ExecutionError(kind="query_failed", message=""))
 
     def test_rejects_extra_fields(self) -> None:
         with pytest.raises(ValidationError):
-            ExecutionResult.model_validate(
-                {"rows": [], "latency_seconds": 0.0, "bytes_scanned": 1000},
-            )
+            ExecutionSuccess(rows=[], latency_seconds=0.0, bytes_scanned=1000)  # type: ignore[call-arg]
+
+    def test_failure_rejects_rows(self) -> None:
+        with pytest.raises(ValidationError, match="rows"):
+            ExecutionFailure(
+                latency_seconds=0.0,
+                error=ExecutionError(kind="query_failed", message="boom"),
+                rows=[],
+            )  # type: ignore[call-arg]
+
+    def test_failure_rejects_schema(self) -> None:
+        with pytest.raises(ValidationError, match="schema"):
+            ExecutionFailure(
+                latency_seconds=0.0,
+                error=ExecutionError(kind="query_failed", message="boom"),
+                schema=[],
+            )  # type: ignore[call-arg]
+
+    def test_success_rejects_error(self) -> None:
+        with pytest.raises(ValidationError, match="error"):
+            ExecutionSuccess(
+                rows=[],
+                latency_seconds=0.0,
+                error=ExecutionError(kind="query_failed", message="boom"),
+            )  # type: ignore[call-arg]
 
     def test_default_metadata_not_shared(self) -> None:
-        a = ExecutionResult(rows=[], latency_seconds=0.0)
-        b = ExecutionResult(rows=[], latency_seconds=0.0)
+        a = ExecutionSuccess(rows=[], latency_seconds=0.0)
+        b = ExecutionSuccess(rows=[], latency_seconds=0.0)
         a.metadata["touched"] = True
         assert b.metadata == {}
 

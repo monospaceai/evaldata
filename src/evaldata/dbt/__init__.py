@@ -38,7 +38,9 @@ from evaldata.dbt.semantic_layer import (
     MetricQuery,
     MetricScorer,
     MetricSolver,
+    MetricSolverFailure,
     MetricSolverOutput,
+    MetricSolverSuccess,
 )
 
 __all__ = [
@@ -60,7 +62,9 @@ __all__ = [
     "MetricResultEquivalence",
     "MetricScorer",
     "MetricSolver",
+    "MetricSolverFailure",
     "MetricSolverOutput",
+    "MetricSolverSuccess",
     "MetricSpecEquivalence",
     "Mode",
     "ModelRef",

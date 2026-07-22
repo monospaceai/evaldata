@@ -6,6 +6,7 @@ import pytest
 
 from evaldata.platforms import duckdb_platform, resolve
 from evaldata.pydantic_evals import SqlEquivalence, close_all
+from evaldata.types import ExecutionSuccess
 from pydantic_evals import Case, Dataset
 
 _PLATFORM = duckdb_platform(name="examples-pydantic-evals")
@@ -27,7 +28,7 @@ def _database() -> Iterator[None]:
         "CREATE TABLE orders (id INTEGER, region VARCHAR, amount INTEGER); "
         "INSERT INTO orders VALUES (1, 'east', 50), (2, 'west', 120), (3, 'east', 20)"
     )
-    assert result.error is None
+    assert isinstance(result, ExecutionSuccess)
     try:
         yield
     finally:

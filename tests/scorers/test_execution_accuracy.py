@@ -10,14 +10,14 @@ from evaldata.scorers.execution_accuracy import SCORER_NAME
 from evaldata.types import (
     EvalCase,
     GoldQuery,
-    PlatformRef,
     ScoreResult,
-    SolverOutput,
+    SolverSuccess,
     Sql,
+    SQLitePlatformRef,
     UntypedResultSet,
 )
 
-_OUTPUT = SolverOutput(output="SELECT ...")
+_OUTPUT = SolverSuccess(output="SELECT ...")
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def _case(gold_sql: str) -> EvalCase:
         id="c",
         input="q",
         expected=GoldQuery(sql=gold_sql),
-        platform=PlatformRef(name="sqlite-ea", kind="sqlite"),
+        platform=SQLitePlatformRef(name="sqlite-ea"),
     )
 
 
@@ -121,7 +121,7 @@ class TestExecutionAccuracy:
             id="c",
             input="q",
             expected=UntypedResultSet(rows=[{"id": 1}]),
-            platform=PlatformRef(name="sqlite-ea", kind="sqlite"),
+            platform=SQLitePlatformRef(name="sqlite-ea"),
         )
         queries = QueryRunner(adapter, Sql("SELECT id FROM items"), "sqlite", None)
         result = queries.run(Sql("SELECT id FROM items"))

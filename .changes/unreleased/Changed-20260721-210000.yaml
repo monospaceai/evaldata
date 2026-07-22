@@ -1,0 +1,3 @@
+kind: Changed
+body: 'Replace optional success/error fields with separate success and failure results for scalar queries, SQL execution, solvers, Semantic Layer solvers, and case reports. Platform references now use per-platform configuration models, and benchmark totals are computed from case reports. These changes update public constructors and serialized shapes.'
+time: 2026-07-21T21:00:00+10:00

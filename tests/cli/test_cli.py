@@ -13,8 +13,9 @@ import pytest
 from typer.testing import CliRunner
 
 import evaldata.cli as cli
-from evaldata.cli import _build_refs, app
-from evaldata.types import PlatformKind
+from evaldata.cli import _bigquery_ref, _databricks_ref, _snowflake_ref, app
+from evaldata.platforms import duckdb_platform, postgres_platform, sqlite_platform
+from evaldata.types import ExecutionFailure, PlatformKind
 
 runner = CliRunner()
 
@@ -235,16 +236,19 @@ class TestBenchStats:
     """Unit tests for `_bench_stats`: covers the difficulty=None skip (line 110)."""
 
     def _make_report(self, id_: str, passed: bool) -> "object":
-        from evaldata.reporting.collector import CaseReport
+        from evaldata.reporting.collector import PassedCaseReport, ScoredFailureCaseReport
+        from evaldata.types import ScoreResult
 
-        return CaseReport(id=id_, input="q", passed=passed)
+        if passed:
+            return PassedCaseReport(id=id_, input="q")
+        return ScoredFailureCaseReport(id=id_, input="q", scores=[ScoreResult(scorer="s", verdict="fail")])
 
     def test_skips_cases_without_difficulty(self) -> None:
         from evaldata.cli import _bench_stats
         from evaldata.core.runner import BenchmarkSummary
 
         report = self._make_report("q1", True)
-        summary = BenchmarkSummary(total=1, passed=1, accuracy=1.0, cases=[report])
+        summary = BenchmarkSummary(cases=[report])
         stats = _bench_stats(
             summary,
             {"q1": None},
@@ -259,7 +263,7 @@ class TestBenchStats:
         from evaldata.core.runner import BenchmarkSummary
 
         reports = [self._make_report("q1", True), self._make_report("q2", False)]
-        summary = BenchmarkSummary(total=2, passed=1, accuracy=0.5, cases=reports)
+        summary = BenchmarkSummary(cases=reports)
         stats = _bench_stats(
             summary,
             {"q1": "simple", "q2": "simple"},
@@ -602,14 +606,12 @@ class TestDoctor:
         assert "FAIL" in result.output
 
     def test_fail_when_probe_query_returns_error_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # A connection that opens but whose SELECT 1 fails as an ExecutionResult.error is a FAIL.
+        # A connection that opens but whose SELECT 1 fails as an ExecutionFailure is a FAIL.
         from evaldata.types import ExecutionError, ExecutionResult
 
         class _ErroringAdapter:
             def execute(self, sql: str) -> ExecutionResult:
-                return ExecutionResult(
-                    rows=[],
-                    schema=None,
+                return ExecutionFailure(
                     latency_seconds=0.0,
                     error=ExecutionError(kind="query_failed", message="probe blew up"),
                 )
@@ -627,19 +629,30 @@ class TestDoctor:
         assert result.exit_code == 2
         assert "specify at least one platform" in result.output
 
+    @pytest.mark.parametrize(
+        "args",
+        [
+            ["--postgres", "host=database"],
+            ["--sqlite", ":memory:"],
+        ],
+    )
+    def test_builds_simple_platform_refs(self, monkeypatch: pytest.MonkeyPatch, args: list[str]) -> None:
+        monkeypatch.setattr(cli, "_probe", lambda ref: (True, "connected"))
+        result = runner.invoke(app, ["doctor", *args])
+        assert result.exit_code == 0
+        assert "OK" in result.output
+
     def test_covers_every_supported_kind(self) -> None:
         # Builds refs only — no connection attempted.
-        refs = _build_refs(
-            duckdb=":memory:",
-            postgres="",
-            sqlite=":memory:",
-            databricks_server_hostname="h",
-            databricks_http_path="/sql/1.0/warehouses/abc",
-            snowflake_account="acc",
-            bigquery_project="project",
-            bigquery_dataset="dataset",
-            bigquery_location="US",
-        )
+        refs = [
+            duckdb_platform(name="duckdb"),
+            postgres_platform(name="postgres"),
+            sqlite_platform(name="sqlite"),
+            _databricks_ref("h", "/sql/1.0/warehouses/abc"),
+            _snowflake_ref("acc", None, None, None),
+            _bigquery_ref("project", "dataset", "US"),
+        ]
+        assert all(ref is not None for ref in refs)
         assert {ref.kind for ref in refs} == set(get_args(PlatformKind))
 
     def test_databricks_flags_required_together(self) -> None:
@@ -649,6 +662,11 @@ class TestDoctor:
 
     def test_bigquery_dataset_and_location_require_project(self) -> None:
         result = runner.invoke(app, ["doctor", "--bigquery-dataset", "dataset"])
+        assert result.exit_code == 2
+        assert "require" in result.output
+
+    def test_snowflake_details_require_account(self) -> None:
+        result = runner.invoke(app, ["doctor", "--snowflake-user", "user"])
         assert result.exit_code == 2
         assert "require" in result.output
 

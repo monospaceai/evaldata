@@ -4,6 +4,8 @@ from typing import Any
 
 import pytest
 
+from evaldata.types import ExecutionFailure, ExecutionSuccess
+
 pytest.importorskip("google.cloud.bigquery")
 
 from google.cloud import bigquery  # noqa: E402
@@ -76,7 +78,7 @@ def _adapter(job: _FakeQueryJob, *, active: bool = False) -> BigQueryAdapter:
 class TestExecute:
     def test_native_timeout_builds_config_when_no_base_config_exists(self) -> None:
         adapter = _adapter(_job([], []))
-        assert adapter.execute_with_timeout("SELECT 1", 1).error is None
+        assert isinstance(adapter.execute_with_timeout("SELECT 1", 1), ExecutionSuccess)
         assert adapter._client.job_configs[0].job_timeout_ms == "1000"  # noqa: SLF001
 
     def test_native_timeout_clones_base_config_and_rounds_milliseconds_up(self) -> None:
@@ -85,7 +87,7 @@ class TestExecute:
         adapter._job_config = base  # noqa: SLF001
         result = adapter.execute_with_timeout("SELECT 1", 0.0011)
         config = adapter._client.job_configs[0]  # noqa: SLF001
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert adapter._client.queried == "SELECT 1"  # noqa: SLF001
         assert config is not base
         assert config.default_dataset == base.default_dataset
@@ -98,7 +100,7 @@ class TestExecute:
             bigquery.SchemaField("label", "STRING", mode="NULLABLE", max_length=16),
         ]
         result = _adapter(_job(schema, [(1, "a"), (2, "b")])).execute("SELECT id, label FROM t")
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.rows == [{"id": 1, "label": "a"}, {"id": 2, "label": "b"}]
         assert result.schema_ is not None
         assert result.schema_.names == ["id", "label"]
@@ -119,23 +121,19 @@ class TestExecute:
 
     def test_error_is_returned_not_raised(self) -> None:
         result = _adapter(_job([], [], error="boom")).execute("SELECT bad")
-        assert result.rows == []
-        assert result.schema_ is None
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         assert result.error.message == "boom"
 
     def test_non_row_returning_statement_has_no_schema(self) -> None:
         result = _adapter(_job([], [])).execute("CREATE TABLE t (n INT64)")
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.rows == []
         assert result.schema_ is None
 
     def test_duplicate_names_error(self) -> None:
         schema = [bigquery.SchemaField("x", "INTEGER"), bigquery.SchemaField("x", "INTEGER")]
         result = _adapter(_job(schema, [(1, 2)])).execute("SELECT 1 AS x, 2 AS x")
-        assert result.rows == []
-        assert result.schema_ is None
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         assert "duplicate output column name(s)" in result.error.message
 
 
@@ -240,7 +238,7 @@ class TestLifecycle:
         adapter = BigQueryAdapter(project="proj", dataset="analytics")
         adapter._client = _FakeClient(_job([bigquery.SchemaField("n", "INTEGER")], [(1,)]))  # noqa: SLF001
         result = adapter.execute("SELECT 1 AS n")
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.rows == [{"n": 1}]
 
     def test_client_exposes_the_underlying_client(self) -> None:
@@ -287,7 +285,7 @@ class TestTypeResolutionLive:
             result = adapter.execute(
                 "SELECT CAST(1.5 AS NUMERIC) AS amount, CAST('x' AS STRING) AS label, [1, 2, 3] AS nums"
             )
-            assert result.error is None, result.error
+            assert isinstance(result, ExecutionSuccess)
             assert result.schema_ is not None
             precise = {c.name: c.type for c in result.schema_.root}
             assert precise["nums"] == SqlType.parse("ARRAY<INT64>", "bigquery"), precise["nums"].raw

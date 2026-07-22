@@ -11,7 +11,7 @@ from snowflake.connector.constants import FIELD_ID_TO_NAME
 from snowflake.connector.cursor import ResultMetadata, SnowflakeCursor
 
 from evaldata.platforms.base import execution_error, rows_or_error
-from evaldata.types import Column, ExecutionError, ExecutionResult, SqlType
+from evaldata.types import Column, ExecutionError, ExecutionFailure, ExecutionResult, ExecutionSuccess, SqlType
 
 
 def _type_string(field_name: str, precision: int | None, scale: int | None, internal_size: int | None) -> str:
@@ -171,7 +171,7 @@ class SnowflakeAdapter:
 
         Returns:
             An `ExecutionResult` with the returned rows, schema, and latency. Query
-            failures are returned as `ExecutionResult.error` rather than raised.
+            failures are returned as an `ExecutionFailure` rather than raised.
         """
         return self._execute(sql)
 
@@ -223,15 +223,15 @@ class SnowflakeAdapter:
                 cursor.execute(sql, timeout=timeout)
             description = cursor.description
             rows_raw = cursor.fetchall() if description is not None else []
-        except Exception as e:  # noqa: BLE001 - execute must never raise; failures return as ExecutionResult.error
+        except Exception as e:  # noqa: BLE001 - execute must never raise; failures return as ExecutionFailure
             elapsed = time.perf_counter() - start
-            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=execution_error(e))
+            return ExecutionFailure(latency_seconds=elapsed, error=execution_error(e))
         finally:
             self._cursor = None
             with contextlib.suppress(Exception):
                 cursor.close()
         elapsed = time.perf_counter() - start
         if description is None:
-            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed)
+            return ExecutionSuccess(rows=[], schema=None, latency_seconds=elapsed)
         columns = [_column_from_metadata(meta) for meta in description]
         return rows_or_error(columns, [tuple(row) for row in rows_raw], elapsed)

@@ -4,6 +4,8 @@ from typing import Any
 
 import pytest
 
+from evaldata.types import ExecutionFailure, ExecutionSuccess
+
 databricks_sql = pytest.importorskip("databricks.sql")
 
 from evaldata.platforms.databricks import DatabricksAdapter  # noqa: E402
@@ -66,7 +68,7 @@ class TestExecute:
     def test_rows_and_schema_on_success(self) -> None:
         cursor = _FakeCursor([("n", "int"), ("amount", "decimal")], [(1, "9.50"), (2, "8.00")])
         result = _adapter(cursor).execute("SELECT n, amount FROM t")
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.rows == [{"n": 1, "amount": "9.50"}, {"n": 2, "amount": "8.00"}]
         assert result.schema_ is not None
         assert result.schema_.names == ["n", "amount"]
@@ -74,14 +76,12 @@ class TestExecute:
 
     def test_error_is_returned_not_raised(self) -> None:
         result = _adapter(_FakeCursor(None, [], error="boom")).execute("SELECT bad")
-        assert result.rows == []
-        assert result.schema_ is None
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         assert result.error.message == "boom"
 
     def test_non_row_returning_statement_has_no_schema(self) -> None:
         result = _adapter(_FakeCursor(None, [])).execute("CREATE TABLE t (n INT)")
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.rows == []
         assert result.schema_ is None
 
@@ -92,9 +92,7 @@ class TestExecute:
                 raise AssertionError(msg)
 
         result = _adapter(_NoFetchCursor([("x", "int"), ("x", "int")], [])).execute("SELECT 1 AS x, 2 AS x")
-        assert result.rows == []
-        assert result.schema_ is None
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         assert "duplicate output column name(s)" in result.error.message
 
     def test_non_connector_fetch_error_is_returned_not_raised(self) -> None:
@@ -104,10 +102,8 @@ class TestExecute:
                 raise ValueError(msg)
 
         result = _adapter(_ArrowFailCursor([("n", "int")], [])).execute("SELECT n")
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         assert result.error.message == "Can't unify schema with duplicate field names"
-        assert result.rows == []
-        assert result.schema_ is None
 
 
 @pytest.mark.unit
@@ -223,6 +219,7 @@ class TestLifecycle:
 
 @pytest.mark.e2e
 @pytest.mark.cloud
+@pytest.mark.databricks
 class TestTypeResolutionLive:
     def test_decimal_and_array_types_resolve_to_precise(self) -> None:
         from .conftest import connect_databricks
@@ -231,7 +228,7 @@ class TestTypeResolutionLive:
         try:
             sql = Sql("SELECT CAST(1.5 AS DECIMAL(10,2)) AS amount, ARRAY('a', 'b') AS tags")
             result = adapter.execute(sql)
-            assert result.error is None, result.error
+            assert isinstance(result, ExecutionSuccess)
             assert result.schema_ is not None
 
             resolved = QueryRunner(adapter, sql, "databricks", None).resolved_schema(result.schema_, sql)
@@ -252,7 +249,7 @@ class TestTypeResolutionLive:
                 "named_struct('x', 1, 'y', CAST('a' AS STRING)) AS s) SELECT amount, s FROM t"
             )
             result = adapter.execute(sql)
-            assert result.error is None, result.error
+            assert isinstance(result, ExecutionSuccess)
             assert result.schema_ is not None
 
             resolved = QueryRunner(adapter, sql, "databricks", None).resolved_schema(result.schema_, sql)

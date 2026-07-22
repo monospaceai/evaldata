@@ -1,6 +1,12 @@
 """`MetricLayerSolver`: an LLM `MetricSolver` that answers a question with a dbt Semantic Layer query."""
 
-from evaldata.dbt.semantic_layer import MetricCase, MetricQuery, MetricSolverOutput
+from evaldata.dbt.semantic_layer import (
+    MetricCase,
+    MetricQuery,
+    MetricSolverFailure,
+    MetricSolverOutput,
+    MetricSolverSuccess,
+)
 from evaldata.llm import Llm, resolve_llm
 from evaldata.solvers.errors import to_solver_error
 from evaldata.types import LlmError
@@ -56,10 +62,10 @@ class MetricLayerSolver:
         prompt = self._prompt_template.format_map({"input": case.input, "semantic_layer": case.sl_context})
         completion = self._llm.complete(prompt, response_format=MetricQuery)
         if isinstance(completion, LlmError):
-            return MetricSolverOutput(error=to_solver_error(completion))
+            return MetricSolverFailure(error=to_solver_error(completion))
 
         usage = completion.usage
-        return MetricSolverOutput(
+        return MetricSolverSuccess(
             query=completion.parsed,
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,

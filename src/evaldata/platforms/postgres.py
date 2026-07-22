@@ -9,7 +9,7 @@ from typing import Self
 import psycopg
 
 from evaldata.platforms.base import execution_error, rows_or_error
-from evaldata.types import Column, ExecutionError, ExecutionResult, SqlType
+from evaldata.types import Column, ExecutionError, ExecutionFailure, ExecutionResult, ExecutionSuccess, SqlType
 
 
 class PostgresAdapter:
@@ -56,7 +56,7 @@ class PostgresAdapter:
 
         Returns:
             An `ExecutionResult` with the returned rows, schema, and latency. Query
-            failures are returned as `ExecutionResult.error` rather than raised.
+            failures are returned as an `ExecutionFailure` rather than raised.
         """
         return self._execute(sql)
 
@@ -113,9 +113,7 @@ class PostgresAdapter:
                     if current_timeout is None:
                         self._reusable = False
                         elapsed = time.perf_counter() - start
-                        return ExecutionResult(
-                            rows=[],
-                            schema=None,
+                        return ExecutionFailure(
                             latency_seconds=elapsed,
                             error=ExecutionError(
                                 kind="query_failed", message="statement timeout setting was unavailable"
@@ -133,7 +131,7 @@ class PostgresAdapter:
                 if timeout_milliseconds is not None and getattr(e, "sqlstate", None) == "57014"
                 else "query_failed"
             )
-            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=execution_error(e, kind))
+            return ExecutionFailure(latency_seconds=elapsed, error=execution_error(e, kind))
         finally:
             if previous_timeout is not None:
                 try:
@@ -143,7 +141,7 @@ class PostgresAdapter:
                     self._reusable = False
         elapsed = time.perf_counter() - start
         if description is None:
-            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed)
+            return ExecutionSuccess(rows=[], schema=None, latency_seconds=elapsed)
         columns = [
             Column(name=col.name, type=SqlType.parse(col.type_display, "postgres"), nullable=col.null_ok)
             for col in description

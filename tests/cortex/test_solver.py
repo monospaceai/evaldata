@@ -5,7 +5,14 @@ from typing import Any
 import pytest
 
 from evaldata.cortex.solver import CortexAnalystSolver
-from evaldata.types import EvalCase, PlatformRef, SolverError
+from evaldata.types import (
+    EvalCase,
+    SnowflakeConfig,
+    SnowflakePlatformRef,
+    SolverError,
+    SolverFailure,
+    SolverSuccess,
+)
 
 
 class _FakeTransport:
@@ -25,7 +32,7 @@ def _case(question: str = "What is the total order amount by region?") -> EvalCa
         id="q1",
         input=question,
         expected={"rows": []},
-        platform=PlatformRef(name="sf", kind="snowflake"),
+        platform=SnowflakePlatformRef(name="sf", config=SnowflakeConfig(account="test")),
     )
 
 
@@ -71,8 +78,8 @@ class TestSolve:
         solver = CortexAnalystSolver(transport, semantic_view="DB.S.V")
         output = solver.solve(_case("q?"))
 
+        assert isinstance(output, SolverSuccess)
         assert output.output == "SELECT region FROM t"
-        assert output.error is None
         assert output.metadata == {"request_id": "req-123", "model_names": ["claude-sonnet-4-5"]}
         assert transport.calls == [("q?", {"semantic_view": "DB.S.V"})]
 
@@ -82,7 +89,7 @@ class TestSolve:
             "message": {"content": [{"type": "suggestions", "suggestions": ["Do you mean revenue?", "By month?"]}]},
         }
         output = self._solver(reply).solve(_case())
-        assert output.output is None
+        assert isinstance(output, SolverFailure)
         assert isinstance(output.error, SolverError)
         assert output.error.kind == "empty_response"
         assert "Do you mean revenue?; By month?" in output.error.message
@@ -90,18 +97,19 @@ class TestSolve:
 
     def test_no_content_becomes_an_empty_response_error(self) -> None:
         output = self._solver({"message": {"content": []}}).solve(_case())
+        assert isinstance(output, SolverFailure)
         assert isinstance(output.error, SolverError)
         assert output.error.kind == "empty_response"
         assert output.error.message == "Cortex Analyst returned no SQL"
 
     def test_blank_sql_statement_is_treated_as_no_sql(self) -> None:
         output = self._solver(_sql_reply("   ")).solve(_case())
-        assert output.output is None
+        assert isinstance(output, SolverFailure)
         assert isinstance(output.error, SolverError)
         assert output.error.kind == "empty_response"
 
     def test_transport_error_passes_through(self) -> None:
         error = SolverError(kind="auth", message="401", provider="cortex_analyst")
         output = self._solver(error).solve(_case())
-        assert output.output is None
+        assert isinstance(output, SolverFailure)
         assert output.error is error

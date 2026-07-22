@@ -3,9 +3,21 @@
 import json
 
 import pytest
+from pydantic import TypeAdapter, ValidationError
 
-from evaldata.reporting.collector import CaseReport, clear, extend, record, reports, run_report_json
-from evaldata.types import ResultSetDiff, ScoreResult, SolverError
+from evaldata.reporting.collector import (
+    CaseReport,
+    ExecutionFailureCaseReport,
+    PassedCaseReport,
+    ScoredFailureCaseReport,
+    SolverFailureCaseReport,
+    clear,
+    extend,
+    record,
+    reports,
+    run_report_json,
+)
+from evaldata.types import ExecutionError, ResultSetDiff, ScoreResult, SolverError
 
 
 @pytest.fixture(autouse=True)
@@ -16,47 +28,63 @@ def _clean_collector() -> None:
 @pytest.mark.unit
 class TestCollector:
     def test_record_and_reports_round_trip(self) -> None:
-        report = CaseReport(id="c1", input="q", passed=True)
+        report = PassedCaseReport(id="c1", input="q")
         record(report)
         assert reports() == [report]
 
     def test_reports_returns_a_snapshot_copy(self) -> None:
-        record(CaseReport(id="c1", input="q", passed=True))
+        record(PassedCaseReport(id="c1", input="q"))
         snapshot = reports()
-        record(CaseReport(id="c2", input="q", passed=True))
+        record(PassedCaseReport(id="c2", input="q"))
         assert len(snapshot) == 1  # snapshot is not a live view
 
     def test_clear_empties_the_accumulator(self) -> None:
-        record(CaseReport(id="c1", input="q", passed=True))
+        record(PassedCaseReport(id="c1", input="q"))
         clear()
         assert reports() == []
 
     def test_extend_appends_in_order(self) -> None:
-        record(CaseReport(id="c1", input="q", passed=True))
+        record(PassedCaseReport(id="c1", input="q"))
         extend(
             [
-                CaseReport(id="c2", input="q", passed=False),
-                CaseReport(id="c3", input="q", passed=True),
+                ScoredFailureCaseReport(id="c2", input="q", scores=[ScoreResult(scorer="s", verdict="fail")]),
+                PassedCaseReport(id="c3", input="q"),
             ]
         )
         assert [r.id for r in reports()] == ["c1", "c2", "c3"]
+
+    def test_passing_report_rejects_non_passing_score(self) -> None:
+        with pytest.raises(ValidationError, match="passing case report"):
+            PassedCaseReport(id="bad", input="q", scores=[ScoreResult(scorer="s", verdict="fail")])
+
+    def test_scored_failure_requires_non_passing_score(self) -> None:
+        with pytest.raises(ValidationError, match="scored-failure"):
+            ScoredFailureCaseReport(id="bad", input="q", scores=[ScoreResult(scorer="s", verdict="pass")])
+
+    def test_execution_failure_round_trips(self) -> None:
+        report = ExecutionFailureCaseReport(
+            id="bad",
+            input="q",
+            error=ExecutionError(kind="query_failed", message="syntax error"),
+        )
+        restored = TypeAdapter(CaseReport).validate_json(report.model_dump_json())
+        assert restored == report
 
 
 @pytest.mark.unit
 class TestRunReportJson:
     def test_counts_and_cases_serialized(self) -> None:
         diff = ResultSetDiff(expected_row_count=1, actual_row_count=0)
-        record(CaseReport(id="ok", input="q1", passed=True))
+        record(PassedCaseReport(id="ok", input="q1"))
         record(
-            CaseReport(
+            ScoredFailureCaseReport(
                 id="bad",
                 input="q2",
-                passed=False,
                 scores=[ScoreResult(scorer="result_set_equivalence", verdict="fail", diff=diff)],
             )
         )
         record(
-            CaseReport(id="solver", input="q3", passed=False, error=SolverError(kind="auth", message="invalid api key"))
+            SolverFailureCaseReport(id="solver", input="q3", error=SolverError(kind="auth", message="invalid api key"))
         )
 
         payload = json.loads(run_report_json(reports()))

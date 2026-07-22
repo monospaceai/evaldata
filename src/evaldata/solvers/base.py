@@ -2,7 +2,15 @@
 
 from typing import Protocol, runtime_checkable
 
-from evaldata.types import EvalCase, SolverOutput
+from evaldata.types import EvalCase, SolverOutput, SolverSuccess
+
+
+class SuccessfulSolver(Protocol):
+    """Produces only successful SQL outputs."""
+
+    def solve(self, case: EvalCase) -> SolverSuccess:
+        """Produce executable SQL for `case`."""
+        ...
 
 
 @runtime_checkable

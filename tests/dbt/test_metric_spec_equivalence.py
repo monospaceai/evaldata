@@ -12,12 +12,12 @@ import pytest
 
 from evaldata.dbt import DbtError, MetricCase, MetricQuery, MetricSpecEquivalence, canonicalize
 from evaldata.dbt.metricflow import CanonicalMetricQuery, _spec_key, group_by_items_by_metric
-from evaldata.types import PlatformRef, ScoreResult
+from evaldata.types import DuckDBPlatformRef, ScoreResult
 
 pytestmark = pytest.mark.unit
 
 TARGET = Path(__file__).parent / "fixtures" / "jaffle_duckdb" / "artifacts"
-PLATFORM = PlatformRef(name="duck", kind="duckdb")
+PLATFORM = DuckDBPlatformRef(name="duck")
 
 
 def _case(gold: MetricQuery, *, target: Path = TARGET) -> MetricCase:

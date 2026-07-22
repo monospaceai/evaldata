@@ -21,19 +21,20 @@ from evaldata.scorers.llm_judge import (
 )
 from evaldata.scorers.sql import Dialect
 from evaldata.types import (
+    DuckDBPlatformRef,
     EvalCase,
     ExecutionResult,
+    ExecutionSuccess,
     Expected,
     GoldQuery,
     LlmError,
-    PlatformRef,
-    SolverOutput,
+    SolverSuccess,
     Sql,
     UntypedResultSet,
 )
 
-_OUTPUT = SolverOutput(output="SELECT 1")
-_RESULT = ExecutionResult(rows=[], latency_seconds=0.0)
+_OUTPUT = SolverSuccess(output="SELECT 1")
+_RESULT = ExecutionSuccess(rows=[], latency_seconds=0.0)
 
 
 class _NullAdapter:
@@ -57,7 +58,7 @@ def _case(expected: Expected | None = None) -> EvalCase:
         id="c",
         input="How many tracks?",
         expected=expected if expected is not None else UntypedResultSet(rows=[]),
-        platform=PlatformRef(name="x", kind="duckdb"),
+        platform=DuckDBPlatformRef(name="x"),
     )
 
 
@@ -257,6 +258,7 @@ class TestLlmJudge:
 
 
 @pytest.mark.e2e
+@pytest.mark.manual
 @pytest.mark.skipif(
     os.environ.get("OPENAI_API_KEY") is None,
     reason="set OPENAI_API_KEY to run live grader e2e",

@@ -11,7 +11,7 @@ from pydantic import BaseModel, model_validator
 
 from evaldata.llm import Llm, resolve_llm
 from evaldata.scorers.context import ScoreContext
-from evaldata.types import EvalCase, ExecutionResult, GoldQuery, LlmError, Score, ScoreResult, SolverOutput
+from evaldata.types import EvalCase, ExecutionResult, GoldQuery, LlmError, Score, ScoreResult, SolverSuccess
 
 SCORER_NAME = "llm_judge"
 
@@ -125,7 +125,7 @@ class LlmJudge:
         self._show = tuple(show) if show is not None else _ALL_FIELDS
 
     def score(
-        self, case: EvalCase, output: SolverOutput, result: ExecutionResult, *, context: ScoreContext
+        self, case: EvalCase, output: SolverSuccess, result: ExecutionResult, *, context: ScoreContext
     ) -> ScoreResult:
         """Grade `case` with the grader model and return a graded `ScoreResult`.
 

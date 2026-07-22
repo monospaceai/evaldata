@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from evaldata.types import EvalCase, SolverOutput, Sql
+from evaldata.types import EvalCase, SolverSuccess, Sql
 
 
 class CallableSolver:
@@ -12,13 +12,13 @@ class CallableSolver:
         """Store the SQL-producing function `fn`."""
         self._fn = fn
 
-    def solve(self, case: EvalCase) -> SolverOutput:
-        """Call the wrapped function and return its SQL as `SolverOutput.output`.
+    def solve(self, case: EvalCase) -> SolverSuccess:
+        """Call the wrapped function and return its SQL as `SolverSuccess.output`.
 
         Args:
             case: The eval case to solve.
 
         Returns:
-            A `SolverOutput` carrying the SQL produced by the wrapped function.
+            A `SolverSuccess` carrying the SQL produced by the wrapped function.
         """
-        return SolverOutput(output=Sql(self._fn(case)))
+        return SolverSuccess(output=Sql(self._fn(case)))

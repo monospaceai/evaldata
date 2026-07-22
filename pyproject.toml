@@ -190,10 +190,12 @@ addopts = [
 markers = [
     "unit: pure-Python unit tests (no external services)",
     "e2e: end-to-end tests against a real platform",
-    "cloud: e2e against a hosted backend needing secret credentials (Databricks, …); run by default, skipped only by the `not cloud` fast path",
-    "snowflake: cloud e2e reachable only via GitHub Actions OIDC (main branch); excluded from the PR gate, run by the dedicated main-only job",
-    "bigquery: cloud e2e reachable via GitHub Actions Workload Identity Federation (OIDC); run by the dedicated BigQuery job",
-    "cortex: live e2e against Cortex Analyst, consuming Snowflake credits; excluded from the PR gate, run manually or by a dedicated off-by-default job",
+    "cloud: tests against a hosted platform",
+    "databricks: tests against Databricks",
+    "snowflake: tests against Snowflake",
+    "bigquery: tests against BigQuery",
+    "cortex: tests against Cortex Analyst",
+    "manual: tests requiring explicit opt-in",
 ]
 
 # ---------------------------------------------------------------------------

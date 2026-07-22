@@ -7,6 +7,7 @@ import pytest
 
 from evaldata.cortex.client import CortexAnalystClient
 from evaldata.platforms.base import PlatformAdapter
+from evaldata.types import ExecutionFailure
 
 PLACEHOLDER_HOST = "test-account.snowflakecomputing.com"
 
@@ -110,7 +111,7 @@ def jaffle_view(live_adapter: PlatformAdapter) -> str:
     """Build the jaffle-shop tables, seed rows, and semantic view; return the view's name."""
     for statement in _JAFFLE_DDL:
         result = live_adapter.execute(statement)
-        if result.error is not None:
+        if isinstance(result, ExecutionFailure):
             msg = f"jaffle fixture setup failed: {result.error.message}"
             raise RuntimeError(msg)
     return SEMANTIC_VIEW

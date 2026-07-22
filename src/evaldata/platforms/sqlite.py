@@ -6,7 +6,7 @@ from types import TracebackType
 from typing import Self
 
 from evaldata.platforms.base import execution_error, untyped_rows_or_error
-from evaldata.types import ExecutionResult
+from evaldata.types import ExecutionFailure, ExecutionResult
 
 
 class SqliteAdapter:
@@ -31,7 +31,7 @@ class SqliteAdapter:
 
         Safe to call from another thread while `execute` is blocked, and a no-op when no
         query is running. The interrupted `execute` raises `sqlite3.OperationalError`, which
-        it surfaces as `ExecutionResult.error` like any other query failure.
+        it surfaces as an `ExecutionFailure` like any other query failure.
         """
         self._conn.interrupt()
 
@@ -61,7 +61,7 @@ class SqliteAdapter:
         Returns:
             An `ExecutionResult` with the returned rows, an `UntypedSchema`, and latency:
             SQLite is dynamically typed and the driver reports no result-column types. Query
-            failures are returned as `ExecutionResult.error` rather than raised.
+            failures are returned as an `ExecutionFailure` rather than raised.
         """
         start = time.perf_counter()
         try:
@@ -70,6 +70,6 @@ class SqliteAdapter:
             rows_raw = cursor.fetchall()
         except sqlite3.Error as e:
             elapsed = time.perf_counter() - start
-            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=execution_error(e))
+            return ExecutionFailure(latency_seconds=elapsed, error=execution_error(e))
         elapsed = time.perf_counter() - start
         return untyped_rows_or_error([desc[0] for desc in description], rows_raw, elapsed)

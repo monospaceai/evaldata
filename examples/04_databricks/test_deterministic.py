@@ -23,7 +23,7 @@ from evaldata import (
 )
 from evaldata.platforms import databricks_platform
 
-pytestmark = [pytest.mark.e2e, pytest.mark.cloud]
+pytestmark = [pytest.mark.e2e, pytest.mark.cloud, pytest.mark.databricks]
 
 _ORDERS = """(
     SELECT CAST(id AS INT) AS id, CAST(customer AS STRING) AS customer,
@@ -33,8 +33,8 @@ _ORDERS = """(
 ) AS evaldata_ex04_orders"""
 _PLATFORM = databricks_platform(
     name="examples-databricks",
-    server_hostname=os.environ.get("DATABRICKS_SERVER_HOSTNAME", ""),
-    http_path=os.environ.get("DATABRICKS_HTTP_PATH", ""),
+    server_hostname=os.environ.get("DATABRICKS_SERVER_HOSTNAME", "your-workspace.cloud.databricks.com"),
+    http_path=os.environ.get("DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/your-warehouse-id"),
 )
 
 

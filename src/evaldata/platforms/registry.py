@@ -13,10 +13,26 @@ from evaldata.platforms.base import PlatformAdapter
 from evaldata.platforms.duckdb import DuckDBAdapter
 from evaldata.platforms.pool import ConnectionPool
 from evaldata.platforms.sqlite import SqliteAdapter
-from evaldata.types import PlatformKind, PlatformRef, PoolPolicy
+from evaldata.types import (
+    BigQueryConfig,
+    BigQueryPlatformRef,
+    DatabricksConfig,
+    DatabricksPlatformRef,
+    DuckDBConfig,
+    DuckDBPlatformRef,
+    PlatformKind,
+    PlatformRef,
+    PoolPolicy,
+    PostgreSQLConfig,
+    PostgreSQLPlatformRef,
+    SnowflakeConfig,
+    SnowflakePlatformRef,
+    SQLiteConfig,
+    SQLitePlatformRef,
+)
 
 
-def duckdb_platform(name: str, path: str = ":memory:", *, pool: PoolPolicy | None = None) -> PlatformRef:
+def duckdb_platform(name: str, path: str = ":memory:", *, pool: PoolPolicy | None = None) -> DuckDBPlatformRef:
     """Build a `PlatformRef` for an in-process DuckDB database.
 
     Args:
@@ -28,10 +44,10 @@ def duckdb_platform(name: str, path: str = ":memory:", *, pool: PoolPolicy | Non
         A serializable `PlatformRef` for the DuckDB database. Building the ref needs no
         driver.
     """
-    return PlatformRef(name=name, kind="duckdb", config={"path": path}, pool=pool)
+    return DuckDBPlatformRef(name=name, config=DuckDBConfig(path=path), pool=pool)
 
 
-def sqlite_platform(name: str, path: str = ":memory:", *, pool: PoolPolicy | None = None) -> PlatformRef:
+def sqlite_platform(name: str, path: str = ":memory:", *, pool: PoolPolicy | None = None) -> SQLitePlatformRef:
     """Build a `PlatformRef` for an in-process SQLite database.
 
     Args:
@@ -43,10 +59,10 @@ def sqlite_platform(name: str, path: str = ":memory:", *, pool: PoolPolicy | Non
         A serializable `PlatformRef` for the SQLite database. Building the ref needs no driver
         (SQLite ships with the standard library).
     """
-    return PlatformRef(name=name, kind="sqlite", config={"path": path}, pool=pool)
+    return SQLitePlatformRef(name=name, config=SQLiteConfig(path=path), pool=pool)
 
 
-def postgres_platform(name: str, conninfo: str = "", *, pool: PoolPolicy | None = None) -> PlatformRef:
+def postgres_platform(name: str, conninfo: str = "", *, pool: PoolPolicy | None = None) -> PostgreSQLPlatformRef:
     """Build a `PlatformRef` for a PostgreSQL database.
 
     Args:
@@ -59,7 +75,7 @@ def postgres_platform(name: str, conninfo: str = "", *, pool: PoolPolicy | None 
         A serializable `PlatformRef` for the PostgreSQL database. Building the ref needs no
         driver.
     """
-    return PlatformRef(name=name, kind="postgres", config={"conninfo": conninfo}, pool=pool)
+    return PostgreSQLPlatformRef(name=name, config=PostgreSQLConfig(conninfo=conninfo), pool=pool)
 
 
 def databricks_platform(
@@ -70,7 +86,7 @@ def databricks_platform(
     catalog: str | None = None,
     schema: str | None = None,
     pool: PoolPolicy | None = None,
-) -> PlatformRef:
+) -> DatabricksPlatformRef:
     """Build a `PlatformRef` for a Databricks SQL Warehouse.
 
     Holds only non-secret connection details; credentials are not included here.
@@ -87,12 +103,13 @@ def databricks_platform(
         A serializable `PlatformRef` for the Databricks warehouse. Building the ref needs no
         driver.
     """
-    config: dict[str, str] = {"server_hostname": server_hostname, "http_path": http_path}
-    if catalog is not None:
-        config["catalog"] = catalog
-    if schema is not None:
-        config["schema"] = schema
-    return PlatformRef(name=name, kind="databricks", dialect="databricks", config=config, pool=pool)
+    config = DatabricksConfig(
+        server_hostname=server_hostname,
+        http_path=http_path,
+        catalog=catalog,
+        schema=schema,
+    )
+    return DatabricksPlatformRef(name=name, dialect="databricks", config=config, pool=pool)
 
 
 def snowflake_platform(
@@ -107,7 +124,7 @@ def snowflake_platform(
     authenticator: str | None = None,
     workload_identity_provider: str | None = None,
     pool: PoolPolicy | None = None,
-) -> PlatformRef:
+) -> SnowflakePlatformRef:
     """Build a `PlatformRef` for a Snowflake account.
 
     Holds only non-secret connection details; credentials are not included here.
@@ -130,18 +147,17 @@ def snowflake_platform(
         A serializable `PlatformRef` for the Snowflake account. Building the ref needs no
         driver.
     """
-    fields = {
-        "user": user,
-        "warehouse": warehouse,
-        "role": role,
-        "database": database,
-        "schema": schema,
-        "authenticator": authenticator,
-        "workload_identity_provider": workload_identity_provider,
-    }
-    config: dict[str, str] = {"account": account}
-    config.update({k: v for k, v in fields.items() if v is not None})
-    return PlatformRef(name=name, kind="snowflake", dialect="snowflake", config=config, pool=pool)
+    config = SnowflakeConfig(
+        account=account,
+        user=user,
+        warehouse=warehouse,
+        role=role,
+        database=database,
+        schema=schema,
+        authenticator=authenticator,
+        workload_identity_provider=workload_identity_provider,
+    )
+    return SnowflakePlatformRef(name=name, dialect="snowflake", config=config, pool=pool)
 
 
 def bigquery_platform(
@@ -151,7 +167,7 @@ def bigquery_platform(
     dataset: str | None = None,
     location: str | None = None,
     pool: PoolPolicy | None = None,
-) -> PlatformRef:
+) -> BigQueryPlatformRef:
     """Build a `PlatformRef` for a BigQuery project.
 
     Holds only non-secret connection details; credentials are not included here.
@@ -167,45 +183,41 @@ def bigquery_platform(
     Returns:
         A serializable `PlatformRef` for the BigQuery project. Building the ref needs no driver.
     """
-    fields = {"dataset": dataset, "location": location}
-    config: dict[str, str] = {"project": project}
-    config.update({k: v for k, v in fields.items() if v is not None})
-    return PlatformRef(name=name, kind="bigquery", dialect="bigquery", config=config, pool=pool)
+    config = BigQueryConfig(project=project, dataset=dataset, location=location)
+    return BigQueryPlatformRef(name=name, dialect="bigquery", config=config, pool=pool)
 
 
-def _build_sqlite(ref: PlatformRef) -> PlatformAdapter:
-    path = str(ref.config.get("path", ":memory:"))
+def _build_sqlite(ref: SQLitePlatformRef) -> PlatformAdapter:
+    path = ref.config.path
     # Keep utility and member connections on the same in-memory database.
     database = f"file:evaldata-{quote(ref.name, safe='')}?mode=memory&cache=shared" if path == ":memory:" else path
     return SqliteAdapter(database=database)
 
 
-def _build_postgres(ref: PlatformRef) -> PlatformAdapter:
+def _build_postgres(ref: PostgreSQLPlatformRef) -> PlatformAdapter:
     try:
         from evaldata.platforms.postgres import PostgresAdapter
     except ImportError as e:
         msg = "PostgresAdapter requires the 'postgres' extra; install it with `uv sync --extra postgres`"
         raise RuntimeError(msg) from e
-    return PostgresAdapter(conninfo=str(ref.config.get("conninfo", "")))
+    return PostgresAdapter(conninfo=ref.config.conninfo)
 
 
-def _build_databricks(ref: PlatformRef) -> PlatformAdapter:
+def _build_databricks(ref: DatabricksPlatformRef) -> PlatformAdapter:
     try:
         from evaldata.platforms.databricks import DatabricksAdapter
     except ImportError as e:
         msg = "DatabricksAdapter requires the 'databricks' extra; install it with `uv sync --extra databricks`"
         raise RuntimeError(msg) from e
-    catalog = ref.config.get("catalog")
-    schema = ref.config.get("schema")
     return DatabricksAdapter(
-        server_hostname=str(ref.config["server_hostname"]),
-        http_path=str(ref.config["http_path"]),
-        catalog=str(catalog) if catalog is not None else None,
-        schema=str(schema) if schema is not None else None,
+        server_hostname=ref.config.server_hostname,
+        http_path=ref.config.http_path,
+        catalog=ref.config.catalog,
+        schema=ref.config.schema_,
     )
 
 
-def _build_snowflake(ref: PlatformRef) -> PlatformAdapter:
+def _build_snowflake(ref: SnowflakePlatformRef) -> PlatformAdapter:
     try:
         from evaldata.platforms.snowflake import SnowflakeAdapter
     except ImportError as e:
@@ -213,24 +225,22 @@ def _build_snowflake(ref: PlatformRef) -> PlatformAdapter:
         raise RuntimeError(msg) from e
     config = ref.config
     return SnowflakeAdapter(
-        account=str(config["account"]),
-        user=str(config["user"]) if "user" in config else None,
+        account=config.account,
+        user=config.user,
         password=os.environ.get("SNOWFLAKE_PASSWORD"),
-        warehouse=str(config["warehouse"]) if "warehouse" in config else None,
-        role=str(config["role"]) if "role" in config else None,
-        database=str(config["database"]) if "database" in config else None,
-        schema=str(config["schema"]) if "schema" in config else None,
-        authenticator=str(config["authenticator"]) if "authenticator" in config else None,
+        warehouse=config.warehouse,
+        role=config.role,
+        database=config.database,
+        schema=config.schema_,
+        authenticator=config.authenticator,
         token=os.environ.get("SNOWFLAKE_TOKEN"),
         private_key_file=os.environ.get("SNOWFLAKE_PRIVATE_KEY_FILE"),
         private_key_file_pwd=os.environ.get("SNOWFLAKE_PRIVATE_KEY_FILE_PWD"),
-        workload_identity_provider=str(config["workload_identity_provider"])
-        if "workload_identity_provider" in config
-        else None,
+        workload_identity_provider=config.workload_identity_provider,
     )
 
 
-def _build_bigquery(ref: PlatformRef) -> PlatformAdapter:
+def _build_bigquery(ref: BigQueryPlatformRef) -> PlatformAdapter:
     try:
         from evaldata.platforms.bigquery import BigQueryAdapter
     except ImportError as e:
@@ -238,9 +248,9 @@ def _build_bigquery(ref: PlatformRef) -> PlatformAdapter:
         raise RuntimeError(msg) from e
     config = ref.config
     return BigQueryAdapter(
-        project=str(config["project"]),
-        dataset=str(config["dataset"]) if "dataset" in config else None,
-        location=str(config["location"]) if "location" in config else None,
+        project=config.project,
+        dataset=config.dataset,
+        location=config.location,
     )
 
 
@@ -276,13 +286,13 @@ def _same_platform(ref: PlatformRef, other: PlatformRef) -> bool:
     return bare == other_bare and _pool_policy(ref) == _pool_policy(other)
 
 
-def _duckdb_pool(ref: PlatformRef) -> ConnectionPool:
+def _duckdb_pool(ref: DuckDBPlatformRef) -> ConnectionPool:
     """Build a DuckDB pool whose members and utility are cursors of one shared parent connection.
 
     Returns:
         A `ConnectionPool` owning the shared parent, closed when the pool closes.
     """
-    parent = duckdb.connect(str(ref.config.get("path", ":memory:")))
+    parent = duckdb.connect(ref.config.path)
 
     def factory() -> PlatformAdapter:
         return DuckDBAdapter.from_connection(parent.cursor())
@@ -290,7 +300,7 @@ def _duckdb_pool(ref: PlatformRef) -> ConnectionPool:
     return ConnectionPool(ref, factory, policy=_pool_policy(ref), parent=parent)
 
 
-def _dedicated_pool(ref: PlatformRef, build: Callable[[PlatformRef], PlatformAdapter]) -> ConnectionPool:
+def _dedicated_pool(ref: PlatformRef, build: Callable[[], PlatformAdapter]) -> ConnectionPool:
     """Build a pool whose every member and utility is an independent adapter (its own connection).
 
     Returns:
@@ -298,13 +308,13 @@ def _dedicated_pool(ref: PlatformRef, build: Callable[[PlatformRef], PlatformAda
     """
 
     def factory() -> PlatformAdapter:
-        return build(ref)
+        return build()
 
     return ConnectionPool(ref, factory, policy=_pool_policy(ref))
 
 
 def _build_pool(ref: PlatformRef) -> ConnectionPool:
-    """Build a `ConnectionPool` for `ref` by exhaustive dispatch over its kind.
+    """Build a `ConnectionPool` for `ref`.
 
     Args:
         ref: The platform reference to build a pool for.
@@ -312,22 +322,19 @@ def _build_pool(ref: PlatformRef) -> ConnectionPool:
     Returns:
         A `ConnectionPool` matching the reference's per-engine session model.
     """
-    kind: PlatformKind = ref.kind
-    match kind:
-        case "duckdb":
-            return _duckdb_pool(ref)
-        case "sqlite":
-            return _dedicated_pool(ref, _build_sqlite)
-        case "postgres":
-            return _dedicated_pool(ref, _build_postgres)
-        case "databricks":
-            return _dedicated_pool(ref, _build_databricks)
-        case "snowflake":
-            return _dedicated_pool(ref, _build_snowflake)
-        case "bigquery":
-            return _dedicated_pool(ref, _build_bigquery)
-        case _ as unreachable:  # pragma: no cover - exhaustiveness guard
-            assert_never(unreachable)
+    if isinstance(ref, DuckDBPlatformRef):
+        return _duckdb_pool(ref)
+    if isinstance(ref, SQLitePlatformRef):
+        return _dedicated_pool(ref, lambda: _build_sqlite(ref))
+    if isinstance(ref, PostgreSQLPlatformRef):
+        return _dedicated_pool(ref, lambda: _build_postgres(ref))
+    if isinstance(ref, DatabricksPlatformRef):
+        return _dedicated_pool(ref, lambda: _build_databricks(ref))
+    if isinstance(ref, SnowflakePlatformRef):
+        return _dedicated_pool(ref, lambda: _build_snowflake(ref))
+    if isinstance(ref, BigQueryPlatformRef):
+        return _dedicated_pool(ref, lambda: _build_bigquery(ref))
+    assert_never(ref)  # pragma: no cover
 
 
 _POOLS: dict[str, ConnectionPool] = {}
@@ -337,8 +344,7 @@ _POOLS_LOCK = threading.Lock()
 def pool_for(ref: PlatformRef) -> ConnectionPool:
     """Return the connection pool for `ref.name`, building and caching one on first use.
 
-    Reuses the cached pool on subsequent calls for the same `ref.name`. An unsupported `kind`
-    is unrepresentable — `PlatformRef` validation rejects it before resolution.
+    Reuses the cached pool on subsequent calls for the same `ref.name`.
 
     Args:
         ref: The platform reference to resolve a pool for.
@@ -369,8 +375,7 @@ def resolve(ref: PlatformRef) -> PlatformAdapter:
 
     The utility adapter is for seeding, `doctor`, and direct execution; it is never a checkout
     member, so its use never contends with concurrent case execution. Concurrent execution goes
-    through `acquired`. An unsupported `kind` is unrepresentable — `PlatformRef` validation
-    rejects it before resolution.
+    through `acquired`.
 
     Args:
         ref: The platform reference to resolve.

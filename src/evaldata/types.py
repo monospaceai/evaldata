@@ -2,7 +2,7 @@
 
 from collections import Counter
 from collections.abc import Iterator
-from typing import Annotated, Any, Literal, NewType
+from typing import Annotated, Any, Literal, NewType, TypeAlias
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, RootModel, model_validator
 from sqlglot import exp
@@ -30,18 +30,6 @@ Basis = Literal["proven", "observed", "judged"]
 Score = Annotated[float, Field(ge=0.0, le=1.0)]
 
 
-class PlatformRef(BaseModel):
-    """Serializable reference to a configured data platform connection."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: Annotated[str, Field(min_length=1)]
-    kind: PlatformKind
-    dialect: SQLDialect | None = None
-    config: dict[str, Any] = Field(default_factory=dict)
-    pool: "PoolPolicy | None" = Field(default=None, exclude_if=lambda value: value is None)
-
-
 class PoolPolicy(BaseModel):
     """Lifecycle limits for a platform's persistent connection pool."""
 
@@ -54,6 +42,129 @@ class PoolPolicy(BaseModel):
     max_quarantined: Annotated[int, Field(gt=0)] | None = None
     max_lifetime_seconds: Annotated[float, Field(gt=0)] | None = None
     max_idle_seconds: Annotated[float, Field(gt=0)] | None = None
+
+
+class DuckDBConfig(BaseModel):
+    """DuckDB connection settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str = ":memory:"
+
+
+class SQLiteConfig(BaseModel):
+    """SQLite connection settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str = ":memory:"
+
+
+class PostgreSQLConfig(BaseModel):
+    """PostgreSQL connection settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    conninfo: str = ""
+
+
+class DatabricksConfig(BaseModel):
+    """Non-secret Databricks connection settings."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True, serialize_by_alias=True)
+
+    server_hostname: Annotated[str, Field(min_length=1)]
+    http_path: Annotated[str, Field(min_length=1)]
+    catalog: str | None = None
+    schema_: str | None = Field(default=None, alias="schema")
+
+
+class SnowflakeConfig(BaseModel):
+    """Non-secret Snowflake connection settings."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True, serialize_by_alias=True)
+
+    account: Annotated[str, Field(min_length=1)]
+    user: str | None = None
+    warehouse: str | None = None
+    role: str | None = None
+    database: str | None = None
+    schema_: str | None = Field(default=None, alias="schema")
+    authenticator: str | None = None
+    workload_identity_provider: str | None = None
+
+
+class BigQueryConfig(BaseModel):
+    """Non-secret BigQuery connection settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project: Annotated[str, Field(min_length=1)]
+    dataset: str | None = None
+    location: str | None = None
+
+
+class _PlatformRefBase(BaseModel):
+    """Fields shared by platform references."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Annotated[str, Field(min_length=1)]
+    dialect: SQLDialect | None = None
+    pool: PoolPolicy | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
+class DuckDBPlatformRef(_PlatformRefBase):
+    """Reference to a DuckDB database."""
+
+    kind: Literal["duckdb"] = "duckdb"
+    config: DuckDBConfig = Field(default_factory=DuckDBConfig)
+
+
+class SQLitePlatformRef(_PlatformRefBase):
+    """Reference to a SQLite database."""
+
+    kind: Literal["sqlite"] = "sqlite"
+    config: SQLiteConfig = Field(default_factory=SQLiteConfig)
+
+
+class PostgreSQLPlatformRef(_PlatformRefBase):
+    """Reference to a PostgreSQL database."""
+
+    kind: Literal["postgres"] = "postgres"
+    config: PostgreSQLConfig = Field(default_factory=PostgreSQLConfig)
+
+
+class DatabricksPlatformRef(_PlatformRefBase):
+    """Reference to a Databricks SQL Warehouse."""
+
+    kind: Literal["databricks"] = "databricks"
+    config: DatabricksConfig
+
+
+class SnowflakePlatformRef(_PlatformRefBase):
+    """Reference to a Snowflake account."""
+
+    kind: Literal["snowflake"] = "snowflake"
+    config: SnowflakeConfig
+
+
+class BigQueryPlatformRef(_PlatformRefBase):
+    """Reference to a BigQuery project."""
+
+    kind: Literal["bigquery"] = "bigquery"
+    config: BigQueryConfig
+
+
+PlatformRef: TypeAlias = Annotated[
+    DuckDBPlatformRef
+    | SQLitePlatformRef
+    | PostgreSQLPlatformRef
+    | DatabricksPlatformRef
+    | SnowflakePlatformRef
+    | BigQueryPlatformRef,
+    Field(discriminator="kind"),
+]
 
 
 class SqlType(BaseModel):
@@ -458,36 +569,33 @@ class LlmError(Error):
     provider: str | None = None
 
 
-class SolverOutput(BaseModel):
-    """A Solver's output: either a successful `output` artifact or an `error`.
-
-    Exactly one of `output`/`error` is set. For SQL solvers, `output` is the SQL to run.
-    """
+class _SolverOutputBase(BaseModel):
+    """Usage data shared by solver outcomes."""
 
     model_config = ConfigDict(extra="forbid")
 
-    output: Annotated[Sql, Field(min_length=1)] | None = None
-    error: SolverError | None = None
     prompt_tokens: Annotated[int, Field(ge=0)] | None = None
     completion_tokens: Annotated[int, Field(ge=0)] | None = None
     latency_seconds: Annotated[float, Field(ge=0)] | None = None
     cost_usd: Annotated[float, Field(ge=0)] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-    @model_validator(mode="after")
-    def _exactly_one_of_output_or_error(self) -> "SolverOutput":
-        """Enforce that exactly one of `output`/`error` is set.
 
-        Returns:
-            The validated `SolverOutput`.
+class SolverSuccess(_SolverOutputBase):
+    """SQL produced successfully by a solver."""
 
-        Raises:
-            ValueError: If Pydantic validation fails.
-        """
-        if (self.output is None) == (self.error is None):
-            msg = "SolverOutput requires exactly one of 'output' or 'error' to be set"
-            raise ValueError(msg)
-        return self
+    status: Literal["success"] = "success"
+    output: Annotated[Sql, Field(min_length=1)]
+
+
+class SolverFailure(_SolverOutputBase):
+    """A solver failure."""
+
+    status: Literal["failure"] = "failure"
+    error: SolverError
+
+
+SolverOutput: TypeAlias = Annotated[SolverSuccess | SolverFailure, Field(discriminator="status")]
 
 
 ExecutionErrorKind = Literal[
@@ -518,16 +626,31 @@ class NormalizationError(Error):
     kind: Literal["parse_failed", "not_single_statement", "normalize_failed", "non_deterministic"]
 
 
-class ExecutionResult(BaseModel):
-    """The result of running SQL against a platform: returned rows plus execution measurements."""
+class _ExecutionResultBase(BaseModel):
+    """Measurements shared by successful and failed SQL executions."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True, serialize_by_alias=True)
 
+    latency_seconds: Annotated[float, Field(ge=0)]
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExecutionSuccess(_ExecutionResultBase):
+    """A successful SQL execution."""
+
+    status: Literal["success"] = "success"
     rows: list[dict[str, Any]]
     schema_: Schema | None = Field(default=None, alias="schema")
-    latency_seconds: Annotated[float, Field(ge=0)]
-    error: ExecutionError | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExecutionFailure(_ExecutionResultBase):
+    """A failed SQL execution."""
+
+    status: Literal["failure"] = "failure"
+    error: ExecutionError
+
+
+ExecutionResult: TypeAlias = Annotated[ExecutionSuccess | ExecutionFailure, Field(discriminator="status")]
 
 
 class TypeMismatch(BaseModel):

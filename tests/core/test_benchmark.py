@@ -8,12 +8,14 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from evaldata import CallableSolver, EvalCase, ExecutionAccuracy, run_benchmark
-from evaldata.core.runner import CaseEvaluation, evaluate_case
+from evaldata.core.runner import BenchmarkSummary, CaseEvaluation, evaluate_case
 from evaldata.platforms import duckdb_platform, sqlite_platform
 from evaldata.platforms.registry import acquired, close_all, resolve
-from evaldata.types import GoldQuery, PlatformRef, SolverError, SolverOutput, Sql
+from evaldata.reporting.collector import SolverFailureCaseReport
+from evaldata.types import GoldQuery, PlatformRef, SolverError, SolverFailure, SolverOutput, SolverSuccess, Sql
 
 
 @pytest.fixture
@@ -67,6 +69,18 @@ class TestRunBenchmark:
         assert summary.passed == 0
         assert summary.accuracy == 0.0
 
+    def test_rejects_independently_supplied_aggregates(self) -> None:
+        with pytest.raises(ValidationError, match="total"):
+            BenchmarkSummary(cases=[], total=1)  # type: ignore[call-arg]
+
+    def test_json_round_trip_derives_aggregates(self) -> None:
+        summary = BenchmarkSummary(cases=[])
+        restored = BenchmarkSummary.model_validate_json(summary.model_dump_json())
+        assert restored == summary
+        assert restored.total == 0
+        assert restored.passed == 0
+        assert restored.accuracy == 0.0
+
     def test_concurrency_preserves_case_order(self, db: str) -> None:
         # Earlier cases sleep longest, so the solvers finish in reverse of submission order;
         # the reports must still come back in case order.
@@ -84,8 +98,8 @@ class TestRunBenchmark:
         class _Solver:
             def solve(self, case: EvalCase) -> SolverOutput:
                 if case.id == "b":
-                    return SolverOutput(error=SolverError(kind="bad_request", message="boom"))
-                return SolverOutput(output=Sql("SELECT id FROM items"))
+                    return SolverFailure(error=SolverError(kind="bad_request", message="boom"))
+                return SolverSuccess(output=Sql("SELECT id FROM items"))
 
         cases = [_case("a", db), _case("b", db), _case("c", db)]
         summary = run_benchmark(cases, _Solver(), scorers=[ExecutionAccuracy()], max_concurrency=3)
@@ -93,7 +107,7 @@ class TestRunBenchmark:
         assert summary.total == 3
         assert summary.passed == 2
         reports = {r.id: r for r in summary.cases}
-        assert reports["b"].error is not None
+        assert isinstance(reports["b"], SolverFailureCaseReport)
         assert reports["a"].passed and reports["c"].passed
 
 

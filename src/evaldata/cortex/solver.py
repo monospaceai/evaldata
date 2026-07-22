@@ -3,7 +3,7 @@
 from typing import Any
 
 from evaldata.cortex.client import CortexTransport
-from evaldata.types import EvalCase, SolverError, SolverOutput, Sql
+from evaldata.types import EvalCase, SolverError, SolverFailure, SolverOutput, SolverSuccess, Sql
 
 
 def _metadata(response: dict[str, Any]) -> dict[str, Any]:
@@ -37,14 +37,14 @@ def _to_output(response: dict[str, Any]) -> SolverOutput:
     metadata = _metadata(response)
     for item in content:
         if item.get("type") == "sql" and item.get("statement", "").strip():
-            return SolverOutput(output=Sql(item["statement"]), metadata=metadata)
+            return SolverSuccess(output=Sql(item["statement"]), metadata=metadata)
     suggestions = [s for item in content if item.get("type") == "suggestions" for s in item.get("suggestions", [])]
     message = (
         "Cortex Analyst returned suggestions instead of SQL: " + "; ".join(suggestions)
         if suggestions
         else "Cortex Analyst returned no SQL"
     )
-    return SolverOutput(
+    return SolverFailure(
         error=SolverError(kind="empty_response", message=message, provider="cortex_analyst"), metadata=metadata
     )
 
@@ -87,5 +87,5 @@ class CortexAnalystSolver:
         """
         response = self._client.send(case.input, self._semantic_ref)
         if isinstance(response, SolverError):
-            return SolverOutput(error=response)
+            return SolverFailure(error=response)
         return _to_output(response)

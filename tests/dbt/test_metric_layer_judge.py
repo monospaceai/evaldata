@@ -13,11 +13,11 @@ from evaldata.dbt import (
 from evaldata.dbt.metric_layer_judge import _render_query
 from evaldata.llm import StubLlm
 from evaldata.scorers.llm_judge import JudgeReply
-from evaldata.types import LlmError, PlatformRef
+from evaldata.types import DuckDBPlatformRef, LlmError
 
 pytestmark = pytest.mark.unit
 
-PLATFORM = PlatformRef(name="duck", kind="duckdb")
+PLATFORM = DuckDBPlatformRef(name="duck")
 
 
 def _case() -> MetricCase:
