@@ -6,7 +6,7 @@ import pytest
 
 from evaldata.dbt.errors import DbtError
 from evaldata.dbt.profile import _pg_conninfo, _platform_from_output, platform_from_profile
-from evaldata.types import PlatformRef
+from evaldata.types import DuckDBPlatformRef, PostgreSQLPlatformRef
 
 pytestmark = pytest.mark.unit
 
@@ -25,10 +25,10 @@ def _project(tmp_path: Path, *, project: str | None = None, profiles: str | None
 
 def test_resolves_duckdb_from_fixture() -> None:
     ref = platform_from_profile(FIXTURE)
-    assert isinstance(ref, PlatformRef)
+    assert isinstance(ref, DuckDBPlatformRef)
     assert ref.kind == "duckdb"
-    assert Path(ref.config["path"]).is_absolute()
-    assert ref.config["path"].endswith("jaffle_duckdb/jaffle.duckdb")
+    assert Path(ref.config.path).is_absolute()
+    assert ref.config.path.endswith("jaffle_duckdb/jaffle.duckdb")
 
 
 def test_missing_dbt_project(tmp_path: Path) -> None:
@@ -97,21 +97,21 @@ def test_no_default_target(tmp_path: Path) -> None:
 
 def test_platform_from_output_duckdb_memory() -> None:
     ref = _platform_from_output("n", {"type": "duckdb"}, Path("/proj"))
-    assert isinstance(ref, PlatformRef)
-    assert ref.config["path"] == ":memory:"
+    assert isinstance(ref, DuckDBPlatformRef)
+    assert ref.config.path == ":memory:"
 
 
 def test_platform_from_output_duckdb_absolute_path() -> None:
     ref = _platform_from_output("n", {"type": "duckdb", "path": "/abs/x.db"}, Path("/proj"))
-    assert isinstance(ref, PlatformRef)
-    assert ref.config["path"] == "/abs/x.db"
+    assert isinstance(ref, DuckDBPlatformRef)
+    assert ref.config.path == "/abs/x.db"
 
 
 def test_platform_from_output_postgres() -> None:
     ref = _platform_from_output("n", {"type": "postgres", "host": "h", "dbname": "d", "user": "u"}, Path("/proj"))
-    assert isinstance(ref, PlatformRef)
+    assert isinstance(ref, PostgreSQLPlatformRef)
     assert ref.kind == "postgres"
-    assert ref.config["conninfo"] == "host=h dbname=d user=u"
+    assert ref.config.conninfo == "host=h dbname=d user=u"
 
 
 def test_platform_from_output_unsupported_adapter() -> None:

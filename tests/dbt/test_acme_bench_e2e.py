@@ -16,6 +16,7 @@ from evaldata.dbt import (
     DbtError,
     MetricCase,
     MetricSolverOutput,
+    MetricSolverSuccess,
     load_dbt_metrics,
     metric_layer_equivalence,
     run,
@@ -24,19 +25,19 @@ from evaldata.dbt import (
 from evaldata.dbt._yaml import read_yaml
 from evaldata.llm import StubLlm
 from evaldata.scorers.llm_judge import JudgeReply
-from evaldata.types import PlatformRef
+from evaldata.types import DuckDBPlatformRef
 
 pytestmark = pytest.mark.e2e
 
 FIXTURE = Path(__file__).parent / "fixtures" / "acme_insurance"
-PLATFORM = PlatformRef(name="acme", kind="duckdb")
+PLATFORM = DuckDBPlatformRef(name="acme")
 
 
 class _GoldSolver:
     """A `MetricSolver` that answers each case with its own gold query."""
 
     def solve(self, case: MetricCase) -> MetricSolverOutput:
-        return MetricSolverOutput(query=case.gold)
+        return MetricSolverSuccess(query=case.gold)
 
 
 def _measure(value: object) -> float | None:

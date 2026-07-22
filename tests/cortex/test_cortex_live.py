@@ -10,7 +10,7 @@ import pytest
 from evaldata.cortex.client import CortexAnalystClient
 from evaldata.cortex.solver import CortexAnalystSolver
 from evaldata.platforms.base import PlatformAdapter
-from evaldata.types import EvalCase, PlatformRef
+from evaldata.types import EvalCase, ExecutionSuccess, SnowflakeConfig, SnowflakePlatformRef, SolverSuccess
 
 pytestmark = [pytest.mark.cortex, pytest.mark.e2e]
 
@@ -31,14 +31,13 @@ def test_cortex_answers_region_totals(live_adapter: PlatformAdapter, jaffle_view
         id="region-totals",
         input="What is the total order amount for each customer region?",
         expected={"rows": []},
-        platform=PlatformRef(name="sf", kind="snowflake"),
+        platform=SnowflakePlatformRef(name="sf", config=SnowflakeConfig(account="test")),
     )
 
     output = solver.solve(case)
-    assert output.error is None, output.error
-    assert output.output is not None
+    assert isinstance(output, SolverSuccess)
 
     result = live_adapter.execute(output.output)
-    assert result.error is None, result.error
+    assert isinstance(result, ExecutionSuccess)
     totals = {_cell(row, "REGION"): _cell(row, "AMOUNT") for row in result.rows}
     assert totals == {"East": Decimal("185.50"), "West": Decimal("380.00")}

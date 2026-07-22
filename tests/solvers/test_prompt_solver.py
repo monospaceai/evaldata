@@ -11,7 +11,16 @@ import pytest
 from evaldata.llm import StubLlm, TextCompletion, Usage
 from evaldata.solvers import SCHEMA_PROMPT_TEMPLATE, Solver
 from evaldata.solvers.prompt import PromptSolver
-from evaldata.types import EvalCase, LlmError, PlatformRef, ProviderErrorKind, SQLDialect, UntypedResultSet
+from evaldata.types import (
+    DuckDBPlatformRef,
+    EvalCase,
+    LlmError,
+    ProviderErrorKind,
+    SolverFailure,
+    SolverSuccess,
+    SQLDialect,
+    UntypedResultSet,
+)
 
 _E2E_MODEL = "openai/gpt-4o-mini"
 
@@ -32,7 +41,7 @@ def _case(*, dialect: SQLDialect | None = None) -> EvalCase:
         id="c",
         input="How many tracks?",
         expected=UntypedResultSet(rows=[]),
-        platform=PlatformRef(name="local", kind="duckdb", dialect=dialect),
+        platform=DuckDBPlatformRef(name="local", dialect=dialect),
     )
 
 
@@ -40,35 +49,34 @@ def _case(*, dialect: SQLDialect | None = None) -> EvalCase:
 class TestPromptSolver:
     def test_happy_path(self) -> None:
         out = PromptSolver(model=StubLlm("SELECT 1 AS n")).solve(_case())
-        assert out.error is None
+        assert isinstance(out, SolverSuccess)
         assert out.output == "SELECT 1 AS n"
         assert out.metadata["model"] == "StubLlm"
 
     def test_sql_is_stripped(self) -> None:
         out = PromptSolver(model=StubLlm("  SELECT 1  ")).solve(_case())
+        assert isinstance(out, SolverSuccess)
         assert out.output == "SELECT 1"
 
     def test_code_fence_is_stripped(self) -> None:
         out = PromptSolver(model=StubLlm("```sql\nSELECT 1\n```")).solve(_case())
-        assert out.error is None
+        assert isinstance(out, SolverSuccess)
         assert out.output == "SELECT 1"
 
     def test_empty_reply_is_empty_response(self) -> None:
         out = PromptSolver(model=StubLlm("")).solve(_case())
-        assert out.output is None
-        assert out.error is not None
+        assert isinstance(out, SolverFailure)
         assert out.error.kind == "empty_response"
 
     def test_whitespace_only_reply_is_empty_response(self) -> None:
         out = PromptSolver(model=StubLlm("   \n  ")).solve(_case())
-        assert out.error is not None
+        assert isinstance(out, SolverFailure)
         assert out.error.kind == "empty_response"
 
     def test_malformed_output_is_invalid_structured_output(self) -> None:
         err = LlmError(kind="malformed_output", message="model returned malformed structured output")
         out = PromptSolver(model=StubLlm(err)).solve(_case())
-        assert out.output is None
-        assert out.error is not None
+        assert isinstance(out, SolverFailure)
         assert out.error.kind == "invalid_structured_output"
 
     @pytest.mark.parametrize(
@@ -86,8 +94,7 @@ class TestPromptSolver:
     def test_provider_error_maps_one_to_one(self, kind: ProviderErrorKind) -> None:
         err = LlmError(kind=kind, message="provider failed", provider="openai")
         out = PromptSolver(model=StubLlm(err)).solve(_case())
-        assert out.output is None
-        assert out.error is not None
+        assert isinstance(out, SolverFailure)
         assert out.error.kind == kind
         assert out.error.provider == "openai"
 
@@ -120,7 +127,7 @@ class TestPromptSolver:
             id="c",
             input="how many tracks?",
             expected=UntypedResultSet(rows=[]),
-            platform=PlatformRef(name="local", kind="duckdb"),
+            platform=DuckDBPlatformRef(name="local"),
             metadata={"schema_ddl": "CREATE TABLE tracks (id INTEGER)"},
         )
         PromptSolver(model=stub, prompt_template=SCHEMA_PROMPT_TEMPLATE).solve(case)
@@ -140,9 +147,8 @@ def test_live_prompt_solver_smoke() -> None:
         id="live",
         input="Return the single integer 1 as a column named n.",
         expected=UntypedResultSet(rows=[{"n": 1}]),
-        platform=PlatformRef(name="local", kind="duckdb", dialect="duckdb"),
+        platform=DuckDBPlatformRef(name="local", dialect="duckdb"),
     )
     out = PromptSolver(model=_E2E_MODEL).solve(case)
-    assert out.error is None
-    assert out.output is not None
+    assert isinstance(out, SolverSuccess)
     assert out.output.strip() != ""

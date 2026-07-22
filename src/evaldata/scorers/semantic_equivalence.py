@@ -29,7 +29,7 @@ from evaldata.types import (
     NormalizationError,
     ScoreResult,
     SemanticVerdict,
-    SolverOutput,
+    SolverSuccess,
     Sql,
 )
 
@@ -47,7 +47,7 @@ class EquivalenceCheck(Protocol):
     method: EquivalenceMethod
 
     def judge(
-        self, case: EvalCase, output: SolverOutput, result: ExecutionResult, *, context: ScoreContext
+        self, case: EvalCase, output: SolverSuccess, result: ExecutionResult, *, context: ScoreContext
     ) -> SemanticVerdict:
         """Judge whether the model's query is equivalent to the case's gold query.
 
@@ -76,7 +76,7 @@ class AstEquivalence:
     method: EquivalenceMethod = "ast"
 
     def judge(
-        self, case: EvalCase, output: SolverOutput, result: ExecutionResult, *, context: ScoreContext
+        self, case: EvalCase, output: SolverSuccess, result: ExecutionResult, *, context: ScoreContext
     ) -> SemanticVerdict:
         """Compare the model and gold queries' normalized syntax trees.
 
@@ -263,7 +263,7 @@ class SemanticEquivalence:
         self._checks = list(checks) if checks is not None else default_equivalence_checks()
 
     def score(
-        self, case: EvalCase, output: SolverOutput, result: ExecutionResult, *, context: ScoreContext
+        self, case: EvalCase, output: SolverSuccess, result: ExecutionResult, *, context: ScoreContext
     ) -> ScoreResult:
         """Run the checks in order, stopping at the first that confirms equivalence.
 

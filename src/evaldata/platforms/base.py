@@ -10,7 +10,9 @@ from evaldata.types import (
     Column,
     ExecutionError,
     ExecutionErrorKind,
+    ExecutionFailure,
     ExecutionResult,
+    ExecutionSuccess,
     Schema,
     SqlType,
     TypedSchema,
@@ -23,14 +25,13 @@ class PlatformAdapter(Protocol):
     """Executes SQL against a data platform; returns rows + schema + latency.
 
     Required behavior:
-        * On success: return `ExecutionResult` with `rows` populated and `schema_`
+        * On success: return `ExecutionSuccess` with `rows` populated and `schema_`
           populated — a `TypedSchema` (each `Column.type` a `SqlType` built from the
           driver's native type string in the adapter's static dialect), or an
           `UntypedSchema` (names only) when the driver reports no result-column types —
-          with non-negative `latency_seconds` and `error is None`.
-        * On query failure: return `ExecutionResult` with `rows=[]`,
-          `schema_=None`, an `error` describing the failure, and non-negative
-          `latency_seconds`. **Do NOT raise.**
+          with non-negative `latency_seconds`.
+        * On query failure: return `ExecutionFailure` with an `error` describing the
+          failure and non-negative `latency_seconds`. **Do NOT raise.**
         * `latency_seconds` measures wall-clock time spent inside `execute()`.
     """
 
@@ -147,8 +148,8 @@ def execute_within_budget(
             to one second for direct adapters; pool leases use their configured policy.
 
     Returns:
-        The adapter's `ExecutionResult` if the query finishes within budget, otherwise an
-        `ExecutionResult` with `error` set and `latency_seconds` measuring the elapsed time.
+        The adapter's execution outcome if the query finishes within budget, otherwise an
+        `ExecutionFailure` with `latency_seconds` measuring the elapsed time.
     """
     if max_seconds is None:
         return adapter.execute(sql)
@@ -185,11 +186,7 @@ def _execute_with_watchdog(
             else:
                 outcome.append(adapter.execute(sql))
         except Exception as e:  # noqa: BLE001 - adapters promise errors-as-values, but watchdogs must finish safely
-            outcome.append(
-                ExecutionResult(
-                    rows=[], schema=None, latency_seconds=time.monotonic() - start, error=execution_error(e)
-                )
-            )
+            outcome.append(ExecutionFailure(latency_seconds=time.monotonic() - start, error=execution_error(e)))
         finally:
             completed_at.append(time.monotonic())
             done.set()
@@ -209,9 +206,7 @@ def _budget_exceeded(start: float, max_seconds: float) -> ExecutionResult:
     Returns:
         A result containing a `budget_exceeded` error.
     """
-    return ExecutionResult(
-        rows=[],
-        schema=None,
+    return ExecutionFailure(
         latency_seconds=time.monotonic() - start,
         error=ExecutionError(
             kind="budget_exceeded", message=f"exceeded cost budget: query did not complete within {max_seconds}s"
@@ -319,7 +314,7 @@ def _result_or_error(
 
     Rows are keyed by name (`dict(zip(...))`), which cannot represent two columns sharing a
     name — the later value would silently overwrite the earlier. Rather than lose data,
-    duplicate output column names are surfaced as `ExecutionResult.error`. The check runs
+    duplicate output column names are surfaced as an `ExecutionFailure`. The check runs
     before `build_schema`, which itself rejects duplicate names.
 
     Args:
@@ -336,11 +331,9 @@ def _result_or_error(
     duplicates = [name for name, count in Counter(names).items() if count > 1]
     if duplicates:
         listed = ", ".join(repr(name) for name in duplicates)
-        return ExecutionResult(
-            rows=[],
-            schema=None,
+        return ExecutionFailure(
             latency_seconds=latency_seconds,
             error=ExecutionError(kind="duplicate_columns", message=f"duplicate output column name(s): {listed}"),
         )
     rows = [dict(zip(names, row, strict=True)) for row in rows_raw]
-    return ExecutionResult(rows=rows, schema=build_schema(), latency_seconds=latency_seconds)
+    return ExecutionSuccess(rows=rows, schema=build_schema(), latency_seconds=latency_seconds)

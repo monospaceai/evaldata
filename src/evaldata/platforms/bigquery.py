@@ -10,7 +10,7 @@ from google.cloud import bigquery
 from sqlglot import exp
 
 from evaldata.platforms.base import execution_error, rows_or_error
-from evaldata.types import Column, ExecutionResult, SqlType
+from evaldata.types import Column, ExecutionFailure, ExecutionResult, ExecutionSuccess, SqlType
 
 
 def _type_string(field: bigquery.SchemaField) -> str:
@@ -130,7 +130,7 @@ class BigQueryAdapter:
 
         Returns:
             An `ExecutionResult` with the returned rows, schema, and latency. Query
-            failures are returned as `ExecutionResult.error` rather than raised.
+            failures are returned as an `ExecutionFailure` rather than raised.
         """
         return self._execute(sql)
 
@@ -167,13 +167,13 @@ class BigQueryAdapter:
             iterator = job.result()
             schema = iterator.schema
             rows_raw = [tuple(row.values()) for row in iterator]
-        except Exception as e:  # noqa: BLE001 - execute must never raise; failures return as ExecutionResult.error
+        except Exception as e:  # noqa: BLE001 - execute must never raise; failures return as ExecutionFailure
             elapsed = time.perf_counter() - start
-            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=execution_error(e))
+            return ExecutionFailure(latency_seconds=elapsed, error=execution_error(e))
         finally:
             self._job = None
         elapsed = time.perf_counter() - start
         if not schema:
-            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed)
+            return ExecutionSuccess(rows=[], schema=None, latency_seconds=elapsed)
         columns = [_column_from_field(field) for field in schema]
         return rows_or_error(columns, rows_raw, elapsed)

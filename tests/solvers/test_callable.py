@@ -3,7 +3,7 @@
 import pytest
 
 from evaldata.solvers import CallableSolver, Solver
-from evaldata.types import EvalCase, PlatformRef, SolverOutput, UntypedResultSet
+from evaldata.types import DuckDBPlatformRef, EvalCase, SolverSuccess, UntypedResultSet
 
 
 def _case() -> EvalCase:
@@ -11,7 +11,7 @@ def _case() -> EvalCase:
         id="c",
         input="q",
         expected=UntypedResultSet(rows=[]),
-        platform=PlatformRef(name="x", kind="duckdb"),
+        platform=DuckDBPlatformRef(name="x"),
     )
 
 
@@ -19,7 +19,7 @@ def _case() -> EvalCase:
 class TestCallableSolver:
     def test_wraps_sql_string_as_output(self) -> None:
         out = CallableSolver(lambda case: "SELECT 1").solve(_case())
-        assert isinstance(out, SolverOutput)
+        assert isinstance(out, SolverSuccess)
         assert out.output == "SELECT 1"
 
     def test_function_receives_the_case(self) -> None:

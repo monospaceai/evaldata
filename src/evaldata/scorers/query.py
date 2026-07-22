@@ -1,26 +1,44 @@
 """`QueryRunner`: a budget-aware handle scorers use to run derived SQL in-platform."""
 
-from dataclasses import dataclass
-from typing import Any
+from typing import Annotated, Any, Literal, TypeAlias
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from evaldata.platforms.base import PlatformAdapter, TypeResolvingAdapter, execute_within_budget
 from evaldata.scorers.sql import Dialect
-from evaldata.types import Column, ExecutionError, ExecutionResult, Sql, TypedSchema
+from evaldata.types import (
+    Column,
+    ExecutionError,
+    ExecutionFailure,
+    ExecutionResult,
+    Sql,
+    TypedSchema,
+)
 
 
-@dataclass(frozen=True)
-class ScalarResult:
-    """The single cell returned by a derived query, or an error.
+class _ScalarResultBase(BaseModel):
+    """Timing shared by scalar query outcomes."""
 
-    Attributes:
-        value: The single cell value, or `None` when `error` is set.
-        error: The failure, or `None` on success.
-        latency_seconds: Wall-clock time the underlying query took.
-    """
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
-    value: Any | None
-    error: ExecutionError | None
     latency_seconds: float
+
+
+class ScalarSuccess(_ScalarResultBase):
+    """A successful scalar query."""
+
+    status: Literal["success"] = "success"
+    value: Any
+
+
+class ScalarFailure(_ScalarResultBase):
+    """A failed scalar query."""
+
+    status: Literal["failure"] = "failure"
+    error: ExecutionError
+
+
+ScalarResult: TypeAlias = Annotated[ScalarSuccess | ScalarFailure, Field(discriminator="status")]
 
 
 class QueryRunner:
@@ -29,8 +47,8 @@ class QueryRunner:
     Holds a live adapter, the model's SQL, the case dialect, and a remaining-time pool
     seeded from the case budget. Each completed query decrements the pool by its
     `latency_seconds`; once the pool is exhausted, further runs short-circuit to an
-    `ExecutionResult` carrying an error without touching the adapter. A `None` budget means
-    the pool is unbounded.
+    `ExecutionFailure` without touching the adapter. A `None` budget means the pool is
+    unbounded.
     """
 
     def __init__(self, adapter: PlatformAdapter, model_sql: Sql, dialect: Dialect, budget: float | None) -> None:
@@ -64,13 +82,11 @@ class QueryRunner:
             sql: The SQL statement to execute.
 
         Returns:
-            The adapter's `ExecutionResult`, or an `ExecutionResult` with `error` set when
-            the budget pool is already exhausted (the adapter is not invoked in that case).
+            The adapter's execution outcome, or an `ExecutionFailure` when the budget pool
+            is already exhausted (the adapter is not invoked in that case).
         """
         if self._remaining is not None and self._remaining <= 0:
-            return ExecutionResult(
-                rows=[],
-                schema=None,
+            return ExecutionFailure(
                 latency_seconds=0.0,
                 error=ExecutionError(
                     kind="budget_exceeded", message="exceeded cost budget: derived-query budget pool exhausted"
@@ -92,19 +108,18 @@ class QueryRunner:
             sql: The SQL statement to execute; expected to return one row and one column.
 
         Returns:
-            A `ScalarResult` carrying the single cell on success, else `error`.
+            A `ScalarSuccess` carrying the single cell, or a `ScalarFailure`.
         """
         result = self.run(sql)
-        if result.error is not None:
-            return ScalarResult(value=None, error=result.error, latency_seconds=result.latency_seconds)
+        if isinstance(result, ExecutionFailure):
+            return ScalarFailure(error=result.error, latency_seconds=result.latency_seconds)
         if len(result.rows) != 1 or len(result.rows[0]) != 1:
-            return ScalarResult(
-                value=None,
+            return ScalarFailure(
                 error=ExecutionError(kind="query_failed", message="expected one row and one column"),
                 latency_seconds=result.latency_seconds,
             )
         (value,) = result.rows[0].values()
-        return ScalarResult(value=value, error=None, latency_seconds=result.latency_seconds)
+        return ScalarSuccess(value=value, latency_seconds=result.latency_seconds)
 
     def resolved_schema(self, base: TypedSchema, sql: Sql) -> TypedSchema | ExecutionError:
         """Return `base` with its column types resolved to the platform's precise types.
@@ -124,7 +139,7 @@ class QueryRunner:
         if not isinstance(adapter, TypeResolvingAdapter):
             return base
         probe = self.run(Sql(adapter.type_probe_sql(sql)))
-        if probe.error is not None:
+        if isinstance(probe, ExecutionFailure):
             return probe.error
         types = adapter.types_from_probe(probe.rows)
         if isinstance(types, ExecutionError):

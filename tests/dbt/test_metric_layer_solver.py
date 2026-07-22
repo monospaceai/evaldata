@@ -1,11 +1,19 @@
 """Tests for `MetricLayerSolver`, driven through a `StubLlm` (no litellm, no network)."""
 
 import pytest
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
-from evaldata.dbt import MetricCase, MetricLayerSolver, MetricQuery, MetricSolver, MetricSolverOutput
+from evaldata.dbt import (
+    MetricCase,
+    MetricLayerSolver,
+    MetricQuery,
+    MetricSolver,
+    MetricSolverFailure,
+    MetricSolverOutput,
+    MetricSolverSuccess,
+)
 from evaldata.llm import Completion, StubLlm, Usage
-from evaldata.types import LlmError, PlatformRef, ProviderErrorKind, SolverError
+from evaldata.types import DuckDBPlatformRef, LlmError, ProviderErrorKind, SolverError
 
 pytestmark = pytest.mark.unit
 
@@ -26,7 +34,7 @@ def _case(sl_context: str = "Metrics:\n  revenue (simple)") -> MetricCase:
         id="c",
         input="Total revenue?",
         gold=MetricQuery(metrics=["revenue"]),
-        platform=PlatformRef(name="local", kind="duckdb"),
+        platform=DuckDBPlatformRef(name="local"),
         target_dir="target",
         sl_context=sl_context,
     )
@@ -36,7 +44,7 @@ class TestMetricLayerSolver:
     def test_happy_path(self) -> None:
         query = MetricQuery(metrics=["revenue"], group_by=["metric_time__month"])
         out = MetricLayerSolver(model=StubLlm(query)).solve(_case())
-        assert out.error is None
+        assert isinstance(out, MetricSolverSuccess)
         assert out.query == query
         assert out.metadata["model"] == "StubLlm"
 
@@ -49,8 +57,7 @@ class TestMetricLayerSolver:
     def test_malformed_output_is_invalid_structured_output(self) -> None:
         err = LlmError(kind="malformed_output", message="model returned malformed structured output")
         out = MetricLayerSolver(model=StubLlm(err)).solve(_case())
-        assert out.query is None
-        assert out.error is not None
+        assert isinstance(out, MetricSolverFailure)
         assert out.error.kind == "invalid_structured_output"
 
     @pytest.mark.parametrize(
@@ -59,8 +66,7 @@ class TestMetricLayerSolver:
     )
     def test_provider_error_maps_one_to_one(self, kind: ProviderErrorKind) -> None:
         out = MetricLayerSolver(model=StubLlm(LlmError(kind=kind, message="boom", provider="openai"))).solve(_case())
-        assert out.query is None
-        assert out.error is not None
+        assert isinstance(out, MetricSolverFailure)
         assert out.error.kind == kind
         assert out.error.provider == "openai"
 
@@ -86,10 +92,25 @@ class TestMetricLayerSolver:
 
 
 class TestMetricSolverOutput:
+    def test_success_round_trips(self) -> None:
+        output = MetricSolverSuccess(query=MetricQuery(metrics=["revenue"]))
+        assert TypeAdapter(MetricSolverOutput).validate_json(output.model_dump_json()) == output
+
+    def test_failure_round_trips(self) -> None:
+        output = MetricSolverFailure(error=SolverError(kind="auth", message="bad"))
+        assert TypeAdapter(MetricSolverOutput).validate_json(output.model_dump_json()) == output
+
     def test_rejects_neither_query_nor_error(self) -> None:
         with pytest.raises(ValidationError):
-            MetricSolverOutput()
+            MetricSolverSuccess()
 
     def test_rejects_both_query_and_error(self) -> None:
         with pytest.raises(ValidationError):
-            MetricSolverOutput(query=MetricQuery(metrics=["revenue"]), error=SolverError(kind="auth", message="bad"))
+            MetricSolverSuccess(query=MetricQuery(metrics=["revenue"]), error=SolverError(kind="auth", message="bad"))
+
+    def test_failure_rejects_query(self) -> None:
+        with pytest.raises(ValidationError):
+            MetricSolverFailure(
+                query=MetricQuery(metrics=["revenue"]),
+                error=SolverError(kind="auth", message="bad"),
+            )  # type: ignore[call-arg]

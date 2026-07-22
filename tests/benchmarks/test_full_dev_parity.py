@@ -32,10 +32,10 @@ from evaldata.loaders.benchmarks.fetch import cached_dataset_path
 from evaldata.loaders.benchmarks.spider import load_spider
 from evaldata.platforms.sqlite import SqliteAdapter
 from evaldata.scorers import ExecutionAccuracy, QueryRunner, ScoreContext
-from evaldata.types import EvalCase, GoldQuery, PlatformRef, SolverOutput, Sql
+from evaldata.types import EvalCase, ExecutionFailure, GoldQuery, SolverSuccess, Sql, SQLiteConfig, SQLitePlatformRef
 from tests._vendor.spider_exec_eval import result_eq
 
-_OUTPUT = SolverOutput(output=Sql("SELECT ..."))
+_OUTPUT = SolverSuccess(output=Sql("SELECT ..."))
 _QUERY_TIMEOUT_SECONDS = 15.0
 
 _DATASETS: list[tuple[str, Callable[[str], Iterator[EvalCase]]]] = [
@@ -119,13 +119,13 @@ def _our_verdict(
     """
     queries = QueryRunner(adapter, Sql(pred_sql), "sqlite", None)
     result = queries.run(Sql(pred_sql))
-    if result.error is not None and result.error.kind == "duplicate_columns":
+    if isinstance(result, ExecutionFailure) and result.error.kind == "duplicate_columns":
         return None
     case = EvalCase(
         id="c",
         input="q",
         expected=GoldQuery(sql=gold_sql),
-        platform=PlatformRef(name=f"bird-parity:{db_path}", kind="sqlite", config={"path": db_path}),
+        platform=SQLitePlatformRef(name=f"bird-parity:{db_path}", config=SQLiteConfig(path=db_path)),
     )
     context = ScoreContext(queries=queries)
     score = scorer.score(case, _OUTPUT, result, context=context)
@@ -169,14 +169,15 @@ def test_full_dev_parity(dataset: str, loader: Callable[[str], Iterator[EvalCase
         for case in cases:
             expected = case.expected
             assert isinstance(expected, GoldQuery)
+            assert isinstance(case.platform, SQLitePlatformRef)
             gold_sql = expected.sql
-            db_path = str(case.platform.config["path"])
+            db_path = case.platform.config.path
             order_matters = _top_level_order_by(gold_sql)
             adapter = adapters.setdefault(db_path, SqliteAdapter(db_path))
 
             # Gold with duplicate output column names is unrepresentable in the name-keyed adapter;
             # skip all variants rather than count them as mismatches.
-            if adapter.execute(gold_sql).error is not None:
+            if isinstance(adapter.execute(gold_sql), ExecutionFailure):
                 skips += 1
                 continue
 

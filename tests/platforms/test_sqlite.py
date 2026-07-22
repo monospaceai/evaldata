@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from evaldata.platforms.sqlite import SqliteAdapter
-from evaldata.types import UntypedSchema
+from evaldata.types import ExecutionSuccess, UntypedSchema
 
 
 @pytest.mark.unit
@@ -29,7 +29,7 @@ class TestSqliteTypes:
     def test_schema_is_untyped_with_names(self, adapter: SqliteAdapter, sql: str, names: list[str]) -> None:
         # The schema carries the column names; types are absent rather than guessed.
         result = adapter.execute(sql)
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert isinstance(result.schema_, UntypedSchema)
         assert result.schema_.names == names
 
@@ -45,5 +45,5 @@ class TestSqliteFilePath:
             first.execute("INSERT INTO t VALUES (42)")
         with SqliteAdapter(database=db_path) as second:
             result = second.execute("SELECT x FROM t")
-            assert result.error is None
+            assert isinstance(result, ExecutionSuccess)
             assert result.rows == [{"x": 42}]

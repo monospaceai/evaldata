@@ -15,12 +15,12 @@ from evaldata.dbt import (
     MetricSpecEquivalence,
     load_dbt_metrics,
 )
-from evaldata.types import PlatformRef
+from evaldata.types import DuckDBPlatformRef
 
 pytestmark = pytest.mark.unit
 
 FIXTURE = Path(__file__).parent / "fixtures" / "jaffle_sl_bench"
-PLATFORM = PlatformRef(name="jaffle", kind="duckdb")
+PLATFORM = DuckDBPlatformRef(name="jaffle")
 
 
 def _corpus() -> list[MetricCase]:

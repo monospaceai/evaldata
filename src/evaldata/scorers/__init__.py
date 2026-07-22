@@ -16,7 +16,7 @@ from evaldata.scorers.equivalence_presets import (
 from evaldata.scorers.execution_accuracy import ExecutionAccuracy
 from evaldata.scorers.expectation_suite import ExpectationSuiteScorer
 from evaldata.scorers.llm_judge import JUDGE_INSTRUCTION, JudgeExample, LlmJudge, RubricBand
-from evaldata.scorers.query import QueryRunner, ScalarResult
+from evaldata.scorers.query import QueryRunner, ScalarFailure, ScalarResult, ScalarSuccess
 from evaldata.scorers.result_set_equivalence import ResultSetEquivalence
 from evaldata.scorers.semantic_equivalence import (
     AstEquivalence,
@@ -38,6 +38,8 @@ __all__ = [
     "RubricBand",
     "ResultSetEquivalence",
     "ScalarResult",
+    "ScalarFailure",
+    "ScalarSuccess",
     "ScoreContext",
     "Scorer",
     "SemanticEquivalence",

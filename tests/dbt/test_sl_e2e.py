@@ -16,12 +16,13 @@ from evaldata.dbt import (
     MetricQuery,
     MetricResultEquivalence,
     MetricSolverOutput,
+    MetricSolverSuccess,
     MetricSpecEquivalence,
     assert_metric_eval,
     run,
     run_metric_benchmark,
 )
-from evaldata.types import PlatformRef
+from evaldata.types import DuckDBPlatformRef
 
 
 class _StubSolver:
@@ -31,13 +32,13 @@ class _StubSolver:
         self._query = query
 
     def solve(self, case: "MetricCase") -> MetricSolverOutput:
-        return MetricSolverOutput(query=self._query)
+        return MetricSolverSuccess(query=self._query)
 
 
 pytestmark = pytest.mark.e2e
 
 FIXTURE = Path(__file__).parent / "fixtures" / "jaffle_duckdb"
-PLATFORM = PlatformRef(name="jaffle", kind="duckdb")
+PLATFORM = DuckDBPlatformRef(name="jaffle")
 
 
 def _target_dir(tmp_path: Path) -> Path:

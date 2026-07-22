@@ -3,7 +3,7 @@
 from typing import Protocol, runtime_checkable
 
 from evaldata.scorers.context import ScoreContext
-from evaldata.types import EvalCase, ExecutionResult, ScoreResult, SolverOutput
+from evaldata.types import EvalCase, ExecutionResult, ScoreResult, SolverSuccess
 
 
 @runtime_checkable
@@ -11,7 +11,7 @@ class Scorer(Protocol):
     """Produces a `ScoreResult` from a case, its solver output, and the execution result."""
 
     def score(
-        self, case: EvalCase, output: SolverOutput, result: ExecutionResult, *, context: ScoreContext
+        self, case: EvalCase, output: SolverSuccess, result: ExecutionResult, *, context: ScoreContext
     ) -> ScoreResult:
         """Decide pass/fail with diagnostics for `case` given `output`, `result`, and `context`."""
         ...

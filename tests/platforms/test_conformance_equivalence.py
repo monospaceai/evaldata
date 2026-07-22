@@ -21,16 +21,15 @@ from evaldata.types import (
     Expected,
     GoldQuery,
     PlatformKind,
-    PlatformRef,
     ScoreResult,
-    SolverOutput,
+    SolverSuccess,
     Sql,
     SqlType,
     TypedResultSet,
     TypedSchema,
 )
 
-from .conftest import conform_name, engine_params, render_model
+from .conftest import conform_name, engine_params, platform_ref, render_model
 
 
 def _string_type(dialect: Dialect) -> str:
@@ -91,13 +90,13 @@ def _score(
         id="c",
         input="q",
         expected=expected,
-        platform=PlatformRef(name="x", kind=dialect),
+        platform=platform_ref(dialect),
         comparison=comparison,
     )
     result = adapter.execute(model_sql)
     queries = QueryRunner(adapter, model_sql, dialect, None)
     return ResultSetEquivalence().score(
-        case, SolverOutput(output=model_sql), result, context=ScoreContext(queries=queries)
+        case, SolverSuccess(output=model_sql), result, context=ScoreContext(queries=queries)
     )
 
 

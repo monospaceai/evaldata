@@ -4,6 +4,8 @@ from typing import Any
 
 import pytest
 
+from evaldata.types import ExecutionFailure, ExecutionSuccess
+
 snowflake_connector = pytest.importorskip("snowflake.connector")
 
 from snowflake.connector.constants import FIELD_NAME_TO_ID  # noqa: E402
@@ -97,7 +99,7 @@ class TestExecute:
     def test_native_timeout_rounds_up_and_executes_sql_once(self) -> None:
         cursor = _FakeCursor(None, [])
         result = _adapter(cursor).execute_with_timeout("SELECT 1", 1.01)
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert cursor.executed == "SELECT 1"
         assert cursor.timeout == 2
 
@@ -108,7 +110,7 @@ class TestExecute:
         ]
         cursor = _FakeCursor(description, [(1, "a"), (2, "b")])
         result = _adapter(cursor).execute("SELECT id, label FROM t")
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.rows == [{"id": 1, "label": "a"}, {"id": 2, "label": "b"}]
         assert result.schema_ is not None
         assert result.schema_.names == ["id", "label"]
@@ -126,23 +128,19 @@ class TestExecute:
 
     def test_error_is_returned_not_raised(self) -> None:
         result = _adapter(_FakeCursor(None, [], error="boom")).execute("SELECT bad")
-        assert result.rows == []
-        assert result.schema_ is None
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         assert result.error.message == "boom"
 
     def test_non_row_returning_statement_has_no_schema(self) -> None:
         result = _adapter(_FakeCursor(None, [])).execute("CREATE TABLE t (n INT)")
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.rows == []
         assert result.schema_ is None
 
     def test_duplicate_names_error(self) -> None:
         description = [_meta("x", "FIXED", precision=38, scale=0), _meta("x", "FIXED", precision=38, scale=0)]
         result = _adapter(_FakeCursor(description, [(1, 2)])).execute("SELECT 1 AS x, 2 AS x")
-        assert result.rows == []
-        assert result.schema_ is None
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         assert "duplicate output column name(s)" in result.error.message
 
 
@@ -343,7 +341,7 @@ class TestTypeResolutionLive:
         adapter = connect_snowflake()
         try:
             result = adapter.execute("SELECT CAST(1.5 AS NUMBER(10,2)) AS amount, CAST('x' AS VARCHAR(50)) AS label")
-            assert result.error is None, result.error
+            assert isinstance(result, ExecutionSuccess)
             assert result.schema_ is not None
             precise = {c.name: c.type for c in result.schema_.root}
             assert precise["AMOUNT"] == SqlType.parse("NUMBER(10,2)", "snowflake"), precise["AMOUNT"].raw

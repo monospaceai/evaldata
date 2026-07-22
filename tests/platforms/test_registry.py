@@ -6,7 +6,7 @@ from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from evaldata.platforms import (
     bigquery_platform,
@@ -18,34 +18,47 @@ from evaldata.platforms import (
     sqlite_platform,
 )
 from evaldata.platforms.registry import acquired, close_all, pool_for
-from evaldata.types import PlatformRef, PoolPolicy
+from evaldata.types import (
+    BigQueryConfig,
+    BigQueryPlatformRef,
+    DatabricksConfig,
+    DatabricksPlatformRef,
+    DuckDBConfig,
+    DuckDBPlatformRef,
+    ExecutionSuccess,
+    PlatformRef,
+    PoolPolicy,
+    PostgreSQLConfig,
+    PostgreSQLPlatformRef,
+    SnowflakeConfig,
+    SnowflakePlatformRef,
+)
 
 
 @pytest.mark.unit
 class TestRefBuilders:
     def test_duckdb_platform_builds_ref(self) -> None:
         ref = duckdb_platform(name="local", path="/tmp/x.duckdb")
-        assert ref == PlatformRef(name="local", kind="duckdb", config={"path": "/tmp/x.duckdb"})
+        assert ref == DuckDBPlatformRef(name="local", config=DuckDBConfig(path="/tmp/x.duckdb"))
 
     def test_duckdb_platform_defaults_to_in_memory(self) -> None:
-        assert duckdb_platform(name="local").config == {"path": ":memory:"}
+        assert duckdb_platform(name="local").config == DuckDBConfig(path=":memory:")
 
     def test_postgres_platform_builds_ref(self) -> None:
         ref = postgres_platform(name="warehouse", conninfo="host=db")
-        assert ref == PlatformRef(name="warehouse", kind="postgres", config={"conninfo": "host=db"})
+        assert ref == PostgreSQLPlatformRef(name="warehouse", config=PostgreSQLConfig(conninfo="host=db"))
 
     def test_databricks_platform_builds_ref(self) -> None:
         ref = databricks_platform(name="wh", server_hostname="h.databricks.com", http_path="/sql/1.0/warehouses/abc")
-        assert ref == PlatformRef(
+        assert ref == DatabricksPlatformRef(
             name="wh",
-            kind="databricks",
             dialect="databricks",
-            config={"server_hostname": "h.databricks.com", "http_path": "/sql/1.0/warehouses/abc"},
+            config=DatabricksConfig(server_hostname="h.databricks.com", http_path="/sql/1.0/warehouses/abc"),
         )
 
     def test_databricks_platform_includes_catalog_and_schema_when_set(self) -> None:
         ref = databricks_platform(name="wh", server_hostname="h", http_path="/p", catalog="main", schema="sales")
-        assert ref.config == {"server_hostname": "h", "http_path": "/p", "catalog": "main", "schema": "sales"}
+        assert ref.config == DatabricksConfig(server_hostname="h", http_path="/p", catalog="main", schema="sales")
 
     def test_snowflake_platform_builds_ref(self) -> None:
         ref = snowflake_platform(
@@ -56,26 +69,25 @@ class TestRefBuilders:
             authenticator="WORKLOAD_IDENTITY",
             workload_identity_provider="OIDC",
         )
-        assert ref == PlatformRef(
+        assert ref == SnowflakePlatformRef(
             name="sf",
-            kind="snowflake",
             dialect="snowflake",
-            config={
-                "account": "acme-test",
-                "warehouse": "COMPUTE_WH",
-                "role": "EVALDATA",
-                "authenticator": "WORKLOAD_IDENTITY",
-                "workload_identity_provider": "OIDC",
-            },
+            config=SnowflakeConfig(
+                account="acme-test",
+                warehouse="COMPUTE_WH",
+                role="EVALDATA",
+                authenticator="WORKLOAD_IDENTITY",
+                workload_identity_provider="OIDC",
+            ),
         )
 
     def test_bigquery_platform_builds_ref(self) -> None:
         ref = bigquery_platform(name="bq", project="my-proj")
-        assert ref == PlatformRef(name="bq", kind="bigquery", dialect="bigquery", config={"project": "my-proj"})
+        assert ref == BigQueryPlatformRef(name="bq", dialect="bigquery", config=BigQueryConfig(project="my-proj"))
 
     def test_bigquery_platform_includes_dataset_and_location_when_set(self) -> None:
         ref = bigquery_platform(name="bq", project="my-proj", dataset="analytics", location="EU")
-        assert ref.config == {"project": "my-proj", "dataset": "analytics", "location": "EU"}
+        assert ref.config == BigQueryConfig(project="my-proj", dataset="analytics", location="EU")
 
     def test_default_pool_is_omitted_from_serialization(self) -> None:
         ref = duckdb_platform(name="local")
@@ -91,7 +103,7 @@ class TestResolve:
         adapter.execute("CREATE TABLE t (n INTEGER)")
         adapter.execute("INSERT INTO t VALUES (1), (2)")
         result = adapter.execute("SELECT count(*) AS c FROM t")
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.rows == [{"c": 2}]
 
     def test_same_name_returns_cached_adapter(self) -> None:
@@ -105,7 +117,7 @@ class TestResolve:
 
     def test_unsupported_kind_blocked_before_resolution(self) -> None:
         with pytest.raises(ValidationError):
-            PlatformRef(name="wh", kind="mysql")  # ty: ignore[invalid-argument-type]
+            TypeAdapter(PlatformRef).validate_python({"name": "wh", "kind": "mysql"})
 
     def test_close_all_is_idempotent_when_empty(self) -> None:
         close_all()
@@ -187,7 +199,7 @@ class TestAcquired:
         with acquired(platform) as member:
             member.execute("CREATE TABLE t (n INTEGER); INSERT INTO t VALUES (1), (2)")
             result = member.execute("SELECT count(*) AS c FROM t")
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.rows == [{"c": 2}]
 
     def test_resolve_seed_is_visible_to_an_acquired_member(self) -> None:
@@ -218,7 +230,7 @@ class TestAcquired:
         with acquired(platform) as member:
             assert member is not utility
             result = member.execute("SELECT count(*) AS c FROM t")
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.rows == [{"c": 2}]
 
     def test_member_is_released_even_when_the_block_raises(self) -> None:
@@ -266,7 +278,7 @@ class TestResolvePostgres:
         adapter = resolve(postgres_platform(name="registry-pg-e2e", conninfo=_postgres_dsn()))
         try:
             result = adapter.execute("SELECT 1 AS n")
-            assert result.error is None
+            assert isinstance(result, ExecutionSuccess)
             assert result.rows == [{"n": 1}]
         finally:
             close_all()

@@ -87,7 +87,8 @@ class SqlEquivalence(Evaluator[Any, str, Any]):
         )
         solver = CallableSolver(lambda _case: ctx.output)
         evaluation = evaluate_case(case, solver, scorers=[self._scorer])
-        score = evaluation.report.scores[0]
+        report = evaluation.report
+        score = report.scores[0]
         return EvaluationReason(value=score.passed, reason=_reason(score))
 
 

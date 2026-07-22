@@ -34,12 +34,12 @@ from evaldata.dbt import (
     run_metric_benchmark,
 )
 from evaldata.llm import StubLlm
+from evaldata.platforms import duckdb_platform
 from evaldata.scorers.llm_judge import JudgeReply
-from evaldata.types import PlatformRef
 
 _PROJECT = Path(__file__).parent / "jaffle"
 _CASES = Path(__file__).parent / "metric_cases.yml"
-_PLATFORM = PlatformRef(name="jaffle", kind="duckdb")
+_PLATFORM = duckdb_platform(name="jaffle")
 _ARTIFACTS = ("manifest.json", "catalog.json", "semantic_manifest.json")
 
 

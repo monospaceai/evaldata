@@ -5,20 +5,22 @@ from typing import assert_never
 from evaldata.scorers import sql
 from evaldata.scorers.base import misconfigured
 from evaldata.scorers.context import ScoreContext
-from evaldata.scorers.query import QueryRunner
+from evaldata.scorers.query import QueryRunner, ScalarFailure
 from evaldata.types import (
     ColumnPresenceExpectation,
     ColumnTypeExpectation,
     EvalCase,
     ExecutionError,
+    ExecutionFailure,
     ExecutionResult,
+    ExecutionSuccess,
     Expectation,
     ExpectationOutcome,
     ExpectationSuite,
     NotNullExpectation,
     RowCountExpectation,
     ScoreResult,
-    SolverOutput,
+    SolverSuccess,
     TypedSchema,
     UniqueExpectation,
 )
@@ -30,7 +32,7 @@ class ExpectationSuiteScorer:
     """Scores a case by checking its executed result against each `Expectation` in its suite."""
 
     def score(
-        self, case: EvalCase, output: SolverOutput, result: ExecutionResult, *, context: ScoreContext
+        self, case: EvalCase, output: SolverSuccess, result: ExecutionResult, *, context: ScoreContext
     ) -> ScoreResult:
         """Evaluate every expectation in the suite; pass iff all hold.
 
@@ -57,7 +59,7 @@ class ExpectationSuiteScorer:
         if not isinstance(expected, ExpectationSuite):
             return misconfigured(SCORER_NAME, expected, "an ExpectationSuite")
 
-        if result.error is not None:
+        if isinstance(result, ExecutionFailure):
             return ScoreResult(
                 scorer=SCORER_NAME,
                 verdict="fail",
@@ -87,7 +89,7 @@ class ExpectationSuiteScorer:
         )
 
 
-def _evaluate_one(expectation: Expectation, result: ExecutionResult, queries: QueryRunner) -> ExpectationOutcome:
+def _evaluate_one(expectation: Expectation, result: ExecutionSuccess, queries: QueryRunner) -> ExpectationOutcome:
     """Check one expectation against `result`, pushing row-level checks into the platform.
 
     Args:
@@ -104,7 +106,7 @@ def _evaluate_one(expectation: Expectation, result: ExecutionResult, queries: Qu
     match expectation:
         case RowCountExpectation():
             scalar = queries.scalar(sql.row_count(model_sql, dialect))
-            if scalar.error is not None:
+            if isinstance(scalar, ScalarFailure):
                 return _query_error_outcome(expectation.kind, None, scalar.error)
             actual = scalar.value
             passed = actual == expectation.exact
@@ -164,12 +166,14 @@ def _evaluate_one(expectation: Expectation, result: ExecutionResult, queries: Qu
                     detail=f"not_null: column {expectation.column!r} not found in result",
                 )
             scalar = queries.scalar(sql.not_null_count(model_sql, expectation.column, dialect))
-            if scalar.error is not None:
+            if isinstance(scalar, ScalarFailure):
                 return _query_error_outcome(expectation.kind, expectation.column, scalar.error)
             null_count = scalar.value
             if null_count == 0:
                 return ExpectationOutcome(kind=expectation.kind, passed=True, column=expectation.column, count=0)
             sample = queries.run(sql.not_null_sample(model_sql, expectation.column, dialect))
+            if isinstance(sample, ExecutionFailure):
+                return _query_error_outcome(expectation.kind, expectation.column, sample.error)
             return ExpectationOutcome(
                 kind=expectation.kind,
                 passed=False,
@@ -187,12 +191,14 @@ def _evaluate_one(expectation: Expectation, result: ExecutionResult, queries: Qu
                     detail=f"unique: column {expectation.column!r} not found in result",
                 )
             scalar = queries.scalar(sql.unique_count(model_sql, expectation.column, dialect))
-            if scalar.error is not None:
+            if isinstance(scalar, ScalarFailure):
                 return _query_error_outcome(expectation.kind, expectation.column, scalar.error)
             duplicate_count = scalar.value
             if duplicate_count == 0:
                 return ExpectationOutcome(kind=expectation.kind, passed=True, column=expectation.column, count=0)
             sample = queries.run(sql.unique_sample(model_sql, expectation.column, dialect))
+            if isinstance(sample, ExecutionFailure):
+                return _query_error_outcome(expectation.kind, expectation.column, sample.error)
             return ExpectationOutcome(
                 kind=expectation.kind,
                 passed=False,
@@ -224,7 +230,7 @@ def _query_error_outcome(kind: str, column: str | None, error: ExecutionError) -
     )
 
 
-def _result_column_names(result: ExecutionResult) -> list[str]:
+def _result_column_names(result: ExecutionSuccess) -> list[str]:
     """Resolve the result's column names: the schema if present, else the first row's keys.
 
     Args:

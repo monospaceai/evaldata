@@ -20,11 +20,12 @@ from evaldata.scorers.sql import Dialect
 from evaldata.types import (
     EvalCase,
     ExecutionError,
+    ExecutionFailure,
     ExecutionResult,
     GoldQuery,
     ResultSetDiff,
     ScoreResult,
-    SolverOutput,
+    SolverSuccess,
     Sql,
 )
 
@@ -66,7 +67,7 @@ class ExecutionAccuracy:
         self._column_alignment = column_alignment
 
     def score(
-        self, case: EvalCase, output: SolverOutput, result: ExecutionResult, *, context: ScoreContext
+        self, case: EvalCase, output: SolverSuccess, result: ExecutionResult, *, context: ScoreContext
     ) -> ScoreResult:
         """Compare the model result against the gold query's executed rows.
 
@@ -87,11 +88,11 @@ class ExecutionAccuracy:
         if not isinstance(expected, GoldQuery):
             return misconfigured(SCORER_NAME, expected, "a GoldQuery")
 
-        if result.error is not None:
+        if isinstance(result, ExecutionFailure):
             return _failure(f"query execution failed: {result.error.message}")
 
         gold = context.queries.run(Sql(expected.sql))
-        if gold.error is not None:
+        if isinstance(gold, ExecutionFailure):
             return _gold_failure(gold.error)
 
         order_sensitive = self._order_sensitive(expected.sql, context.queries.dialect)

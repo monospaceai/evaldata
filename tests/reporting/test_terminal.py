@@ -2,23 +2,24 @@
 
 import pytest
 
-from evaldata.reporting.collector import CaseReport
+from evaldata.reporting.collector import PassedCaseReport, ScoredFailureCaseReport, SolverFailureCaseReport
 from evaldata.reporting.terminal import render_failure, render_solver_error, render_summary
 from evaldata.types import (
     ColumnMismatch,
+    DuckDBPlatformRef,
     EvalCase,
     ExecutionError,
-    ExecutionResult,
-    PlatformRef,
+    ExecutionFailure,
+    ExecutionSuccess,
     ResultSetDiff,
     ScoreResult,
     SolverError,
-    SolverOutput,
+    SolverSuccess,
     TypeMismatch,
     UntypedResultSet,
 )
 
-_PLATFORM = PlatformRef(name="local", kind="duckdb")
+_PLATFORM = DuckDBPlatformRef(name="local")
 
 
 def _case() -> EvalCase:
@@ -33,8 +34,8 @@ def _case() -> EvalCase:
 @pytest.mark.unit
 class TestRenderFailure:
     def test_renders_case_id_and_sql_verbatim(self) -> None:
-        out = SolverOutput(output="SELECT count(*) AS count FROM tracks WHERE genre = 'Rock'")
-        result = ExecutionResult(rows=[{"count": 2}], latency_seconds=0.0)
+        out = SolverSuccess(output="SELECT count(*) AS count FROM tracks WHERE genre = 'Rock'")
+        result = ExecutionSuccess(rows=[{"count": 2}], latency_seconds=0.0)
         diff = ResultSetDiff(
             expected_row_count=1,
             actual_row_count=1,
@@ -53,8 +54,8 @@ class TestRenderFailure:
         assert "99" in msg and "2" in msg
 
     def test_renders_column_and_type_diffs(self) -> None:
-        out = SolverOutput(output="SELECT 1")
-        result = ExecutionResult(rows=[], latency_seconds=0.0)
+        out = SolverSuccess(output="SELECT 1")
+        result = ExecutionSuccess(rows=[], latency_seconds=0.0)
         diff = ResultSetDiff(
             expected_row_count=1,
             actual_row_count=0,
@@ -72,8 +73,8 @@ class TestRenderFailure:
         assert "TIMESTAMP" in msg and "DATE" in msg
 
     def test_renders_column_mismatches(self) -> None:
-        out = SolverOutput(output="SELECT 1")
-        result = ExecutionResult(rows=[{"amount": 5}], latency_seconds=0.0)
+        out = SolverSuccess(output="SELECT 1")
+        result = ExecutionSuccess(rows=[{"amount": 5}], latency_seconds=0.0)
         diff = ResultSetDiff(
             expected_row_count=3,
             actual_row_count=3,
@@ -90,8 +91,8 @@ class TestRenderFailure:
 
     def test_bracketed_type_strings_survive(self) -> None:
         # Array/list-style values must not be eaten by Rich console markup ([...] tags).
-        out = SolverOutput(output="SELECT 1")
-        result = ExecutionResult(rows=[], latency_seconds=0.0)
+        out = SolverSuccess(output="SELECT 1")
+        result = ExecutionSuccess(rows=[], latency_seconds=0.0)
         diff = ResultSetDiff(
             expected_row_count=1,
             actual_row_count=1,
@@ -102,32 +103,32 @@ class TestRenderFailure:
         assert "INTEGER[]" in msg and "VARCHAR[]" in msg
 
     def test_annotates_basis_when_present(self) -> None:
-        out = SolverOutput(output="SELECT 1")
-        result = ExecutionResult(rows=[], latency_seconds=0.0)
+        out = SolverSuccess(output="SELECT 1")
+        result = ExecutionSuccess(rows=[], latency_seconds=0.0)
         score = ScoreResult(scorer="result_set_equivalence", verdict="fail", basis="observed")
         msg = render_failure(_case(), out, result, [score])
         assert "FAIL (observed)" in msg
 
     def test_omits_basis_annotation_when_absent(self) -> None:
-        out = SolverOutput(output="SELECT 1")
-        result = ExecutionResult(rows=[], latency_seconds=0.0)
+        out = SolverSuccess(output="SELECT 1")
+        result = ExecutionSuccess(rows=[], latency_seconds=0.0)
         score = ScoreResult(scorer="result_set_equivalence", verdict="fail")
         msg = render_failure(_case(), out, result, [score])
         assert "FAIL" in msg
         assert "(" not in msg.split("FAIL")[1].split("\n")[0]
 
     def test_renders_execution_error(self) -> None:
-        out = SolverOutput(output="SELECT * FROM nope")
-        result = ExecutionResult(
-            rows=[], latency_seconds=0.0, error=ExecutionError(kind="query_failed", message="table nope does not exist")
+        out = SolverSuccess(output="SELECT * FROM nope")
+        result = ExecutionFailure(
+            latency_seconds=0.0, error=ExecutionError(kind="query_failed", message="table nope does not exist")
         )
         score = ScoreResult(scorer="result_set_equivalence", verdict="fail", explanation="query failed")
         msg = render_failure(_case(), out, result, [score])
         assert "execution error: table nope does not exist" in msg
 
     def test_renders_misconfigured_scorer(self) -> None:
-        out = SolverOutput(output="SELECT 1")
-        result = ExecutionResult(rows=[], latency_seconds=0.0)
+        out = SolverSuccess(output="SELECT 1")
+        result = ExecutionSuccess(rows=[], latency_seconds=0.0)
         score = ScoreResult(
             scorer="execution_accuracy",
             verdict="inconclusive",
@@ -154,11 +155,10 @@ class TestRenderSummary:
     def test_rows_results_and_tally(self) -> None:
         summary = render_summary(
             [
-                CaseReport(id="ok", input="q", passed=True),
-                CaseReport(
+                PassedCaseReport(id="ok", input="q"),
+                ScoredFailureCaseReport(
                     id="bad",
                     input="q",
-                    passed=False,
                     scores=[ScoreResult(scorer="result_set_equivalence", verdict="fail")],
                 ),
             ]
@@ -170,6 +170,6 @@ class TestRenderSummary:
 
     def test_solver_error_shown_in_detail(self) -> None:
         summary = render_summary(
-            [CaseReport(id="x", input="q", passed=False, error=SolverError(kind="auth", message="invalid api key"))]
+            [SolverFailureCaseReport(id="x", input="q", error=SolverError(kind="auth", message="invalid api key"))]
         )
         assert "solver error [auth]" in summary

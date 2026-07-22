@@ -9,18 +9,20 @@ import pytest
 from evaldata.platforms.duckdb import DuckDBAdapter
 from evaldata.scorers import FirstDecisive, QueryRunner, ScoreContext, Scorer, observed_equivalence
 from evaldata.types import (
+    DuckDBPlatformRef,
     EvalCase,
     ExecutionResult,
+    ExecutionSuccess,
     GoldQuery,
-    PlatformRef,
     ResultSetDiff,
     ScoreResult,
     SolverOutput,
+    SolverSuccess,
     Sql,
 )
 
-_OUTPUT = SolverOutput(output="SELECT 1")
-_RESULT = ExecutionResult(rows=[], latency_seconds=0.0)
+_OUTPUT = SolverSuccess(output="SELECT 1")
+_RESULT = ExecutionSuccess(rows=[], latency_seconds=0.0)
 
 
 class _FakeScorer:
@@ -50,7 +52,7 @@ def _inconclusive(scorer: str) -> ScoreResult:
 
 
 def _gold_case(gold_sql: str) -> EvalCase:
-    return EvalCase(id="c", input="q", expected=GoldQuery(sql=gold_sql), platform=PlatformRef(name="x", kind="duckdb"))
+    return EvalCase(id="c", input="q", expected=GoldQuery(sql=gold_sql), platform=DuckDBPlatformRef(name="x"))
 
 
 class _NullAdapter:
@@ -161,7 +163,7 @@ class TestObservedEquivalence:
     def test_ast_confirms_and_skips_execution(self) -> None:
         model = "select NAME from t where id > 1 and country = 'US'"
         case = _gold_case("SELECT name FROM t WHERE country = 'US' AND id > 1")
-        result = ExecutionResult(rows=[], latency_seconds=0.0)
+        result = ExecutionSuccess(rows=[], latency_seconds=0.0)
         score = observed_equivalence().score(case, _OUTPUT, result, context=_duckdb_context(model))
         assert score.passed is True
         assert _trail(score) == ["semantic_equivalence"]
@@ -169,7 +171,7 @@ class TestObservedEquivalence:
     def test_ast_inconclusive_then_execution_confirms(self) -> None:
         model = "SELECT 2 AS n UNION ALL SELECT 1 AS n"
         case = _gold_case("SELECT 1 AS n UNION ALL SELECT 2 AS n")
-        result = ExecutionResult(rows=[{"n": 2}, {"n": 1}], latency_seconds=0.0)
+        result = ExecutionSuccess(rows=[{"n": 2}, {"n": 1}], latency_seconds=0.0)
         score = observed_equivalence().score(case, _OUTPUT, result, context=_duckdb_context(model))
         assert score.passed is True
         assert _trail(score) == ["semantic_equivalence", "result_set_equivalence"]
@@ -177,7 +179,7 @@ class TestObservedEquivalence:
     def test_execution_refutes_genuinely_different_queries(self) -> None:
         model = "SELECT 1 AS n"
         case = _gold_case("SELECT 2 AS n")
-        result = ExecutionResult(rows=[{"n": 1}], latency_seconds=0.0)
+        result = ExecutionSuccess(rows=[{"n": 1}], latency_seconds=0.0)
         score = observed_equivalence().score(case, _OUTPUT, result, context=_duckdb_context(model))
         assert score.passed is False
         assert _trail(score) == ["semantic_equivalence", "result_set_equivalence"]

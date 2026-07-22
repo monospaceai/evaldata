@@ -9,7 +9,15 @@ import pytest
 import evaldata.platforms.pool as platform_pool
 from evaldata.platforms.base import TypeResolvingAdapter, execute_within_budget
 from evaldata.platforms.pool import ConnectionPool, PoolUnavailableError
-from evaldata.types import ExecutionError, ExecutionResult, PlatformRef, PoolPolicy
+from evaldata.types import (
+    DuckDBPlatformRef,
+    ExecutionError,
+    ExecutionFailure,
+    ExecutionResult,
+    ExecutionSuccess,
+    PlatformRef,
+    PoolPolicy,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -66,7 +74,7 @@ class _HangingAdapter(_FakeAdapter):
     def execute(self, sql: str) -> ExecutionResult:
         self.started.set()
         self.finish.wait()
-        return ExecutionResult(rows=[], schema=None, latency_seconds=0.0)
+        return ExecutionSuccess(rows=[], schema=None, latency_seconds=0.0)
 
     def cancel(self) -> None:
         self.cancel_started.set()
@@ -103,7 +111,7 @@ class _NativeTimeoutAdapter(_FakeAdapter):
 
     def execute_with_timeout(self, sql: str, timeout_seconds: float) -> ExecutionResult:
         self.timeouts.append(timeout_seconds)
-        return ExecutionResult(rows=[], schema=None, latency_seconds=0.0)
+        return ExecutionSuccess(rows=[], schema=None, latency_seconds=0.0)
 
 
 class _ReusableStateAdapter(_FakeAdapter):
@@ -158,7 +166,7 @@ class _TrackingAdapter(_FakeAdapter):
         self.cancel_count += 1
 
     def execute(self, sql: str) -> ExecutionResult:
-        return ExecutionResult(rows=[], schema=None, latency_seconds=0.0)
+        return ExecutionSuccess(rows=[], schema=None, latency_seconds=0.0)
 
 
 class _BlockingCloseAdapter(_TrackingAdapter):
@@ -194,7 +202,7 @@ class _Clock:
 
 
 def _ref() -> PlatformRef:
-    return PlatformRef(name="pool-test", kind="duckdb")
+    return DuckDBPlatformRef(name="pool-test")
 
 
 def _pool(max_size: int = 2, *, parent: _FakeParent | None = None) -> tuple[ConnectionPool, list[_FakeAdapter]]:
@@ -396,7 +404,7 @@ class TestClose:
         lease = pool.acquire()
         pool.close()
         result = lease.execute("SELECT 1")
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         assert result.error.kind == "platform_unavailable"
         pool.release(lease)
         assert adapter.close_done.wait(1)
@@ -497,7 +505,7 @@ class TestLifecycle:
         adapter = _NativeTimeoutAdapter()
         pool = ConnectionPool(_ref(), lambda: adapter, max_size=1)
         result = execute_within_budget(pool.acquire(), "SELECT 1", 0.125)
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert adapter.timeouts == [0.125]
 
     @pytest.mark.parametrize("reusable", [False, RuntimeError("state unavailable")])
@@ -581,7 +589,7 @@ class TestLifecycle:
         member = pool.acquire()
         result = execute_within_budget(member, "SELECT 1", 0.01, cancel_grace_seconds=0.01)
         first = built[0]
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         assert result.error.kind == "budget_exceeded"
         assert first.started.is_set()
         assert first.cancel_started.is_set()
@@ -633,7 +641,7 @@ class TestLifecycle:
         assert adapter.cancel_started.wait(1)
         assert returned.wait(1)
         assert adapter.finish_cancel.is_set() is False
-        assert results[0].error is not None
+        assert isinstance(results[0], ExecutionFailure)
         adapter.finish.set()
         adapter.finish_cancel.set()
         thread.join(1)
@@ -1025,9 +1033,7 @@ class TestLifecycle:
         adapter = _ClassifierAdapter(disconnected)
         pool = ConnectionPool(_ref(), lambda: adapter, max_size=1)
         member = pool.acquire()
-        result = ExecutionResult(
-            rows=[], schema=None, latency_seconds=0.0, error=ExecutionError(kind="query_failed", message="x")
-        )
+        result = ExecutionFailure(latency_seconds=0.0, error=ExecutionError(kind="query_failed", message="x"))
         pool._record_execution_result(cast(Any, member)._member, result)  # noqa: SLF001
         pool.release(member)
         assert adapter.close_count == int(disconnected is True)
@@ -1040,21 +1046,21 @@ class TestLifecycle:
 
     def test_unexpected_worker_exception_is_a_query_error(self) -> None:
         result = execute_within_budget(_RaisingExecuteAdapter(), "SELECT 1", 1)
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         assert result.error.kind == "query_failed"
         assert result.error.message == "execute failed"
 
     def test_pool_watchdog_converts_worker_exceptions_and_returns_budget_error_after_grace(self) -> None:
         error_pool = ConnectionPool(_ref(), _RaisingExecuteAdapter, max_size=1)
         error = execute_within_budget(error_pool.acquire(), "SELECT 1", 1)
-        assert error.error is not None
+        assert isinstance(error, ExecutionFailure)
         assert error.error.kind == "query_failed"
 
         adapter = _CompletingCancelAdapter()
         pool = ConnectionPool(_ref(), lambda: adapter, max_size=1)
         result = execute_within_budget(pool.acquire(), "SELECT 1", 0.01, cancel_grace_seconds=1)
         assert adapter.cancel_started.wait(1)
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         assert result.error.kind == "budget_exceeded"
 
     def test_pool_completion_at_or_after_deadline_returns_budget_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1068,7 +1074,7 @@ class TestLifecycle:
                 started.set()
                 finish.wait()
                 now["value"] = 1.0
-                return ExecutionResult(rows=[], schema=None, latency_seconds=0.0)
+                return ExecutionSuccess(rows=[], schema=None, latency_seconds=0.0)
 
         pool = ConnectionPool(_ref(), Adapter, max_size=1)
         lease = pool.acquire()
@@ -1085,7 +1091,7 @@ class TestLifecycle:
         finish.set()
         assert returned.wait(1)
         thread.join(1)
-        assert results[0].error is not None
+        assert isinstance(results[0], ExecutionFailure)
         assert results[0].error.kind == "budget_exceeded"
 
     def test_active_or_quarantined_lease_rejects_another_execution(self) -> None:
@@ -1098,18 +1104,18 @@ class TestLifecycle:
         thread.start()
         assert adapter.started.wait(1)
         active = lease.execute("SELECT 2")
-        assert active.error is not None
+        assert isinstance(active, ExecutionFailure)
         assert active.error.kind == "platform_unavailable"
         adapter.finish.set()
         thread.join(1)
-        assert first_results[0].error is None
+        assert isinstance(first_results[0], ExecutionSuccess)
 
         adapter = _HangingAdapter()
         pool = ConnectionPool(_ref(), lambda: adapter, max_size=1)
         lease = pool.acquire()
         execute_within_budget(lease, "SELECT 1", 0.01, cancel_grace_seconds=0.0)
         quarantined = execute_within_budget(lease, "SELECT 2", 1.0)
-        assert quarantined.error is not None
+        assert isinstance(quarantined, ExecutionFailure)
         assert quarantined.error.kind == "platform_unavailable"
         adapter.finish.set()
         adapter.finish_cancel.set()
@@ -1175,7 +1181,7 @@ class TestLifecycle:
         adapter = _RaisingCancelAdapter()
         pool = ConnectionPool(_ref(), lambda: adapter, policy=PoolPolicy(max_size=1, cancel_grace_seconds=0.0))
         result = execute_within_budget(pool.acquire(), "SELECT 1", 0.01)
-        assert result.error is not None
+        assert isinstance(result, ExecutionFailure)
         adapter.finish.set()
         for _ in range(20):
             if adapter.close_count:

@@ -7,7 +7,7 @@ from typing import Self
 import duckdb
 
 from evaldata.platforms.base import execution_error, rows_or_error
-from evaldata.types import Column, ExecutionError, ExecutionResult, SqlType
+from evaldata.types import Column, ExecutionError, ExecutionFailure, ExecutionResult, SqlType
 
 
 class DuckDBAdapter:
@@ -40,7 +40,7 @@ class DuckDBAdapter:
 
         Safe to call from another thread while `execute` is blocked, and a no-op when no
         query is running. The interrupted `execute` raises `duckdb.InterruptException`,
-        which it surfaces as `ExecutionResult.error` like any other query failure.
+        which it surfaces as an `ExecutionFailure` like any other query failure.
         """
         self._conn.interrupt()
 
@@ -72,7 +72,7 @@ class DuckDBAdapter:
 
         Returns:
             An `ExecutionResult` with the returned rows, schema, and latency. Query
-            failures are returned as `ExecutionResult.error` rather than raised.
+            failures are returned as an `ExecutionFailure` rather than raised.
         """
         start = time.perf_counter()
         try:
@@ -81,7 +81,7 @@ class DuckDBAdapter:
             rows_raw = cursor.fetchall()
         except duckdb.Error as e:
             elapsed = time.perf_counter() - start
-            return ExecutionResult(rows=[], schema=None, latency_seconds=elapsed, error=execution_error(e))
+            return ExecutionFailure(latency_seconds=elapsed, error=execution_error(e))
         elapsed = time.perf_counter() - start
         columns: list[Column] = []
         for desc in description:

@@ -8,13 +8,26 @@ from rich import box
 from rich.console import Console, RenderableType
 from rich.table import Table
 
-from evaldata.reporting.collector import CaseReport
-from evaldata.types import EvalCase, ExecutionResult, ResultSetDiff, ScoreResult, SolverError, SolverOutput
+from evaldata.reporting.collector import (
+    CaseReport,
+    ExecutionFailureCaseReport,
+    ScoredFailureCaseReport,
+    SolverFailureCaseReport,
+)
+from evaldata.types import (
+    EvalCase,
+    ExecutionFailure,
+    ExecutionResult,
+    ResultSetDiff,
+    ScoreResult,
+    SolverError,
+    SolverSuccess,
+)
 
 
 def render_failure(
     case: EvalCase,
-    output: SolverOutput,
+    output: SolverSuccess,
     result: ExecutionResult,
     failures: Sequence[ScoreResult],
 ) -> str:
@@ -38,7 +51,7 @@ def render_failure(
         f"  input: {case.input}",
         f"  sql:   {output.output}",
     ]
-    if result.error is not None:
+    if isinstance(result, ExecutionFailure):
         lines.append(f"  execution error: {result.error.message}")
     for score in failures:
         lines.append(
@@ -103,9 +116,12 @@ def _summary_detail(report: CaseReport) -> str:
     Returns:
         The solver error if present, else a comma-separated list of failed scorer names.
     """
-    if report.error is not None:
-        return f"solver error [{report.error.kind}]: {report.error.message}"
-    return ", ".join(score.scorer for score in report.scores if not score.passed)
+    if isinstance(report, (SolverFailureCaseReport, ExecutionFailureCaseReport)):
+        prefix = "solver error" if isinstance(report, SolverFailureCaseReport) else "execution error"
+        return f"{prefix} [{report.error.kind}]: {report.error.message}"
+    if isinstance(report, ScoredFailureCaseReport):
+        return ", ".join(score.scorer for score in report.scores if not score.passed)
+    return ""
 
 
 def _render_diff(diff: ResultSetDiff) -> str:

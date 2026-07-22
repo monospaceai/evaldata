@@ -14,7 +14,7 @@ import pytest
 from evaldata import CallableSolver, EvalCase, SemanticEquivalence, eval_case, observed_equivalence
 from evaldata.platforms import duckdb_platform, resolve
 from evaldata.scorers import AstEquivalence, QueryRunner, ScoreContext, Scorer
-from evaldata.types import ScoreResult
+from evaldata.types import ScoreResult, SolverSuccess
 
 _DB_PATH = Path(tempfile.mkdtemp(prefix="evaldata_ex01_sem_")) / "shop.duckdb"
 _PLATFORM = duckdb_platform(name="examples-semantic-equivalence", path=str(_DB_PATH))
@@ -42,8 +42,8 @@ def _score(case: EvalCase, model_sql: str, scorer: Scorer) -> ScoreResult:
     """
     solver = CallableSolver(lambda _case: model_sql)
     output = solver.solve(case)
+    assert isinstance(output, SolverSuccess)
     sql = output.output
-    assert sql is not None  # CallableSolver always produces SQL here
     dialect = case.platform.dialect or case.platform.kind
     runner = QueryRunner(resolve(case.platform), sql, dialect, None)
     context = ScoreContext(queries=runner)

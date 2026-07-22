@@ -15,7 +15,7 @@ from evaldata.platforms.base import (
     TypeResolvingAdapter,
     execution_error,
 )
-from evaldata.types import ExecutionError, ExecutionResult, PlatformRef, PoolPolicy, SqlType
+from evaldata.types import ExecutionError, ExecutionFailure, ExecutionResult, PlatformRef, PoolPolicy, SqlType
 
 
 class _Closeable(Protocol):
@@ -519,9 +519,7 @@ class ConnectionPool:
                 else:
                     result = member.adapter.execute(sql)
             except Exception as e:  # noqa: BLE001 - retain errors-as-values when an adapter violates its contract
-                result = ExecutionResult(
-                    rows=[], schema=None, latency_seconds=time.monotonic() - start, error=execution_error(e)
-                )
+                result = ExecutionFailure(latency_seconds=time.monotonic() - start, error=execution_error(e))
             outcome.append(result)
             self._record_execution_result(member, result)
             completed_at.append(time.monotonic())
@@ -583,11 +581,10 @@ class ConnectionPool:
 
     def _record_execution_result(self, member: _PoolMember, result: ExecutionResult) -> None:
         """Mark a member poisoned only when its adapter classifies the result as a disconnect."""
-        error = result.error
-        if error is None or not isinstance(member.adapter, DisconnectClassifier):
+        if not isinstance(result, ExecutionFailure) or not isinstance(member.adapter, DisconnectClassifier):
             return
         try:
-            disconnected = member.adapter.is_disconnect(error)
+            disconnected = member.adapter.is_disconnect(result.error)
         except Exception:  # noqa: BLE001 - an unavailable classifier cannot prove the session unsafe
             return
         if disconnected:
@@ -679,9 +676,7 @@ class ConnectionPool:
         raise RuntimeError(msg)
 
     def _lease_unavailable(self) -> ExecutionResult:
-        return ExecutionResult(
-            rows=[],
-            schema=None,
+        return ExecutionFailure(
             latency_seconds=0.0,
             error=ExecutionError(
                 kind="platform_unavailable",
@@ -691,9 +686,7 @@ class ConnectionPool:
 
     @staticmethod
     def _budget_exceeded(start: float, max_seconds: float) -> ExecutionResult:
-        return ExecutionResult(
-            rows=[],
-            schema=None,
+        return ExecutionFailure(
             latency_seconds=time.monotonic() - start,
             error=ExecutionError(
                 kind="budget_exceeded", message=f"exceeded cost budget: query did not complete within {max_seconds}s"

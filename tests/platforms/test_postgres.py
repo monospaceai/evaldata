@@ -9,7 +9,7 @@ from evaldata.platforms import postgres_platform
 from evaldata.platforms.base import PlatformAdapter
 from evaldata.platforms.postgres import PostgresAdapter
 from evaldata.platforms.registry import close_all, resolve
-from evaldata.types import ExecutionError, GoldQuery
+from evaldata.types import ExecutionError, ExecutionFailure, ExecutionSuccess, GoldQuery
 
 from .conftest import _postgres_dsn, connect_postgres
 
@@ -89,7 +89,7 @@ class TestPostgresNativeTypes:
     )
     def test_native_type_string_is_exact(self, adapter: PlatformAdapter, sql: str, expected_type: str) -> None:
         result = adapter.execute(sql)
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.schema_ is not None
         assert result.schema_[0].type.raw == expected_type
 
@@ -106,7 +106,7 @@ class TestPostgresNativeTypes:
     )
     def test_emitted_type_parses_under_postgres_dialect(self, adapter: PlatformAdapter, sql: str) -> None:
         result = adapter.execute(sql)
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert result.schema_ is not None
         parsed = exp.DataType.build(result.schema_[0].type.raw, dialect="postgres")
         assert isinstance(parsed, exp.DataType)
@@ -121,14 +121,14 @@ class TestPostgresLifecycle:
         from .conftest import _postgres_dsn
 
         with PostgresAdapter(_postgres_dsn()) as adapter:
-            assert adapter.execute("SELECT 1 AS n").error is None
-        assert adapter.execute("SELECT 1 AS n").error is not None
+            assert isinstance(adapter.execute("SELECT 1 AS n"), ExecutionSuccess)
+        assert isinstance(adapter.execute("SELECT 1 AS n"), ExecutionFailure)
 
     def test_non_row_returning_statement_succeeds_without_schema(self) -> None:
         adapter = connect_postgres()
         try:
             result = adapter.execute("CREATE TEMP TABLE t_cov (x int)")
-            assert result.error is None
+            assert isinstance(result, ExecutionSuccess)
             assert result.schema_ is None
             assert result.rows == []
         finally:
@@ -151,14 +151,14 @@ class TestPostgresTimeoutAndHealth:
         ordinary_cursor = _TimeoutCursor()
         ordinary_cursor.description = []
         ordinary = _timeout_adapter(_TimeoutConnection(ordinary_cursor))
-        assert ordinary.execute("SELECT user_sql").error is None
+        assert isinstance(ordinary.execute("SELECT user_sql"), ExecutionSuccess)
 
         class MissingSettingCursor(_TimeoutCursor):
             def fetchone(self) -> None:
                 return None
 
         missing = _timeout_adapter(_TimeoutConnection(MissingSettingCursor()))
-        assert missing.execute_with_timeout("SELECT user_sql", 1).error is not None
+        assert isinstance(missing.execute_with_timeout("SELECT user_sql", 1), ExecutionFailure)
         assert missing.is_reusable() is False
 
     def test_native_timeout_rounds_up_executes_user_sql_once_and_restores(self) -> None:
@@ -166,7 +166,7 @@ class TestPostgresTimeoutAndHealth:
         restore = _TimeoutCursor()
         adapter = _timeout_adapter(_TimeoutConnection(work, restore))
         result = adapter.execute_with_timeout("SELECT user_sql", 0.0011)
-        assert result.error is None
+        assert isinstance(result, ExecutionSuccess)
         assert work.calls == [
             ("SELECT current_setting('statement_timeout')", None),
             ("SELECT set_config('statement_timeout', %s, false)", ("2",)),
@@ -180,16 +180,16 @@ class TestPostgresTimeoutAndHealth:
         ordinary = _timeout_adapter(_TimeoutConnection(_TimeoutCursor(user_error=cancelled)))
         native_result = native.execute_with_timeout("SELECT user_sql", 1)
         ordinary_result = ordinary.execute("SELECT user_sql")
-        assert native_result.error is not None
+        assert isinstance(native_result, ExecutionFailure)
         assert native_result.error.kind == "budget_exceeded"
-        assert ordinary_result.error is not None
+        assert isinstance(ordinary_result, ExecutionFailure)
         assert ordinary_result.error.kind == "query_failed"
 
     def test_restore_failure_marks_successful_session_unreusable(self) -> None:
         adapter = _timeout_adapter(
             _TimeoutConnection(_TimeoutCursor(), _TimeoutCursor(restore_error=psycopg.Error("restore failed")))
         )
-        assert adapter.execute_with_timeout("SELECT user_sql", 1).error is None
+        assert isinstance(adapter.execute_with_timeout("SELECT user_sql", 1), ExecutionSuccess)
         assert adapter.is_reusable() is False
 
     def test_ping_fast_fails_closed_or_broken_connection(self) -> None:

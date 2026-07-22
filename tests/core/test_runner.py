@@ -13,9 +13,13 @@ from evaldata.platforms.pool import PoolUnavailableError
 from evaldata.scorers import QueryRunner, ScoreContext
 from evaldata.types import (
     CostBudget,
+    DuckDBPlatformRef,
+    ExecutionFailure,
     ExecutionResult,
+    ExecutionSuccess,
     ScoreResult,
     SolverError,
+    SolverFailure,
     SolverOutput,
     Sql,
     UntypedResultSet,
@@ -37,7 +41,7 @@ def _case(expected_rows: list[dict[str, object]]) -> EvalCase:
         id="rock-count",
         input="How many tracks are in the 'Rock' genre?",
         expected=UntypedResultSet(rows=expected_rows),
-        platform=PlatformRef(name="local", kind="duckdb"),
+        platform=DuckDBPlatformRef(name="local"),
     )
 
 
@@ -116,8 +120,7 @@ class TestAssertEvalAdapterResolution:
         evaluation = evaluate_case(
             _case([{"count": 2}]), CallableSolver(lambda c: _ROCK_SQL), scorers=[DerivedQueryScorer()]
         )
-        assert evaluation.result is not None
-        assert evaluation.result.error is not None
+        assert isinstance(evaluation.result, ExecutionFailure)
         assert evaluation.result.error.kind == "platform_unavailable"
         assert evaluation.report.passed is False
         assert len(evaluation.failures) == 1
@@ -146,7 +149,7 @@ class _ErrorSolver:
         self._error = error
 
     def solve(self, case: EvalCase) -> SolverOutput:
-        return SolverOutput(error=self._error)
+        return SolverFailure(error=self._error)
 
 
 class _ExplodingAdapter:
@@ -237,7 +240,7 @@ class TestAssertEvalContext:
         assert isinstance(spy.context, ScoreContext)
         assert isinstance(spy.context.queries, QueryRunner)
         derived = spy.context.queries.run(Sql("SELECT 1"))
-        assert derived.error is None
+        assert isinstance(derived, ExecutionSuccess)
         assert derived.rows == [{"1": 1}]
 
     def test_model_query_flows_through_runner_under_budget(self, duck: DuckDBAdapter) -> None:
@@ -245,7 +248,7 @@ class TestAssertEvalContext:
             id="rock-count",
             input="How many tracks are in the 'Rock' genre?",
             expected=UntypedResultSet(rows=[{"count": 2}]),
-            platform=PlatformRef(name="local", kind="duckdb"),
+            platform=DuckDBPlatformRef(name="local"),
             cost_budget=CostBudget(max_seconds=30.0),
         )
         solver = CallableSolver(lambda c: _ROCK_SQL)

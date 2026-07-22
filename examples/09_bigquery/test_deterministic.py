@@ -22,6 +22,7 @@ from evaldata import (
     eval_case,
 )
 from evaldata.platforms import bigquery_platform, resolve
+from evaldata.types import ExecutionFailure
 
 pytestmark = [pytest.mark.e2e, pytest.mark.cloud, pytest.mark.bigquery]
 
@@ -48,7 +49,7 @@ def _seed_project() -> Iterator[None]:
     ]
     for sql in statements:
         result = adapter.execute(sql)
-        if result.error is not None:  # pragma: no cover
+        if isinstance(result, ExecutionFailure):  # pragma: no cover
             msg = f"failed to seed BigQuery table {_TABLE!r}: {result.error.message}"
             raise RuntimeError(msg)
     yield

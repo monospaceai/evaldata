@@ -94,10 +94,10 @@ def test_terminal_summary_skipped_on_xdist_worker() -> None:
 
 @pytest.mark.unit
 def test_sessionfinish_on_xdist_worker_ships_results_not_json(tmp_path: Path) -> None:
-    from evaldata.reporting.collector import CaseReport, clear, record
+    from evaldata.reporting.collector import PassedCaseReport, clear, record
 
     clear()
-    record(CaseReport(id="w1", input="q", passed=True))
+    record(PassedCaseReport(id="w1", input="q"))
     artifact = tmp_path / "results.json"
     workeroutput: dict[str, object] = {}
     config = types.SimpleNamespace(workerinput={}, workeroutput=workeroutput, getoption=lambda name: str(artifact))
@@ -114,7 +114,9 @@ def test_testnodedown_merges_worker_cases_into_controller() -> None:
     from evaldata.reporting.collector import clear, reports
 
     clear()
-    node = types.SimpleNamespace(workeroutput={plugin._WORKEROUTPUT_KEY: [{"id": "w1", "input": "q", "passed": True}]})
+    node = types.SimpleNamespace(
+        workeroutput={plugin._WORKEROUTPUT_KEY: [{"id": "w1", "input": "q", "status": "passed", "scores": []}]}
+    )
     plugin.pytest_testnodedown(node, None)
     assert [r.id for r in reports()] == ["w1"]
     clear()

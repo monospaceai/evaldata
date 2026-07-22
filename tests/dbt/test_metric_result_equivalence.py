@@ -3,11 +3,11 @@
 import pytest
 
 from evaldata.dbt import DbtError, MetricCase, MetricQuery, MetricResultEquivalence
-from evaldata.types import PlatformRef
+from evaldata.types import DuckDBPlatformRef
 
 pytestmark = pytest.mark.unit
 
-PLATFORM = PlatformRef(name="duck", kind="duckdb")
+PLATFORM = DuckDBPlatformRef(name="duck")
 
 
 def _case() -> MetricCase:

@@ -10,12 +10,12 @@ import pytest
 
 from evaldata.dbt import DbtError, MetricCase, MetricQuery, MetricSpecEquivalence
 from evaldata.dbt._yaml import read_yaml
-from evaldata.types import PlatformRef
+from evaldata.types import DuckDBPlatformRef
 
 pytestmark = pytest.mark.unit
 
 FIXTURE = Path(__file__).parent / "fixtures" / "acme_insurance"
-PLATFORM = PlatformRef(name="acme", kind="duckdb")
+PLATFORM = DuckDBPlatformRef(name="acme")
 
 
 def _corpus() -> list[MetricCase]:

@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from evaldata.scorers.base import Scorer
 from evaldata.scorers.context import ScoreContext
-from evaldata.types import EvalCase, ExecutionResult, ScoreResult, SolverOutput
+from evaldata.types import EvalCase, ExecutionResult, ScoreResult, SolverSuccess
 
 
 class FirstDecisive:
@@ -31,7 +31,7 @@ class FirstDecisive:
             raise ValueError(msg)
 
     def score(
-        self, case: EvalCase, output: SolverOutput, result: ExecutionResult, *, context: ScoreContext
+        self, case: EvalCase, output: SolverSuccess, result: ExecutionResult, *, context: ScoreContext
     ) -> ScoreResult:
         """Run members in order, returning the first decisive result (later members not consulted), else the last.
 
@@ -49,12 +49,14 @@ class FirstDecisive:
             member's result when every member is `inconclusive`, with the `"first_decisive"` trail
             merged into its metadata.
         """
-        trail: list[dict[str, object]] = []
-        decided: ScoreResult | None = None
-        for scorer in self._scorers:
-            decided = scorer.score(case, output, result, context=context)
-            trail.append({"scorer": decided.scorer, "passed": decided.passed, "verdict": decided.verdict})
+        first, *remaining = self._scorers
+        decided = first.score(case, output, result, context=context)
+        trail: list[dict[str, object]] = [
+            {"scorer": decided.scorer, "passed": decided.passed, "verdict": decided.verdict}
+        ]
+        for scorer in remaining:
             if decided.verdict != "inconclusive":
                 break
-        assert decided is not None
+            decided = scorer.score(case, output, result, context=context)
+            trail.append({"scorer": decided.scorer, "passed": decided.passed, "verdict": decided.verdict})
         return decided.model_copy(update={"metadata": {**decided.metadata, "first_decisive": trail}})

@@ -19,6 +19,7 @@ from evaldata import EvalCase, ExecutionAccuracy, assert_eval, eval_case
 from evaldata.cortex import CortexAnalystClient, CortexAnalystSolver
 from evaldata.platforms import resolve, snowflake_platform
 from evaldata.platforms.snowflake import SnowflakeAdapter
+from evaldata.types import ExecutionFailure
 
 pytestmark = [pytest.mark.e2e, pytest.mark.cortex]
 
@@ -79,7 +80,7 @@ def _seed_semantic_view() -> Iterator[None]:
         statements.append(f"CREATE SCHEMA IF NOT EXISTS {_DATABASE}.{_SCHEMA}")
     for sql in [*statements, *_SETUP]:
         result = adapter.execute(sql)
-        if result.error is not None:  # pragma: no cover
+        if isinstance(result, ExecutionFailure):  # pragma: no cover
             msg = f"failed to build the jaffle semantic view: {result.error.message}"
             raise RuntimeError(msg)
     yield

@@ -1,8 +1,8 @@
 """The dbt Semantic Layer evaluation vertical: query, case, output, and pluggable contracts."""
 
-from typing import Annotated, Protocol, runtime_checkable
+from typing import Annotated, Literal, Protocol, TypeAlias, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from evaldata.types import PlatformRef, ScoreResult, SolverError
 
@@ -40,33 +40,36 @@ class MetricCase(BaseModel):
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
-class MetricSolverOutput(BaseModel):
-    """A Semantic Layer solver's output: either a candidate `query` or an `error` (exactly one set)."""
+class _MetricSolverOutputBase(BaseModel):
+    """Usage data shared by Semantic Layer solver outcomes."""
 
     model_config = ConfigDict(extra="forbid")
 
-    query: MetricQuery | None = None
-    error: SolverError | None = None
     prompt_tokens: Annotated[int, Field(ge=0)] | None = None
     completion_tokens: Annotated[int, Field(ge=0)] | None = None
     latency_seconds: Annotated[float, Field(ge=0)] | None = None
     cost_usd: Annotated[float, Field(ge=0)] | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
 
-    @model_validator(mode="after")
-    def _exactly_one_of_query_or_error(self) -> "MetricSolverOutput":
-        """Enforce that exactly one of `query`/`error` is set.
 
-        Returns:
-            The validated `MetricSolverOutput`.
+class MetricSolverSuccess(_MetricSolverOutputBase):
+    """A metric query produced successfully by a Semantic Layer solver."""
 
-        Raises:
-            ValueError: If both or neither of `query` and `error` are set.
-        """
-        if (self.query is None) == (self.error is None):
-            msg = "MetricSolverOutput requires exactly one of 'query' or 'error' to be set"
-            raise ValueError(msg)
-        return self
+    status: Literal["success"] = "success"
+    query: MetricQuery
+
+
+class MetricSolverFailure(_MetricSolverOutputBase):
+    """A Semantic Layer solver failure."""
+
+    status: Literal["failure"] = "failure"
+    error: SolverError
+
+
+MetricSolverOutput: TypeAlias = Annotated[
+    MetricSolverSuccess | MetricSolverFailure,
+    Field(discriminator="status"),
+]
 
 
 @runtime_checkable

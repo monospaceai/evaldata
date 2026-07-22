@@ -19,16 +19,17 @@ from evaldata.scorers.llm_judge import JudgeReply
 from evaldata.scorers.semantic_equivalence import SemanticEquivalence
 from evaldata.scorers.sql import Dialect
 from evaldata.types import (
+    DuckDBPlatformRef,
     EvalCase,
     ExecutionResult,
+    ExecutionSuccess,
     GoldQuery,
-    PlatformRef,
-    SolverOutput,
+    SolverSuccess,
     Sql,
 )
 
-_OUTPUT = SolverOutput(output="SELECT 1")
-_RESULT = ExecutionResult(rows=[], latency_seconds=0.0)
+_OUTPUT = SolverSuccess(output="SELECT 1")
+_RESULT = ExecutionSuccess(rows=[], latency_seconds=0.0)
 
 
 class _NullAdapter:
@@ -48,7 +49,7 @@ def _context(model: str, dialect: Dialect = "duckdb") -> ScoreContext:
 
 
 def _gold_case(gold_sql: str) -> EvalCase:
-    return EvalCase(id="c", input="q", expected=GoldQuery(sql=gold_sql), platform=PlatformRef(name="x", kind="duckdb"))
+    return EvalCase(id="c", input="q", expected=GoldQuery(sql=gold_sql), platform=DuckDBPlatformRef(name="x"))
 
 
 def _trail(score) -> list[str]:

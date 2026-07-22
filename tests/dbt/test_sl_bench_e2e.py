@@ -15,6 +15,7 @@ from evaldata.dbt import (
     MetricQuery,
     MetricResultEquivalence,
     MetricSolverOutput,
+    MetricSolverSuccess,
     MetricSpecEquivalence,
     load_dbt_metrics,
     metric_layer_equivalence,
@@ -23,12 +24,12 @@ from evaldata.dbt import (
 )
 from evaldata.llm import StubLlm
 from evaldata.scorers.llm_judge import JudgeReply
-from evaldata.types import PlatformRef
+from evaldata.types import DuckDBPlatformRef
 
 pytestmark = pytest.mark.e2e
 
 FIXTURE = Path(__file__).parent / "fixtures" / "jaffle_sl_bench"
-PLATFORM = PlatformRef(name="jaffle", kind="duckdb")
+PLATFORM = DuckDBPlatformRef(name="jaffle")
 ARTIFACTS = ("manifest.json", "catalog.json", "semantic_manifest.json")
 
 
@@ -36,7 +37,7 @@ class _GoldSolver:
     """A `MetricSolver` that answers each case with its own gold query."""
 
     def solve(self, case: MetricCase) -> MetricSolverOutput:
-        return MetricSolverOutput(query=case.gold)
+        return MetricSolverSuccess(query=case.gold)
 
 
 @pytest.fixture(scope="module")

@@ -11,7 +11,7 @@ from evaldata.llm import StubLlm
 from evaldata.platforms.registry import close_all
 from evaldata.scorers import ExecutionAccuracy
 from evaldata.solvers import SCHEMA_PROMPT_TEMPLATE, PromptSolver
-from evaldata.types import PlatformRef
+from evaldata.types import DuckDBPlatformRef
 
 pytestmark = pytest.mark.e2e
 
@@ -30,7 +30,7 @@ def _project(tmp_path: Path) -> Path:
 def _summary(tmp_path: Path, model_sql: str) -> float:
     project = _project(tmp_path)
     platform = platform_from_profile(project)
-    assert isinstance(platform, PlatformRef)
+    assert isinstance(platform, DuckDBPlatformRef)
     cases = load_dbt(project / "artifacts", platform=platform, cases=project / "cases.yml")
     assert not isinstance(cases, DbtError)
     solver = PromptSolver(model=StubLlm(model_sql), prompt_template=SCHEMA_PROMPT_TEMPLATE)

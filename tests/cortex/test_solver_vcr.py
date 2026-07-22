@@ -3,7 +3,7 @@
 import pytest
 
 from evaldata.cortex.solver import CortexAnalystSolver
-from evaldata.types import EvalCase, PlatformRef
+from evaldata.types import EvalCase, SnowflakeConfig, SnowflakePlatformRef, SolverSuccess
 
 _SEMANTIC_VIEW = "JAFFLE_SHOP_DB.PUBLIC.JAFFLE_SHOP_SV"
 
@@ -15,12 +15,11 @@ def test_solver_returns_sql_from_cortex(cortex_vcr_client: object) -> None:
         id="region-totals",
         input="What is the total order amount for each customer region?",
         expected={"rows": []},
-        platform=PlatformRef(name="sf", kind="snowflake"),
+        platform=SnowflakePlatformRef(name="sf", config=SnowflakeConfig(account="test")),
     )
 
     output = solver.solve(case)
 
-    assert output.error is None
-    assert output.output is not None
+    assert isinstance(output, SolverSuccess)
     assert "SEMANTIC_VIEW" in output.output.upper()
     assert output.metadata.get("request_id")

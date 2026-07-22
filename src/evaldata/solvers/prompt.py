@@ -4,7 +4,7 @@ import re
 
 from evaldata.llm import Llm, resolve_llm
 from evaldata.solvers.errors import to_solver_error
-from evaldata.types import EvalCase, LlmError, SolverError, SolverOutput, Sql
+from evaldata.types import EvalCase, LlmError, SolverError, SolverFailure, SolverOutput, SolverSuccess, Sql
 
 DEFAULT_PROMPT_TEMPLATE = """Generate a {dialect} SQL query that answers the following question.
 Return only the SQL query with no explanation or markdown.
@@ -86,15 +86,15 @@ class PromptSolver:
         prompt = self._prompt_template.format_map({"dialect": dialect, "input": case.input, "schema": schema})
         completion = self._llm.complete_text(prompt)
         if isinstance(completion, LlmError):
-            return SolverOutput(error=to_solver_error(completion))
+            return SolverFailure(error=to_solver_error(completion))
 
         sql = Sql(_extract_sql(completion.text).strip())
         if not sql:
-            return SolverOutput(
+            return SolverFailure(
                 error=SolverError(kind="empty_response", message="model returned no SQL", provider=None)
             )
         usage = completion.usage
-        return SolverOutput(
+        return SolverSuccess(
             output=sql,
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,

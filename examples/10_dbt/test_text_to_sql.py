@@ -19,7 +19,7 @@ from evaldata.dbt import DbtError, load_dbt, platform_from_profile
 from evaldata.llm import StubLlm
 from evaldata.platforms.registry import close_all
 from evaldata.solvers import SCHEMA_PROMPT_TEMPLATE
-from evaldata.types import EvalCase, PlatformRef
+from evaldata.types import EvalCase
 
 _PROJECT = Path(__file__).parent / "jaffle"
 _CASES = Path(__file__).parent / "cases.yml"
@@ -45,7 +45,7 @@ def _cases(tmp_path: Path) -> dict[str, EvalCase]:
     project = tmp_path / "jaffle"
     shutil.copytree(_PROJECT, project)
     platform = platform_from_profile(project)
-    assert isinstance(platform, PlatformRef)
+    assert not isinstance(platform, DbtError)
     cases = load_dbt(project / "artifacts", platform=platform, cases=_CASES)
     assert not isinstance(cases, DbtError)
     return {case.id: case for case in cases}

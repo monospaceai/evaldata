@@ -16,17 +16,19 @@ from evaldata.equivalence import ColumnReconciliation, build_result_set_diff, re
 from evaldata.scorers import sql
 from evaldata.scorers.base import misconfigured
 from evaldata.scorers.context import ScoreContext
-from evaldata.scorers.query import QueryRunner
+from evaldata.scorers.query import QueryRunner, ScalarFailure
 from evaldata.types import (
     ColumnMismatch,
     ComparisonConfig,
     EvalCase,
     ExecutionError,
+    ExecutionFailure,
     ExecutionResult,
+    ExecutionSuccess,
     GoldQuery,
     Schema,
     ScoreResult,
-    SolverOutput,
+    SolverSuccess,
     TypedResultSet,
     TypedSchema,
     TypeMismatch,
@@ -60,7 +62,7 @@ class ResultSetEquivalence:
     """Scores a case by diffing its executed result set against its expected result set in SQL."""
 
     def score(
-        self, case: EvalCase, output: SolverOutput, result: ExecutionResult, *, context: ScoreContext
+        self, case: EvalCase, output: SolverSuccess, result: ExecutionResult, *, context: ScoreContext
     ) -> ScoreResult:
         """Compare `result` against `case.expected`; pass iff the engine finds them equivalent.
 
@@ -90,7 +92,7 @@ class ResultSetEquivalence:
         if not isinstance(expected, UntypedResultSet | TypedResultSet | GoldQuery):
             return misconfigured(SCORER_NAME, expected, "an UntypedResultSet, TypedResultSet, or GoldQuery")
 
-        if result.error is not None:
+        if isinstance(result, ExecutionFailure):
             return ScoreResult(
                 scorer=SCORER_NAME,
                 verdict="fail",
@@ -199,13 +201,13 @@ def _resolve_gold(expected: GoldQuery, queries: QueryRunner) -> _ExpectedSource 
     """
     gold_sql = sql.Sql(expected.sql)
     probe = queries.run(sql.gold_schema_probe(gold_sql, queries.dialect))
-    if probe.error is not None:
+    if isinstance(probe, ExecutionFailure):
         return _gold_failure(probe.error)
     schema_ = probe.schema_
     names = schema_.names if schema_ is not None else []
 
     count = queries.scalar(sql.row_count(gold_sql, queries.dialect))
-    if count.error is not None:
+    if isinstance(count, ScalarFailure):
         return _gold_failure(count.error)
     row_count = int(count.value or 0)
 
@@ -222,7 +224,7 @@ def _failure(explanation: str) -> ScoreResult:
 
 def _keyed_score(
     source: _ExpectedSource,
-    result: ExecutionResult,
+    result: ExecutionSuccess,
     columns: ColumnReconciliation,
     type_mismatches: list[TypeMismatch],
     config: ComparisonConfig,
@@ -260,7 +262,7 @@ def _keyed_score(
 
     for relation, side in ((expected_rel, "expected"), (actual_rel, "actual")):
         dupes = queries.scalar(sql.keyed_dupes_count(relation, config.match_key, dialect))
-        if dupes.error is not None:
+        if isinstance(dupes, ScalarFailure):
             return _failure(f"query execution failed: {dupes.error.message}")
         if int(dupes.value or 0) > 0:
             return _failure(
@@ -280,7 +282,7 @@ def _keyed_score(
             dialect,
         )
     )
-    if stats.error is not None:
+    if isinstance(stats, ExecutionFailure):
         return _failure(f"query execution failed: {stats.error.message}")
     row = stats.rows[0]
     missing_count = int(row["missing"] or 0)
@@ -340,13 +342,13 @@ def _keyed_samples(
     sample_missing: list[dict[str, Any]] = []
     if missing_count:
         run = queries.run(sql.keyed_sample(expected_rel, actual_rel, match_key, in_both, "missing", queries.dialect))
-        if run.error is not None:
+        if isinstance(run, ExecutionFailure):
             return run.error
         sample_missing = run.rows
     sample_extra: list[dict[str, Any]] = []
     if extra_count:
         run = queries.run(sql.keyed_sample(expected_rel, actual_rel, match_key, in_both, "extra", queries.dialect))
-        if run.error is not None:
+        if isinstance(run, ExecutionFailure):
             return run.error
         sample_extra = run.rows
     return (sample_missing, sample_extra)
@@ -384,10 +386,10 @@ def _diff_rows(
     actual_rel = sql.aligned_actual(queries.model_sql, in_both, numeric, queries.dialect, round_scale)
 
     missing = queries.scalar(sql.bag_diff_count(expected_rel, actual_rel, in_both, queries.dialect))
-    if missing.error is not None:
+    if isinstance(missing, ScalarFailure):
         return missing.error
     extra = queries.scalar(sql.bag_diff_count(actual_rel, expected_rel, in_both, queries.dialect))
-    if extra.error is not None:
+    if isinstance(extra, ScalarFailure):
         return extra.error
 
     missing_count = int(missing.value or 0)
@@ -395,13 +397,13 @@ def _diff_rows(
     sample_missing: list[dict[str, Any]] = []
     if missing_count:
         run = queries.run(sql.bag_diff_sample(expected_rel, actual_rel, in_both, queries.dialect))
-        if run.error is not None:
+        if isinstance(run, ExecutionFailure):
             return run.error
         sample_missing = run.rows
     sample_extra: list[dict[str, Any]] = []
     if extra_count:
         run = queries.run(sql.bag_diff_sample(actual_rel, expected_rel, in_both, queries.dialect))
-        if run.error is not None:
+        if isinstance(run, ExecutionFailure):
             return run.error
         sample_extra = run.rows
     return (missing_count, extra_count, sample_missing, sample_extra)

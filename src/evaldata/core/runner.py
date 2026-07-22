@@ -2,39 +2,89 @@
 
 from collections.abc import Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import islice
-from typing import cast
+from typing import TypeAlias, overload
 
 from pydantic import BaseModel, ConfigDict
 
 from evaldata.platforms.base import PlatformAdapter
 from evaldata.platforms.pool import PoolUnavailableError
 from evaldata.platforms.registry import acquired
-from evaldata.reporting.collector import CaseReport, record
+from evaldata.reporting.collector import (
+    CaseReport,
+    ExecutionFailureCaseReport,
+    PassedCaseReport,
+    ScoredFailureCaseReport,
+    SolverFailureCaseReport,
+    record,
+)
 from evaldata.reporting.terminal import render_failure, render_solver_error
 from evaldata.scorers.base import Scorer
 from evaldata.scorers.context import ScoreContext
 from evaldata.scorers.query import QueryRunner
-from evaldata.solvers.base import Solver
-from evaldata.types import EvalCase, ExecutionError, ExecutionResult, ScoreResult, SolverOutput, Sql
+from evaldata.solvers.base import Solver, SuccessfulSolver
+from evaldata.types import (
+    EvalCase,
+    ExecutionError,
+    ExecutionFailure,
+    ExecutionResult,
+    ScoreResult,
+    SolverFailure,
+    SolverOutput,
+    SolverSuccess,
+    Sql,
+)
 
 
 @dataclass(frozen=True)
-class CaseEvaluation:
-    """The outcome of running one case through a solver + platform + scorers, without raising.
+class SolverFailedCaseEvaluation:
+    """A case evaluation that stopped at solver failure."""
+
+    report: SolverFailureCaseReport
+    output: SolverFailure
+    result: None = None
+    failures: list[ScoreResult] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ExecutedCaseEvaluation:
+    """A case evaluation that reached execution and scoring.
 
     Attributes:
-        report: The case outcome (identity, pass/fail, per-scorer results or a solver error).
-        output: The solver output, carrying either the SQL or a typed `SolverError`.
-        result: The executed model result, or `None` when the solver itself failed.
-        failures: The failing scorer results (empty when the case passed or the solver failed).
+        report: The case report.
+        output: The successful solver output.
+        result: The execution outcome.
+        failures: The non-passing scorer results.
     """
 
-    report: CaseReport
-    output: SolverOutput
-    result: ExecutionResult | None
+    report: PassedCaseReport | ScoredFailureCaseReport | ExecutionFailureCaseReport
+    output: SolverSuccess
+    result: ExecutionResult
     failures: list[ScoreResult]
+
+
+CaseEvaluation: TypeAlias = SolverFailedCaseEvaluation | ExecutedCaseEvaluation
+
+
+@overload
+def evaluate_case(
+    case: EvalCase,
+    solver: SuccessfulSolver,
+    *,
+    scorers: Sequence[Scorer],
+    adapter: PlatformAdapter | None = None,
+) -> ExecutedCaseEvaluation: ...
+
+
+@overload
+def evaluate_case(
+    case: EvalCase,
+    solver: Solver,
+    *,
+    scorers: Sequence[Scorer],
+    adapter: PlatformAdapter | None = None,
+) -> CaseEvaluation: ...
 
 
 def evaluate_case(
@@ -61,8 +111,7 @@ def evaluate_case(
             from `case.platform`.
 
     Returns:
-        A `CaseEvaluation` carrying the case report, the solver output, the execution result
-        (or `None` on solver error), and any failing scorer results.
+        A solver-failure evaluation if the solver fails; otherwise, an executed evaluation.
     """
     output = solver.solve(case)
     return _score_output(case, output, scorers=scorers, adapter=adapter)
@@ -85,20 +134,12 @@ def _score_output(
             from `case.platform` for this call and released afterward.
 
     Returns:
-        A `CaseEvaluation` carrying the case report, the solver output, the execution result
-        (or `None` on solver error), and any failing scorer results.
-
-    Raises:
-        AssertionError: If the solver returns neither output nor error (unreachable — the
-            `SolverOutput` validator guarantees exactly one is set).
+        A solver-failure evaluation if the solver fails; otherwise, an executed evaluation.
     """
-    if output.error is not None:
-        report = CaseReport(id=case.id, input=case.input, passed=False, error=output.error)
-        return CaseEvaluation(report=report, output=output, result=None, failures=[])
+    if isinstance(output, SolverFailure):
+        report = SolverFailureCaseReport(id=case.id, input=case.input, error=output.error)
+        return SolverFailedCaseEvaluation(report=report, output=output)
     sql = output.output
-    if sql is None:  # pragma: no cover - unreachable: SolverOutput's validator guarantees output XOR error
-        msg = f"evaldata case {case.id!r}: solver returned neither output nor error"
-        raise AssertionError(msg)
     if adapter is not None:
         return _execute_and_score(case, output, sql, scorers=scorers, adapter=adapter)
     try:
@@ -110,7 +151,7 @@ def _score_output(
 
 def _platform_unavailable(
     case: EvalCase,
-    output: SolverOutput,
+    output: SolverSuccess,
     sql: Sql,
     scorers: Sequence[Scorer],
     error: PoolUnavailableError,
@@ -120,9 +161,7 @@ def _platform_unavailable(
     Returns:
         A failed case evaluation with a `platform_unavailable` execution result.
     """
-    result = ExecutionResult(
-        rows=[],
-        schema=None,
+    result = ExecutionFailure(
         latency_seconds=0.0,
         error=ExecutionError(kind="platform_unavailable", message=str(error)),
     )
@@ -131,8 +170,13 @@ def _platform_unavailable(
     context = ScoreContext(queries=QueryRunner(adapter, sql, dialect, None))
     scores = [scorer.score(case, output, result, context=context) for scorer in scorers]
     failures = [score for score in scores if not score.passed]
-    report = CaseReport(id=case.id, input=case.input, passed=False, scores=list(scores))
-    return CaseEvaluation(report=report, output=output, result=result, failures=failures)
+    report = ExecutionFailureCaseReport(
+        id=case.id,
+        input=case.input,
+        error=result.error,
+        scores=list(scores),
+    )
+    return ExecutedCaseEvaluation(report=report, output=output, result=result, failures=failures)
 
 
 class _UnavailableAdapter:
@@ -163,7 +207,7 @@ class _UnavailableAdapter:
 
 def _execute_and_score(
     case: EvalCase,
-    output: SolverOutput,
+    output: SolverSuccess,
     sql: Sql,
     *,
     scorers: Sequence[Scorer],
@@ -189,8 +233,18 @@ def _execute_and_score(
     context = ScoreContext(queries=queries)
     scores = [scorer.score(case, output, result, context=context) for scorer in scorers]
     failures = [s for s in scores if not s.passed]
-    report = CaseReport(id=case.id, input=case.input, passed=not failures, scores=list(scores))
-    return CaseEvaluation(report=report, output=output, result=result, failures=failures)
+    if isinstance(result, ExecutionFailure):
+        report: CaseReport = ExecutionFailureCaseReport(
+            id=case.id,
+            input=case.input,
+            error=result.error,
+            scores=list(scores),
+        )
+    elif failures:
+        report = ScoredFailureCaseReport(id=case.id, input=case.input, scores=list(scores))
+    else:
+        report = PassedCaseReport(id=case.id, input=case.input, scores=list(scores))
+    return ExecutedCaseEvaluation(report=report, output=output, result=result, failures=failures)
 
 
 def assert_eval(
@@ -217,11 +271,10 @@ def assert_eval(
     """
     evaluation = evaluate_case(case, solver, scorers=scorers, adapter=adapter)
     record(evaluation.report)
-    if evaluation.output.error is not None:
+    if isinstance(evaluation, SolverFailedCaseEvaluation):
         raise AssertionError(render_solver_error(case, evaluation.output.error))
     if not evaluation.report.passed:
-        result = cast(ExecutionResult, evaluation.result)
-        raise AssertionError(render_failure(case, evaluation.output, result, evaluation.failures))
+        raise AssertionError(render_failure(case, evaluation.output, evaluation.result, evaluation.failures))
 
 
 class BenchmarkSummary(BaseModel):
@@ -229,10 +282,22 @@ class BenchmarkSummary(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    total: int
-    passed: int
-    accuracy: float
     cases: list[CaseReport]
+
+    @property
+    def total(self) -> int:
+        """Number of evaluated cases."""
+        return len(self.cases)
+
+    @property
+    def passed(self) -> int:
+        """Number of passing cases."""
+        return sum(1 for report in self.cases if report.passed)
+
+    @property
+    def accuracy(self) -> float:
+        """Fraction of evaluated cases that passed, or `0.0` when empty."""
+        return self.passed / self.total if self.total else 0.0
 
 
 def run_benchmark(
@@ -274,7 +339,4 @@ def run_benchmark(
         ]
     else:
         reports = [evaluate_case(case, solver, scorers=scorers).report for case in selected]
-    total = len(reports)
-    passed = sum(1 for report in reports if report.passed)
-    accuracy = passed / total if total else 0.0
-    return BenchmarkSummary(total=total, passed=passed, accuracy=accuracy, cases=reports)
+    return BenchmarkSummary(cases=reports)

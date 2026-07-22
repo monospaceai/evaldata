@@ -2,22 +2,91 @@
 
 import json
 from collections.abc import Iterable, Sequence
+from typing import Annotated, Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from evaldata.types import ScoreResult, SolverError
+from evaldata.types import ExecutionError, ScoreResult, SolverError
 
 
-class CaseReport(BaseModel):
-    """One eval case's outcome: its identity, pass/fail, and per-scorer results (or a solver error)."""
+class _CaseReportBase(BaseModel):
+    """Identity shared by every case outcome."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: str
     input: str
-    passed: bool
+    status: str
+
+    @property
+    def passed(self) -> bool:
+        """Whether the case passed."""
+        return self.status == "passed"
+
+
+class PassedCaseReport(_CaseReportBase):
+    """A passing case report."""
+
+    status: Literal["passed"] = "passed"
     scores: list[ScoreResult] = Field(default_factory=list)
-    error: SolverError | None = None
+
+    @model_validator(mode="after")
+    def _all_scores_passed(self) -> "PassedCaseReport":
+        """Reject non-passing scores on a passing report.
+
+        Returns:
+            The validated report.
+
+        Raises:
+            ValueError: If any scorer did not pass.
+        """
+        if any(not score.passed for score in self.scores):
+            msg = "a passing case report cannot carry a failing or inconclusive score"
+            raise ValueError(msg)
+        return self
+
+
+class ScoredFailureCaseReport(_CaseReportBase):
+    """A case that did not pass scoring."""
+
+    status: Literal["scored_failure"] = "scored_failure"
+    scores: Annotated[list[ScoreResult], Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def _has_non_passing_score(self) -> "ScoredFailureCaseReport":
+        """Require a score that explains the failed report.
+
+        Returns:
+            The validated report.
+
+        Raises:
+            ValueError: If every score passed.
+        """
+        if all(score.passed for score in self.scores):
+            msg = "a scored-failure case report requires a failing or inconclusive score"
+            raise ValueError(msg)
+        return self
+
+
+class SolverFailureCaseReport(_CaseReportBase):
+    """A case that failed before execution because the solver failed."""
+
+    status: Literal["solver_failure"] = "solver_failure"
+    error: SolverError
+
+
+class ExecutionFailureCaseReport(_CaseReportBase):
+    """A case whose generated SQL failed to execute."""
+
+    status: Literal["execution_failure"] = "execution_failure"
+    error: ExecutionError
+    scores: list[ScoreResult] = Field(default_factory=list)
+
+
+CaseReport: TypeAlias = Annotated[
+    PassedCaseReport | ScoredFailureCaseReport | SolverFailureCaseReport | ExecutionFailureCaseReport,
+    Field(discriminator="status"),
+]
 
 
 _RUN: list[CaseReport] = []
